@@ -114,6 +114,54 @@ on conflict (name) do nothing;
 
 alter table companies add column if not exists lead_source text;
 
+-- ===== PICKLISTS (รายการ dropdown ที่แก้ไข/เพิ่ม/ลบได้เองทุกคนในระบบ แบบเดียวกับ dropdown list ใน Google Sheets) =====
+-- แทนที่ CONSTANTS ที่เคยฮาร์ดโค้ดในโค้ดฝั่ง frontend — list_key คือชื่อรายการ, value คือตัวเลือกแต่ละอัน
+create table if not exists picklists (
+  id          uuid primary key default uuid_generate_v4(),
+  list_key    text not null,
+  value       text not null,
+  sort_order  int default 0,
+  created_at  timestamptz default now(),
+  unique (list_key, value)
+);
+
+insert into picklists (list_key, value, sort_order)
+select 'industries', v, i from unnest(array[
+  'เทคโนโลยี', 'การผลิต', 'การค้าปลีก', 'การเงินและธนาคาร', 'สุขภาพและการแพทย์',
+  'การศึกษา', 'อสังหาริมทรัพย์', 'โลจิสติกส์', 'อาหารและเครื่องดื่ม', 'พลังงาน',
+  'สื่อและโฆษณา', 'ท่องเที่ยวและโรงแรม', 'ก่อสร้าง', 'เกษตรกรรม', 'อื่นๆ'
+]) with ordinality as t(v, i)
+on conflict (list_key, value) do nothing;
+
+insert into picklists (list_key, value, sort_order)
+select 'company_statuses', v, i from unnest(array['Active', 'Prospect', 'Inactive']) with ordinality as t(v, i)
+on conflict (list_key, value) do nothing;
+
+insert into picklists (list_key, value, sort_order)
+select 'deal_stages', v, i from unnest(array['Lead', 'Qualified', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost']) with ordinality as t(v, i)
+on conflict (list_key, value) do nothing;
+
+insert into picklists (list_key, value, sort_order)
+select 'activity_types', v, i from unnest(array['โทรศัพท์', 'อีเมล', 'ประชุม', 'Line', 'เยี่ยมชมลูกค้า', 'สาธิตสินค้า', 'อื่นๆ']) with ordinality as t(v, i)
+on conflict (list_key, value) do nothing;
+
+insert into picklists (list_key, value, sort_order)
+select 'task_priorities', v, i from unnest(array['ต่ำ', 'ปกติ', 'สูง', 'เร่งด่วน']) with ordinality as t(v, i)
+on conflict (list_key, value) do nothing;
+
+insert into picklists (list_key, value, sort_order)
+select 'task_statuses', v, i from unnest(array['รอดำเนินการ', 'กำลังดำเนินการ', 'เสร็จสิ้น', 'ยกเลิก']) with ordinality as t(v, i)
+on conflict (list_key, value) do nothing;
+
+insert into picklists (list_key, value, sort_order)
+select 'quot_statuses', v, i from unnest(array['Draft', 'Sent', 'Approved', 'Rejected', 'Expired']) with ordinality as t(v, i)
+on conflict (list_key, value) do nothing;
+
+-- ย้ายรายการ "ที่มาลูกค้า" เดิม (ถ้าเคยเพิ่ม/ลบผ่านหน้าจัดการมาก่อน) เข้ามาอยู่ในระบบ picklists เดียวกัน
+insert into picklists (list_key, value)
+select 'lead_sources', name from lead_sources
+on conflict (list_key, value) do nothing;
+
 -- ===== ATTACHMENTS (เอกสารแนบต่อบริษัท, ไฟล์เก็บใน Supabase Storage bucket "attachments") =====
 create table if not exists attachments (
   id           uuid primary key default uuid_generate_v4(),
@@ -257,6 +305,7 @@ alter table settings    enable row level security;
 alter table attachments enable row level security;
 alter table profiles    enable row level security;
 alter table lead_sources enable row level security;
+alter table picklists   enable row level security;
 
 -- ลบ policy แบบเก่า "authenticated ทำได้ทุกอย่าง" (ถ้ามีจากเวอร์ชันก่อนหน้า)
 drop policy if exists "allow all for authenticated" on companies;
@@ -365,10 +414,15 @@ drop policy if exists "settings write" on settings;
 create policy "settings write" on settings for all using (is_admin()) with check (is_admin());
 
 -- ----- lead_sources: ทุกคนอ่านได้ (ใช้เลือกในฟอร์ม), เพิ่ม/ลบได้เฉพาะ admin -----
+-- (ตารางนี้เลิกใช้แล้ว แทนที่ด้วย picklists — เก็บไว้เผื่อมีข้อมูลเก่า ไม่ลบทิ้ง)
 drop policy if exists "lead_sources select" on lead_sources;
 create policy "lead_sources select" on lead_sources for select using (auth.role() = 'authenticated');
 drop policy if exists "lead_sources write" on lead_sources;
 create policy "lead_sources write" on lead_sources for all using (is_admin()) with check (is_admin());
+
+-- ----- picklists: ทุกคนที่ login แล้วแก้ไขได้เลย (เหมือน dropdown list ที่แก้ไขร่วมกันได้ใน Google Sheets) -----
+drop policy if exists "picklists all" on picklists;
+create policy "picklists all" on picklists for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 -- ----- profiles: เห็นของตัวเอง หรือ admin เห็นทั้งหมด, แก้ไข role ได้เฉพาะ admin -----
 drop policy if exists "profiles select" on profiles;

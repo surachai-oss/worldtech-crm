@@ -1,5 +1,4 @@
 import Papa from 'papaparse'
-import { CONSTANTS } from './api'
 
 // ===== นำเข้าบริษัทลูกค้าจากไฟล์ CSV (เปิด/แก้ไขได้ปกติใน Excel — บันทึกเป็น .csv ก่อนอัปโหลด) =====
 export const COMPANY_IMPORT_COLUMNS = [
@@ -16,7 +15,7 @@ export const COMPANY_IMPORT_COLUMNS = [
 ]
 
 const EXAMPLE_ROW = {
-  name: 'บริษัท ตัวอย่าง จำกัด', industry: CONSTANTS.INDUSTRIES[0], phone: '02-xxx-xxxx',
+  name: 'บริษัท ตัวอย่าง จำกัด', industry: 'เทคโนโลยี', phone: '02-xxx-xxxx',
   email: 'contact@example.com', website: 'https://www.example.com', address: 'ที่อยู่ตัวอย่าง',
   status: 'Active', owner: 'ชื่อผู้รับผิดชอบ', lead_source: '', note: ''
 }

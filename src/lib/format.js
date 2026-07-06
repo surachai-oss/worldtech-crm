@@ -46,7 +46,10 @@ export function activityColor(t) {
   return { 'โทรศัพท์': '#e6f4fd', 'อีเมล': '#e6f7f0', 'ประชุม': '#fff3cd', 'Line': '#f0faf0', 'เยี่ยมชมลูกค้า': '#f3e6ff', 'สาธิตสินค้า': '#ebf0fa', 'อื่นๆ': '#f7fafc' }[t] || '#f7fafc'
 }
 
-export const stageColors = { 'Lead': '#718096', 'Qualified': '#3182ce', 'Proposal': '#d69e2e', 'Negotiation': '#dd6b20', 'Closed Won': '#38a169', 'Closed Lost': '#e53e3e' }
+const STAGE_COLORS = { 'Lead': '#718096', 'Qualified': '#3182ce', 'Proposal': '#d69e2e', 'Negotiation': '#dd6b20', 'Closed Won': '#38a169', 'Closed Lost': '#e53e3e' }
+export function stageColor(stage) {
+  return STAGE_COLORS[stage] || '#805ad5' // สี default สำหรับ stage ที่เพิ่มเองใหม่
+}
 
 export function fmtFileSize(bytes) {
   if (!bytes) return '-'

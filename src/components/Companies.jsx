@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
-import { CONSTANTS, PAGE_SIZE, fetchCompaniesPage } from '../lib/api'
+import { PAGE_SIZE, fetchCompaniesPage } from '../lib/api'
 import { statusBadgeClass } from '../lib/format'
 import { canEdit, canDelete } from '../lib/permissions'
 import { useUi } from './UiContext'
+import { usePicklists } from './PicklistsContext'
 import Pagination from './Pagination'
 import ImportCompaniesModal from './ImportCompaniesModal'
 
 export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete }) {
   const { toast } = useUi()
+  const { list } = usePicklists()
   const [q, setQ] = useState('')
   const [status, setStatus] = useState('')
   const [industry, setIndustry] = useState('')
@@ -51,11 +53,11 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
         <input className="filter-input" placeholder="🔍 ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
           <option value="">ทุกสถานะ</option>
-          {CONSTANTS.COMPANY_STATUSES.map(s => <option key={s}>{s}</option>)}
+          {list('company_statuses').map(s => <option key={s}>{s}</option>)}
         </select>
         <select className="filter-select" value={industry} onChange={e => setIndustry(e.target.value)}>
           <option value="">ทุกอุตสาหกรรม</option>
-          {CONSTANTS.INDUSTRIES.map(i => <option key={i}>{i}</option>)}
+          {list('industries').map(i => <option key={i}>{i}</option>)}
         </select>
       </div>
       <div className="card">

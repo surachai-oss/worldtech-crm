@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { CONSTANTS, PAGE_SIZE, fetchActivitiesPage } from '../lib/api'
+import { PAGE_SIZE, fetchActivitiesPage } from '../lib/api'
 import { fmtDate, activityIcon, activityColor } from '../lib/format'
 import { canManageChild } from '../lib/permissions'
 import { useUi } from './UiContext'
+import { usePicklists } from './PicklistsContext'
 import Pagination from './Pagination'
 
 export default function Activities({ perm, reloadKey, onNavCompany, onAdd, onDelete }) {
   const { toast } = useUi()
+  const { list } = usePicklists()
   const [type, setType] = useState('')
   const [page, setPage] = useState(0)
   const [rows, setRows] = useState([])
@@ -35,7 +37,7 @@ export default function Activities({ perm, reloadKey, onNavCompany, onAdd, onDel
       <div className="filter-bar">
         <select className="filter-select" value={type} onChange={e => setType(e.target.value)}>
           <option value="">ทุกประเภท</option>
-          {CONSTANTS.ACTIVITY_TYPES.map(t => <option key={t}>{t}</option>)}
+          {list('activity_types').map(t => <option key={t}>{t}</option>)}
         </select>
       </div>
       <div className="card">

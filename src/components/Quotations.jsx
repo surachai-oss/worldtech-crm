@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
-import { CONSTANTS, PAGE_SIZE, fetchQuotationsPage, fetchQuotationsTotal } from '../lib/api'
+import { PAGE_SIZE, fetchQuotationsPage, fetchQuotationsTotal } from '../lib/api'
 import { fmtCurrency, fmtDate, quotBadgeClass } from '../lib/format'
 import { printQuotation } from '../lib/printQuotation'
 import { canManageChild } from '../lib/permissions'
 import { useUi } from './UiContext'
+import { usePicklists } from './PicklistsContext'
+import EditableSelect from './EditableSelect'
 import Pagination from './Pagination'
 
 export default function Quotations({ perm, reloadKey, settings, onAdd, onStatusChange, onDelete }) {
   const { toast } = useUi()
+  const { list } = usePicklists()
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(0)
@@ -43,7 +46,7 @@ export default function Quotations({ perm, reloadKey, settings, onAdd, onStatusC
       <div className="filter-bar">
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
           <option value="">ทุกสถานะ</option>
-          {CONSTANTS.QUOT_STATUSES.map(s => <option key={s}>{s}</option>)}
+          {list('quot_statuses').map(s => <option key={s}>{s}</option>)}
         </select>
         <input className="filter-input" placeholder="🔍 ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
       </div>
@@ -63,10 +66,7 @@ export default function Quotations({ perm, reloadKey, settings, onAdd, onStatusC
                     <td style={{ fontSize: 12 }}>{fmtDate(qt.quot_date)}</td>
                     <td className="td-actions" onClick={e => e.stopPropagation()}>
                       {canManageChild(qt.company, perm) && (
-                        <select className="filter-select" style={{ fontSize: 11, padding: '3px 6px' }}
-                          value={qt.status} onChange={e => onStatusChange(qt.id, e.target.value)}>
-                          {CONSTANTS.QUOT_STATUSES.map(s => <option key={s}>{s}</option>)}
-                        </select>
+                        <EditableSelect listKey="quot_statuses" value={qt.status} onChange={v => onStatusChange(qt.id, v)} style={{ display: 'inline-flex', width: 160 }} />
                       )}
                       <button className="btn btn-secondary btn-xs" onClick={() => doPrint(qt)}>📄 PDF</button>
                       {canManageChild(qt.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(qt.id)}>🗑</button>}

@@ -1,10 +1,12 @@
-import { CONSTANTS, computeDashboard } from '../lib/api'
-import { fmtCurrency, fmtDate, isOverdue, isDueToday, stageBadgeClass, priorityIcon, activityIcon, activityColor, stageColors } from '../lib/format'
+import { computeDashboard } from '../lib/api'
+import { fmtCurrency, fmtDate, isOverdue, isDueToday, stageBadgeClass, priorityIcon, activityIcon, activityColor, stageColor } from '../lib/format'
+import { usePicklists } from './PicklistsContext'
 
 export default function Dashboard({ data, onNav }) {
-  const d = computeDashboard(data)
+  const { list } = usePicklists()
+  const stages = list('deal_stages')
+  const d = computeDashboard(data, stages)
   const s = d.summary
-  const stages = CONSTANTS.DEAL_STAGES
   const total = stages.reduce((sum, st) => sum + (d.stageData[st]?.count || 0), 0)
 
   return (
@@ -49,7 +51,7 @@ export default function Dashboard({ data, onNav }) {
               {stages.map(st => {
                 const cnt = d.stageData[st]?.count || 0
                 const pct = total ? (cnt / total * 100) : 0
-                return <div key={st} className="pipeline-seg" title={`${st}: ${cnt}`} style={{ width: pct + '%', background: stageColors[st], minWidth: cnt > 0 ? 4 : 0 }} />
+                return <div key={st} className="pipeline-seg" title={`${st}: ${cnt}`} style={{ width: pct + '%', background: stageColor(st), minWidth: cnt > 0 ? 4 : 0 }} />
               })}
             </div>
             <div className="table-wrap" style={{ marginTop: 10 }}>
@@ -60,7 +62,7 @@ export default function Dashboard({ data, onNav }) {
                     const info = d.stageData[st] || { count: 0, value: 0 }
                     return (
                       <tr key={st}>
-                        <td><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: stageColors[st], marginRight: 6 }} />{st}</td>
+                        <td><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: stageColor(st), marginRight: 6 }} />{st}</td>
                         <td style={{ textAlign: 'center', fontWeight: 600 }}>{info.count}</td>
                         <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(info.value)}</td>
                       </tr>

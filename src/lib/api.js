@@ -1,19 +1,9 @@
 import { supabase } from '../supabaseClient'
 
-// ===== CONSTANTS (เดิมมาจาก CONSTANTS ใน Code.gs) =====
+// ===== CONSTANTS (ค่าคงที่ระบบที่ไม่ให้ผู้ใช้แก้เอง) =====
+// รายการ dropdown อื่นๆ (สถานะ, stage, ประเภท ฯลฯ) ย้ายไปเป็น picklists ที่แก้ไขได้ในแอปแล้ว — ดู PicklistsContext
 export const CONSTANTS = {
-  DEAL_STAGES: ['Lead', 'Qualified', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost'],
-  ACTIVITY_TYPES: ['โทรศัพท์', 'อีเมล', 'ประชุม', 'Line', 'เยี่ยมชมลูกค้า', 'สาธิตสินค้า', 'อื่นๆ'],
-  TASK_PRIORITIES: ['ต่ำ', 'ปกติ', 'สูง', 'เร่งด่วน'],
-  TASK_STATUSES: ['รอดำเนินการ', 'กำลังดำเนินการ', 'เสร็จสิ้น', 'ยกเลิก'],
-  COMPANY_STATUSES: ['Active', 'Prospect', 'Inactive'],
-  QUOT_STATUSES: ['Draft', 'Sent', 'Approved', 'Rejected', 'Expired'],
   ROLES: ['admin', 'sale'],
-  INDUSTRIES: [
-    'เทคโนโลยี', 'การผลิต', 'การค้าปลีก', 'การเงินและธนาคาร', 'สุขภาพและการแพทย์',
-    'การศึกษา', 'อสังหาริมทรัพย์', 'โลจิสติกส์', 'อาหารและเครื่องดื่ม', 'พลังงาน',
-    'สื่อและโฆษณา', 'ท่องเที่ยวและโรงแรม', 'ก่อสร้าง', 'เกษตรกรรม', 'อื่นๆ'
-  ]
 }
 
 function handle(res) {
@@ -122,12 +112,17 @@ export const updateCompany = (id, d) => supabase.from('companies').update(d).eq(
 export const deleteCompany = (id) => supabase.from('companies').delete().eq('id', id).then(handle)
 export const bulkImportCompanies = (rows) => supabase.from('companies').insert(rows).select().then(handle)
 
-// ===== LEAD SOURCES (ที่มาของลูกค้า) =====
-export async function listLeadSources() {
-  return supabase.from('lead_sources').select('*').order('name', { ascending: true }).then(handle)
+// ===== PICKLISTS (dropdown ที่แก้ไข/เพิ่ม/ลบตัวเลือกได้เองในแอป — แบบเดียวกับ dropdown list ใน Google Sheets) =====
+export async function getAllPicklists() {
+  const rows = await supabase.from('picklists').select('*')
+    .order('sort_order', { ascending: true }).order('value', { ascending: true }).then(handle)
+  const grouped = {}
+  rows.forEach(r => { (grouped[r.list_key] ||= []).push(r) })
+  return grouped
 }
-export const addLeadSource = (name) => supabase.from('lead_sources').insert({ name }).select().single().then(handle)
-export const deleteLeadSource = (id) => supabase.from('lead_sources').delete().eq('id', id).then(handle)
+export const addPicklistValue = (listKey, value) =>
+  supabase.from('picklists').insert({ list_key: listKey, value }).select().single().then(handle)
+export const deletePicklistValue = (id) => supabase.from('picklists').delete().eq('id', id).then(handle)
 
 // ===== CONTACTS =====
 export const addContact = (d) => supabase.from('contacts').insert(d).select().single().then(handle)
@@ -221,7 +216,8 @@ export async function adminCreateUser({ email, password, full_name }, accessToke
 }
 
 // ===== DASHBOARD (คำนวณฝั่ง client จาก getAllData) =====
-export function computeDashboard(data) {
+// stages: รายชื่อ deal stage ปัจจุบัน (จาก picklists) — ใช้แค่จัดกลุ่มตาราง Pipeline ให้ตรงกับ stage ที่มีจริงตอนนี้
+export function computeDashboard(data, stages = []) {
   const { companies, deals, tasks, activities, quotations } = data
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
@@ -237,7 +233,7 @@ export function computeDashboard(data) {
   }).length
 
   const stageData = {}
-  CONSTANTS.DEAL_STAGES.forEach(s => { stageData[s] = { count: 0, value: 0 } })
+  stages.forEach(s => { stageData[s] = { count: 0, value: 0 } })
   deals.forEach(d => {
     if (stageData[d.stage]) {
       stageData[d.stage].count++

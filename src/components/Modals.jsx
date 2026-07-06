@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { CONSTANTS, listLeadSources } from '../lib/api'
+import { useState } from 'react'
+import EditableSelect from './EditableSelect'
 
 function Field({ label, required, children }) {
   return (
@@ -16,29 +16,6 @@ function CompanySelect({ companies, value, onChange }) {
       <option value="">-- เลือกบริษัท --</option>
       {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
     </select>
-  )
-}
-
-// select ที่มีตัวเลือก "อื่นๆ" — เลือกแล้วโผล่ช่องให้พิมพ์ระบุเอง ค่าที่พิมพ์จะถูกใช้เป็นค่าจริงที่บันทึก
-function OtherableSelect({ value, onChange, options, otherLabel = 'อื่นๆ', placeholder = '-- เลือก --', otherPlaceholder = 'ระบุ...' }) {
-  const [forceOther, setForceOther] = useState(false)
-  const isKnown = value && options.includes(value)
-  const isOther = forceOther || (!!value && !isKnown)
-  const selectValue = isOther ? otherLabel : (value || '')
-  return (
-    <>
-      <select className="form-control" value={selectValue} onChange={e => {
-        const v = e.target.value
-        if (v === otherLabel) { setForceOther(true); onChange('') }
-        else { setForceOther(false); onChange(v) }
-      }}>
-        <option value="">{placeholder}</option>
-        {options.map(o => <option key={o}>{o}</option>)}
-      </select>
-      {isOther && (
-        <input className="form-control" style={{ marginTop: 6 }} placeholder={otherPlaceholder} value={value || ''} onChange={e => onChange(e.target.value)} autoFocus />
-      )}
-    </>
   )
 }
 
@@ -62,26 +39,24 @@ function ModalShell({ title, onClose, onSave, saveLabel = '💾 บันทึ�
 
 export function CompanyModal({ initial, onClose, onSave }) {
   const [f, setF] = useState(() => initial || { name: '', industry: '', status: 'Active', phone: '', email: '', website: '', address: '', owner: '', lead_source: '', note: '' })
-  const [leadSources, setLeadSources] = useState([])
   const [files, setFiles] = useState([])
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
-
-  useEffect(() => { listLeadSources().then(setLeadSources).catch(() => {}) }, [])
 
   const onFilesChange = (e) => setFiles(Array.from(e.target.files || []))
 
   return (
     <ModalShell title={initial?.id ? 'แก้ไขบริษัท' : 'เพิ่มบริษัทลูกค้า'} onClose={onClose} onSave={() => onSave(f, files)}>
       <Field label="ชื่อบริษัท" required><input className="form-control" value={f.name} onChange={set('name')} placeholder="บริษัท ตัวอย่าง จำกัด" /></Field>
+      <Field label="เอกสารแนบ (ภพ20, หนังสือรับรองบริษัท ฯลฯ)">
+        <input className="form-control" type="file" multiple onChange={onFilesChange} />
+        {files.length > 0 && <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>เลือกแล้ว {files.length} ไฟล์: {files.map(file => file.name).join(', ')}</div>}
+      </Field>
       <div className="form-row">
         <Field label="อุตสาหกรรม">
-          <OtherableSelect value={f.industry} onChange={v => setF(s => ({ ...s, industry: v }))}
-            options={CONSTANTS.INDUSTRIES} otherPlaceholder="ระบุอุตสาหกรรม" />
+          <EditableSelect listKey="industries" value={f.industry} onChange={v => setF(s => ({ ...s, industry: v }))} />
         </Field>
         <Field label="สถานะ">
-          <select className="form-control" value={f.status || 'Active'} onChange={set('status')}>
-            {CONSTANTS.COMPANY_STATUSES.map(s => <option key={s}>{s}</option>)}
-          </select>
+          <EditableSelect listKey="company_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} />
         </Field>
       </div>
       <div className="form-row">
@@ -93,15 +68,10 @@ export function CompanyModal({ initial, onClose, onSave }) {
       <div className="form-row">
         <Field label="ผู้รับผิดชอบ"><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
         <Field label="ที่มา">
-          <OtherableSelect value={f.lead_source} onChange={v => setF(s => ({ ...s, lead_source: v }))}
-            options={leadSources.map(s => s.name)} placeholder="-- ไม่ระบุ --" otherPlaceholder="ระบุที่มา" />
+          <EditableSelect listKey="lead_sources" value={f.lead_source} onChange={v => setF(s => ({ ...s, lead_source: v }))} placeholder="-- ไม่ระบุ --" />
         </Field>
       </div>
       <Field label="หมายเหตุ"><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
-      <Field label="เอกสารแนบ (ภพ20, หนังสือรับรองบริษัท ฯลฯ)">
-        <input className="form-control" type="file" multiple onChange={onFilesChange} />
-        {files.length > 0 && <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>เลือกแล้ว {files.length} ไฟล์: {files.map(file => file.name).join(', ')}</div>}
-      </Field>
     </ModalShell>
   )
 }
@@ -138,9 +108,7 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
       <Field label="ชื่อดีล" required><input className="form-control" value={f.name} onChange={set('name')} placeholder="โปรเจกต์ / สินค้าที่ขาย" /></Field>
       <div className="form-row">
         <Field label="Stage">
-          <select className="form-control" value={f.stage} onChange={set('stage')}>
-            {CONSTANTS.DEAL_STAGES.map(s => <option key={s}>{s}</option>)}
-          </select>
+          <EditableSelect listKey="deal_stages" value={f.stage} onChange={v => setF(s => ({ ...s, stage: v }))} />
         </Field>
         <Field label="มูลค่า (บาท)"><input className="form-control" type="number" value={f.value || ''} onChange={set('value')} /></Field>
       </div>
@@ -155,7 +123,7 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
 
 export function ActivityModal({ companies, contacts, defaultCompanyId, currentUserName, onClose, onSave }) {
   const [f, setF] = useState({
-    company_id: defaultCompanyId || '', contact_id: '', type: CONSTANTS.ACTIVITY_TYPES[0],
+    company_id: defaultCompanyId || '', contact_id: '', type: '',
     subject: '', detail: '', activity_date: new Date().toISOString().split('T')[0], recorded_by: currentUserName || ''
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
@@ -165,9 +133,7 @@ export function ActivityModal({ companies, contacts, defaultCompanyId, currentUs
       <Field label="บริษัท"><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v, contact_id: '' }))} /></Field>
       <div className="form-row">
         <Field label="ประเภทการติดต่อ" required>
-          <select className="form-control" value={f.type} onChange={set('type')}>
-            {CONSTANTS.ACTIVITY_TYPES.map(t => <option key={t}>{t}</option>)}
-          </select>
+          <EditableSelect listKey="activity_types" value={f.type} onChange={v => setF(s => ({ ...s, type: v }))} />
         </Field>
         <Field label="วันที่"><input className="form-control" type="date" value={f.activity_date} onChange={set('activity_date')} /></Field>
       </div>
@@ -196,16 +162,12 @@ export function TaskModal({ initial, companies, defaultCompanyId, currentUserNam
       <div className="form-row">
         <Field label="วันครบกำหนด"><input className="form-control" type="date" value={f.due_date || ''} onChange={set('due_date')} /></Field>
         <Field label="ลำดับความสำคัญ">
-          <select className="form-control" value={f.priority} onChange={set('priority')}>
-            {CONSTANTS.TASK_PRIORITIES.map(p => <option key={p}>{p}</option>)}
-          </select>
+          <EditableSelect listKey="task_priorities" value={f.priority} onChange={v => setF(s => ({ ...s, priority: v }))} />
         </Field>
       </div>
       <div className="form-row">
         <Field label="สถานะ">
-          <select className="form-control" value={f.status} onChange={set('status')}>
-            {CONSTANTS.TASK_STATUSES.map(s => <option key={s}>{s}</option>)}
-          </select>
+          <EditableSelect listKey="task_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} />
         </Field>
         <Field label="ผู้รับผิดชอบ"><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
       </div>
@@ -227,9 +189,7 @@ export function QuotationModal({ companies, defaultCompanyId, onClose, onSave })
       <div className="form-row">
         <Field label="มูลค่า (บาท)"><input className="form-control" type="number" value={f.value || ''} onChange={set('value')} /></Field>
         <Field label="สถานะ">
-          <select className="form-control" value={f.status} onChange={set('status')}>
-            {CONSTANTS.QUOT_STATUSES.map(s => <option key={s}>{s}</option>)}
-          </select>
+          <EditableSelect listKey="quot_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} />
         </Field>
       </div>
       <div className="form-row">

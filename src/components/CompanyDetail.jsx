@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { fmtCurrency, fmtDate, fmtFileSize, isOverdue, isDueToday, stageBadgeClass, statusBadgeClass, quotBadgeClass, priorityIcon, activityIcon, activityColor } from '../lib/format'
-import { CONSTANTS, listAttachments, uploadAttachment, deleteAttachment, getAttachmentUrl } from '../lib/api'
+import { listAttachments, uploadAttachment, deleteAttachment, getAttachmentUrl } from '../lib/api'
 import { printQuotation } from '../lib/printQuotation'
 import { canEdit, canDelete, canManageChild } from '../lib/permissions'
 import { useUi } from './UiContext'
+import EditableSelect from './EditableSelect'
 
 const TABS = [
   ['info', 'ข้อมูลบริษัท'], ['contacts', 'ผู้ติดต่อ'], ['deals', 'ดีล'],
@@ -230,9 +231,7 @@ function QuotationsTab({ quotations, company, perm, settings, onAdd, onStatusCha
                 <td style={{ fontSize: 12 }}>{fmtDate(q.quot_date)}</td>
                 <td className="td-actions">
                   {manageable && (
-                    <select className="filter-select" style={{ fontSize: 11, padding: '3px 6px' }} value={q.status} onChange={e => onStatusChange(q.id, e.target.value)}>
-                      {CONSTANTS.QUOT_STATUSES.map(s => <option key={s}>{s}</option>)}
-                    </select>
+                    <EditableSelect listKey="quot_statuses" value={q.status} onChange={v => onStatusChange(q.id, v)} style={{ display: 'inline-flex', width: 160 }} />
                   )}
                   <button className="btn btn-secondary btn-xs" onClick={() => printQuotation(q, company, settings)}>📄 PDF</button>
                   {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(q.id)}>🗑</button>}

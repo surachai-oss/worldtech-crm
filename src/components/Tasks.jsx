@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { CONSTANTS, PAGE_SIZE, fetchTasksPage, fetchTaskCounts } from '../lib/api'
+import { PAGE_SIZE, fetchTasksPage, fetchTaskCounts } from '../lib/api'
 import { fmtDate, isOverdue, isDueToday, priorityIcon, statusBadgeClass } from '../lib/format'
 import { canEdit, canDelete } from '../lib/permissions'
 import { useUi } from './UiContext'
+import { usePicklists } from './PicklistsContext'
 import Pagination from './Pagination'
 
 export default function Tasks({ perm, reloadKey, onNavCompany, onAdd, onEdit, onComplete, onDelete }) {
   const { toast } = useUi()
+  const { list } = usePicklists()
   const [status, setStatus] = useState('')
   const [priority, setPriority] = useState('')
   const [q, setQ] = useState('')
@@ -51,11 +53,11 @@ export default function Tasks({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
       <div className="filter-bar">
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
           <option value="">ทุกสถานะ</option>
-          {CONSTANTS.TASK_STATUSES.map(s => <option key={s}>{s}</option>)}
+          {list('task_statuses').map(s => <option key={s}>{s}</option>)}
         </select>
         <select className="filter-select" value={priority} onChange={e => setPriority(e.target.value)}>
           <option value="">ทุกลำดับ</option>
-          {CONSTANTS.TASK_PRIORITIES.map(p => <option key={p}>{p}</option>)}
+          {list('task_priorities').map(p => <option key={p}>{p}</option>)}
         </select>
         <input className="filter-input" placeholder="🔍 ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
       </div>

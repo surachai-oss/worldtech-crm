@@ -1,8 +1,10 @@
-import { CONSTANTS } from '../lib/api'
-import { fmtCurrency, fmtDate, stageColors } from '../lib/format'
+import { fmtCurrency, fmtDate, stageColor } from '../lib/format'
 import { canEdit } from '../lib/permissions'
+import { usePicklists } from './PicklistsContext'
+import EditableSelect from './EditableSelect'
 
 export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdit, onMoveStage }) {
+  const { list } = usePicklists()
   const totalVal = deals.reduce((s, d) => s + (Number(d.value) || 0), 0)
 
   return (
@@ -12,10 +14,10 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
         <button className="btn btn-primary" onClick={onAdd}>+ เพิ่มดีล</button>
       </div>
       <div className="kanban-board">
-        {CONSTANTS.DEAL_STAGES.map(stage => {
+        {list('deal_stages').map(stage => {
           const sd = deals.filter(d => d.stage === stage)
           const sv = sd.reduce((s, d) => s + (Number(d.value) || 0), 0)
-          const color = stageColors[stage]
+          const color = stageColor(stage)
           return (
             <div className="kanban-col" key={stage}>
               <div className="kanban-col-header" style={{ background: color + '22', color }}>
@@ -34,12 +36,9 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
                       {d.close_date && <div className="deal-date">{fmtDate(d.close_date)}</div>}
                       <div className="deal-owner">{d.owner || ''}</div>
                       {canEdit(d, perm) && (
-                        <div style={{ marginTop: 8, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>✏️</button>
-                          <select className="filter-select" style={{ fontSize: 10, padding: '2px 4px', maxWidth: 120 }}
-                            value={d.stage} onChange={e => onMoveStage(d.id, e.target.value)}>
-                            {CONSTANTS.DEAL_STAGES.map(s => <option key={s}>{s}</option>)}
-                          </select>
+                        <div style={{ marginTop: 8, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>✏️ แก้ไข</button>
+                          <EditableSelect listKey="deal_stages" value={d.stage} onChange={v => onMoveStage(d.id, v)} style={{ width: 140 }} />
                         </div>
                       )}
                     </div>
