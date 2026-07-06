@@ -3,6 +3,7 @@ import { PAGE_SIZE, fetchContactsPage } from '../lib/api'
 import { canManageChild } from '../lib/permissions'
 import { useUi } from './UiContext'
 import Pagination from './Pagination'
+import ImportContactsModal from './ImportContactsModal'
 
 export default function Contacts({ perm, reloadKey, onNavCompany, onEdit, onDelete }) {
   const { toast } = useUi()
@@ -11,6 +12,8 @@ export default function Contacts({ perm, reloadKey, onNavCompany, onEdit, onDele
   const [rows, setRows] = useState([])
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [showImport, setShowImport] = useState(false)
+  const [localBump, setLocalBump] = useState(0)
 
   useEffect(() => { setPage(0) }, [q])
 
@@ -29,14 +32,18 @@ export default function Contacts({ perm, reloadKey, onNavCompany, onEdit, onDele
       }
     }, 250)
     return () => { alive = false; clearTimeout(t) }
-  }, [page, q, reloadKey])
+  }, [page, q, reloadKey, localBump])
 
   return (
     <div>
       <div className="section-header">
         <div className="section-title">👥 ผู้ติดต่อทั้งหมด <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
-        <button className="btn btn-primary" onClick={() => onEdit(null)}>+ เพิ่มผู้ติดต่อ</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" onClick={() => setShowImport(true)}>📥 นำเข้าจากไฟล์</button>
+          <button className="btn btn-primary" onClick={() => onEdit(null)}>+ เพิ่มผู้ติดต่อ</button>
+        </div>
       </div>
+      {showImport && <ImportContactsModal onClose={() => setShowImport(false)} onImported={() => setLocalBump(b => b + 1)} />}
       <div className="filter-bar">
         <input className="filter-input" placeholder="🔍 ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
       </div>

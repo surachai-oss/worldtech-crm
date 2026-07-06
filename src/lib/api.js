@@ -128,6 +128,12 @@ export const deletePicklistValue = (id) => supabase.from('picklists').delete().e
 export const addContact = (d) => supabase.from('contacts').insert(d).select().single().then(handle)
 export const updateContact = (id, d) => supabase.from('contacts').update(d).eq('id', id).select().single().then(handle)
 export const deleteContact = (id) => supabase.from('contacts').delete().eq('id', id).then(handle)
+export const bulkImportContacts = (rows) => supabase.from('contacts').insert(rows).select().then(handle)
+
+// รายชื่อบริษัทแบบย่อ (id, name) — ใช้จับคู่ชื่อบริษัทตอนนำเข้าผู้ติดต่อจากไฟล์
+export async function listCompanyNames() {
+  return supabase.from('companies').select('id, name').order('name', { ascending: true }).then(handle)
+}
 
 // ===== ACTIVITIES =====
 export const addActivity = (d) => supabase.from('activities').insert(d).select().single().then(handle)
