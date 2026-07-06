@@ -1,0 +1,12 @@
+export default function Pagination({ page, pageSize, count, onPage }) {
+  const totalPages = Math.max(1, Math.ceil((count || 0) / pageSize))
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', fontSize: 12, color: 'var(--text-light)', borderTop: '1px solid var(--border)' }}>
+      <div>ทั้งหมด {count || 0} รายการ · หน้า {page + 1}/{totalPages}</div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button className="btn btn-outline btn-xs" disabled={page <= 0} onClick={() => onPage(page - 1)}>‹ ก่อนหน้า</button>
+        <button className="btn btn-outline btn-xs" disabled={page + 1 >= totalPages} onClick={() => onPage(page + 1)}>ถัดไป ›</button>
+      </div>
+    </div>
+  )
+}

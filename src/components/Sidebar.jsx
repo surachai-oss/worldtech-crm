@@ -4,16 +4,18 @@ const NAV = [
   { section: 'การขาย', items: [{ id: 'deals', icon: '🤝', label: 'ดีลการขาย' }, { id: 'quotations', icon: '📋', label: 'ใบเสนอราคา' }] },
   { section: 'ติดตาม', items: [{ id: 'activities', icon: '📝', label: 'ประวัติการติดต่อ' }, { id: 'tasks', icon: '✅', label: 'งาน Follow-up' }] },
 ]
+const ADMIN_SECTION = { section: 'ผู้ดูแลระบบ', items: [{ id: 'users', icon: '👤', label: 'ผู้ใช้งาน' }] }
 
-export default function Sidebar({ activeView, onNav, user, onLogout }) {
+export default function Sidebar({ activeView, onNav, user, isAdmin, onLogout }) {
   const name = user?.name || 'ผู้ใช้งาน'
+  const sections = isAdmin ? [...NAV, ADMIN_SECTION] : NAV
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
         <div className="brand">⚡ Worldtech</div>
         <div className="brand-sub">B2B CRM</div>
       </div>
-      {NAV.map(sec => (
+      {sections.map(sec => (
         <div className="nav-section" key={sec.section}>
           <div className="nav-section-title">{sec.section}</div>
           {sec.items.map(it => (

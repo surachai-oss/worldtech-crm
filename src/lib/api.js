@@ -8,6 +8,7 @@ export const CONSTANTS = {
   TASK_STATUSES: ['รอดำเนินการ', 'กำลังดำเนินการ', 'เสร็จสิ้น', 'ยกเลิก'],
   COMPANY_STATUSES: ['Active', 'Prospect', 'Inactive'],
   QUOT_STATUSES: ['Draft', 'Sent', 'Approved', 'Rejected', 'Expired'],
+  ROLES: ['admin', 'sale'],
   INDUSTRIES: [
     'เทคโนโลยี', 'การผลิต', 'การค้าปลีก', 'การเงินและธนาคาร', 'สุขภาพและการแพทย์',
     'การศึกษา', 'อสังหาริมทรัพย์', 'โลจิสติกส์', 'อาหารและเครื่องดื่ม', 'พลังงาน',
@@ -20,7 +21,12 @@ function handle(res) {
   return res.data
 }
 
-// ===== BULK LOAD =====
+// escape ตัวอักษรที่ทำให้ query string ของ supabase (.or/.ilike) พังได้
+function safeLike(q) {
+  return (q || '').replace(/[%,()]/g, '').trim()
+}
+
+// ===== BULK LOAD (ใช้กับ Dashboard, ค้นหาส่วนกลาง, และหน้ารายละเอียดบริษัท) =====
 export async function getAllData() {
   const [companies, contacts, deals, activities, tasks, quotations] = await Promise.all([
     supabase.from('companies').select('*').order('created_at', { ascending: false }).then(handle),
@@ -31,6 +37,83 @@ export async function getAllData() {
     supabase.from('quotations').select('*').order('created_at', { ascending: false }).then(handle),
   ])
   return { companies, contacts, deals, activities, tasks, quotations }
+}
+
+// ===== PAGINATION (ใช้กับหน้ารายการแบบแยกหน้า ไม่โหลดทั้งหมดทีเดียว) =====
+export const PAGE_SIZE = 20
+
+function range(page) {
+  const from = page * PAGE_SIZE
+  return [from, from + PAGE_SIZE - 1]
+}
+
+export async function fetchCompaniesPage({ page = 0, q = '', status = '', industry = '' } = {}) {
+  let query = supabase.from('companies').select('*', { count: 'exact' }).order('created_at', { ascending: false })
+  const sq = safeLike(q)
+  if (sq) query = query.or(`name.ilike.%${sq}%,phone.ilike.%${sq}%,email.ilike.%${sq}%`)
+  if (status) query = query.eq('status', status)
+  if (industry) query = query.eq('industry', industry)
+  const { data, error, count } = await query.range(...range(page))
+  if (error) throw error
+  return { rows: data, count, pageSize: PAGE_SIZE }
+}
+
+export async function fetchContactsPage({ page = 0, q = '' } = {}) {
+  let query = supabase.from('contacts').select('*, company:companies(id,name,created_by)', { count: 'exact' }).order('created_at', { ascending: false })
+  const sq = safeLike(q)
+  if (sq) query = query.or(`full_name.ilike.%${sq}%,phone.ilike.%${sq}%,email.ilike.%${sq}%`)
+  const { data, error, count } = await query.range(...range(page))
+  if (error) throw error
+  return { rows: data, count, pageSize: PAGE_SIZE }
+}
+
+export async function fetchActivitiesPage({ page = 0, type = '' } = {}) {
+  let query = supabase.from('activities').select('*, company:companies(id,name,created_by)', { count: 'exact' }).order('activity_date', { ascending: false })
+  if (type) query = query.eq('type', type)
+  const { data, error, count } = await query.range(...range(page))
+  if (error) throw error
+  return { rows: data, count, pageSize: PAGE_SIZE }
+}
+
+export async function fetchTaskCounts() {
+  const today = new Date().toISOString().slice(0, 10)
+  const [pending, overdue, done] = await Promise.all([
+    supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'รอดำเนินการ'),
+    supabase.from('tasks').select('id', { count: 'exact', head: true }).neq('status', 'เสร็จสิ้น').lt('due_date', today),
+    supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'เสร็จสิ้น'),
+  ])
+  return { pending: pending.count || 0, overdue: overdue.count || 0, done: done.count || 0 }
+}
+
+export async function fetchTasksPage({ page = 0, status = '', priority = '', q = '' } = {}) {
+  let query = supabase.from('tasks').select('*, company:companies(id,name)', { count: 'exact' }).order('due_date', { ascending: true })
+  if (status) query = query.eq('status', status)
+  if (priority) query = query.eq('priority', priority)
+  const sq = safeLike(q)
+  if (sq) query = query.ilike('subject', `%${sq}%`)
+  const { data, error, count } = await query.range(...range(page))
+  if (error) throw error
+  return { rows: data, count, pageSize: PAGE_SIZE }
+}
+
+export async function fetchQuotationsTotal({ status = '', q = '' } = {}) {
+  let query = supabase.from('quotations').select('value')
+  if (status) query = query.eq('status', status)
+  const sq = safeLike(q)
+  if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
+  const { data, error } = await query
+  if (error) throw error
+  return data.reduce((s, x) => s + (Number(x.value) || 0), 0)
+}
+
+export async function fetchQuotationsPage({ page = 0, status = '', q = '' } = {}) {
+  let query = supabase.from('quotations').select('*, company:companies(id,name,created_by)', { count: 'exact' }).order('created_at', { ascending: false })
+  if (status) query = query.eq('status', status)
+  const sq = safeLike(q)
+  if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
+  const { data, error, count } = await query.range(...range(page))
+  if (error) throw error
+  return { rows: data, count, pageSize: PAGE_SIZE }
 }
 
 // ===== COMPANIES =====
@@ -72,6 +155,62 @@ export async function addQuotation(d) {
 export const updateQuotationStatus = (id, status) =>
   supabase.from('quotations').update({ status }).eq('id', id).select().single().then(handle)
 export const deleteQuotation = (id) => supabase.from('quotations').delete().eq('id', id).then(handle)
+
+// ===== ATTACHMENTS (Supabase Storage bucket "attachments") =====
+export const ATTACHMENTS_BUCKET = 'attachments'
+export const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024 // 20MB
+
+export async function listAttachments(companyId) {
+  return supabase.from('attachments').select('*').eq('company_id', companyId)
+    .order('created_at', { ascending: false }).then(handle)
+}
+
+export async function uploadAttachment(companyId, file, uploadedBy) {
+  if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('ไฟล์ใหญ่เกิน 20MB')
+  const safeName = file.name.replace(/[^\w.\-ก-๙ ]/g, '_')
+  const path = `${companyId}/${Date.now()}_${safeName}`
+  const { error: upErr } = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file)
+  if (upErr) throw upErr
+  return supabase.from('attachments').insert({
+    company_id: companyId, file_name: file.name, file_path: path,
+    file_size: file.size, mime_type: file.type, uploaded_by: uploadedBy
+  }).select().single().then(handle)
+}
+
+export async function getAttachmentUrl(filePath) {
+  const { data, error } = await supabase.storage.from(ATTACHMENTS_BUCKET).createSignedUrl(filePath, 60)
+  if (error) throw error
+  return data.signedUrl
+}
+
+export async function deleteAttachment(id, filePath) {
+  await supabase.storage.from(ATTACHMENTS_BUCKET).remove([filePath])
+  return supabase.from('attachments').delete().eq('id', id).then(handle)
+}
+
+// ===== PROFILES / ROLES (Admin / Sale) =====
+export async function getMyProfile(userId) {
+  return supabase.from('profiles').select('*').eq('id', userId).maybeSingle().then(handle)
+}
+
+export async function listProfiles() {
+  return supabase.from('profiles').select('*').order('created_at', { ascending: true }).then(handle)
+}
+
+export const updateProfileRole = (id, role) =>
+  supabase.from('profiles').update({ role }).eq('id', id).select().single().then(handle)
+
+// ต้อง login เป็น admin — เรียก Netlify Function ที่ถือ service role key ไว้ฝั่ง server เท่านั้น
+export async function adminCreateUser({ email, password, full_name }, accessToken) {
+  const res = await fetch('/.netlify/functions/create-user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ email, password, full_name })
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(json.error || 'สร้างผู้ใช้งานไม่สำเร็จ')
+  return json
+}
 
 // ===== DASHBOARD (คำนวณฝั่ง client จาก getAllData) =====
 export function computeDashboard(data) {

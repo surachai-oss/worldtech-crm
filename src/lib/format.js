@@ -47,3 +47,11 @@ export function activityColor(t) {
 }
 
 export const stageColors = { 'Lead': '#718096', 'Qualified': '#3182ce', 'Proposal': '#d69e2e', 'Negotiation': '#dd6b20', 'Closed Won': '#38a169', 'Closed Lost': '#e53e3e' }
+
+export function fmtFileSize(bytes) {
+  if (!bytes) return '-'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let n = Number(bytes), i = 0
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++ }
+  return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+}

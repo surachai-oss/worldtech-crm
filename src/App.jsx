@@ -12,12 +12,14 @@ import Deals from './components/Deals'
 import Activities from './components/Activities'
 import Tasks from './components/Tasks'
 import Quotations from './components/Quotations'
+import Users from './components/Users'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal } from './components/Modals'
 import './App.css'
 
 const TITLES = {
   dashboard: 'แดชบอร์ด', companies: 'บริษัทลูกค้า', 'company-detail': 'รายละเอียดบริษัท',
-  contacts: 'ผู้ติดต่อ', deals: 'ดีลการขาย', activities: 'ประวัติการติดต่อ', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา'
+  contacts: 'ผู้ติดต่อ', deals: 'ดีลการขาย', activities: 'ประวัติการติดต่อ', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา',
+  users: 'ผู้ใช้งาน'
 }
 
 function AppInner({ session }) {
@@ -25,11 +27,16 @@ function AppInner({ session }) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState({ companies: [], contacts: [], deals: [], activities: [], tasks: [], quotations: [] })
   const [settings, setSettings] = useState({})
+  const [profile, setProfile] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const [view, setView] = useState('dashboard')
   const [currentCompanyId, setCurrentCompanyId] = useState(null)
   const [modal, setModal] = useState(null) // { type, payload }
   const [searchQ, setSearchQ] = useState('')
   const [showResults, setShowResults] = useState(false)
+
+  const isAdmin = profile?.role === 'admin'
+  const perm = { userId: session.user.id, isAdmin }
 
   const reload = async () => {
     try {
@@ -47,6 +54,8 @@ function AppInner({ session }) {
       const map = {}
         ; (s || []).forEach(r => { map[r.key] = r.value })
       setSettings(map)
+      try { setProfile(await api.getMyProfile(session.user.id)) }
+      catch (e) { toast('โหลดข้อมูลผู้ใช้งานไม่สำเร็จ: ' + e.message, 'error') }
       setLoading(false)
     })()
   }, [])
@@ -68,6 +77,7 @@ function AppInner({ session }) {
       await fn()
       toast(successMsg, 'success')
       await reload()
+      setReloadKey(k => k + 1)
     } catch (e) {
       toast('เกิดข้อผิดพลาด: ' + e.message, 'error')
     }
@@ -120,7 +130,7 @@ function AppInner({ session }) {
     closeModal()
     if (!f.name?.trim()) { toast('กรุณากรอกชื่อบริษัท', 'error'); return }
     if (f.id) await run(() => api.updateCompany(f.id, f), 'อัปเดตสำเร็จ')
-    else await run(() => api.addCompany(f), 'เพิ่มบริษัทสำเร็จ')
+    else await run(() => api.addCompany({ ...f, created_by: session.user.id }), 'เพิ่มบริษัทสำเร็จ')
   }
   const saveContact = async (f) => {
     closeModal()
@@ -134,7 +144,7 @@ function AppInner({ session }) {
     if (!f.name?.trim()) { toast('กรุณากรอกชื่อดีล', 'error'); return }
     if (!f.company_id) { toast('กรุณาเลือกบริษัท', 'error'); return }
     if (f.id) await run(() => api.updateDeal(f.id, f), 'อัปเดตดีลสำเร็จ')
-    else await run(() => api.addDeal(f), 'เพิ่มดีลสำเร็จ')
+    else await run(() => api.addDeal({ ...f, created_by: session.user.id }), 'เพิ่มดีลสำเร็จ')
   }
   const saveActivity = async (f) => {
     closeModal()
@@ -146,7 +156,7 @@ function AppInner({ session }) {
     closeModal()
     if (!f.subject?.trim()) { toast('กรุณากรอกหัวข้องาน', 'error'); return }
     if (f.id) await run(() => api.updateTask(f.id, f), 'อัปเดตสำเร็จ')
-    else await run(() => api.addTask(f), 'เพิ่มงานสำเร็จ')
+    else await run(() => api.addTask({ ...f, created_by: session.user.id }), 'เพิ่มงานสำเร็จ')
   }
   const saveQuotation = async (f) => {
     closeModal()
@@ -181,7 +191,7 @@ function AppInner({ session }) {
 
   return (
     <div id="app">
-      <Sidebar activeView={view} onNav={nav} user={currentUser} onLogout={() => supabase.auth.signOut()} />
+      <Sidebar activeView={view} onNav={nav} user={currentUser} isAdmin={isAdmin} onLogout={() => supabase.auth.signOut()} />
       <div className="main-content">
         <div className="topbar">
           <div className="topbar-title">{TITLES[view]}</div>
@@ -214,7 +224,7 @@ function AppInner({ session }) {
         <div className="content-area">
           {view === 'dashboard' && <Dashboard data={data} onNav={nav} />}
           {view === 'companies' && (
-            <Companies companies={data.companies} onOpen={(id) => nav('company-detail', id)} onEdit={actions.editCompany} onDelete={actions.deleteCompany} />
+            <Companies perm={perm} reloadKey={reloadKey} onOpen={(id) => nav('company-detail', id)} onEdit={actions.editCompany} onDelete={actions.deleteCompany} />
           )}
           {view === 'company-detail' && currentCompany && (
             <CompanyDetail
@@ -225,25 +235,28 @@ function AppInner({ session }) {
               tasks={data.tasks.filter(t => t.company_id === currentCompanyId)}
               quotations={data.quotations.filter(q => q.company_id === currentCompanyId)}
               settings={settings}
+              perm={perm}
+              currentUserName={currentUser.name}
               onBack={() => nav('companies')}
               actions={actions}
             />
           )}
           {view === 'contacts' && (
-            <Contacts contacts={data.contacts} companies={data.companies} onNavCompany={(id) => nav('company-detail', id)} onEdit={(c) => actions.editContact(c?.company_id, c)} onDelete={actions.deleteContact} />
+            <Contacts perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onEdit={(c) => actions.editContact(c?.company_id, c)} onDelete={actions.deleteContact} />
           )}
           {view === 'deals' && (
-            <Deals deals={data.deals} companies={data.companies} onAdd={() => actions.addDeal(null)} onAddStage={actions.addDealStage} onEdit={actions.editDeal} onMoveStage={actions.moveDealStage} />
+            <Deals perm={perm} deals={data.deals} companies={data.companies} onAdd={() => actions.addDeal(null)} onAddStage={actions.addDealStage} onEdit={actions.editDeal} onMoveStage={actions.moveDealStage} />
           )}
           {view === 'activities' && (
-            <Activities activities={data.activities} companies={data.companies} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addActivity(null)} onDelete={actions.deleteActivity} />
+            <Activities perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addActivity(null)} onDelete={actions.deleteActivity} />
           )}
           {view === 'tasks' && (
-            <Tasks tasks={data.tasks} companies={data.companies} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addTask(null)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />
+            <Tasks perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addTask(null)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />
           )}
           {view === 'quotations' && (
-            <Quotations quotations={data.quotations} companies={data.companies} settings={settings} onAdd={() => actions.addQuotation(null)} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} />
+            <Quotations perm={perm} reloadKey={reloadKey} settings={settings} onAdd={() => actions.addQuotation(null)} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} />
           )}
+          {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
         </div>
       </div>
 

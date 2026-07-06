@@ -1,19 +1,22 @@
-import { useState } from 'react'
-import { fmtCurrency, fmtDate, isOverdue, isDueToday, stageBadgeClass, statusBadgeClass, quotBadgeClass, priorityIcon, activityIcon, activityColor } from '../lib/format'
-import { CONSTANTS } from '../lib/api'
+import { useEffect, useState } from 'react'
+import { fmtCurrency, fmtDate, fmtFileSize, isOverdue, isDueToday, stageBadgeClass, statusBadgeClass, quotBadgeClass, priorityIcon, activityIcon, activityColor } from '../lib/format'
+import { CONSTANTS, listAttachments, uploadAttachment, deleteAttachment, getAttachmentUrl } from '../lib/api'
 import { printQuotation } from '../lib/printQuotation'
+import { canEdit, canDelete, canManageChild } from '../lib/permissions'
+import { useUi } from './UiContext'
 
 const TABS = [
   ['info', 'ข้อมูลบริษัท'], ['contacts', 'ผู้ติดต่อ'], ['deals', 'ดีล'],
-  ['activities', 'กิจกรรม'], ['tasks', 'งาน'], ['quotations', 'ใบเสนอราคา']
+  ['activities', 'กิจกรรม'], ['tasks', 'งาน'], ['quotations', 'ใบเสนอราคา'], ['attachments', 'เอกสารแนบ']
 ]
 
-export default function CompanyDetail({ company, contacts, deals, activities, tasks, quotations, settings, onBack, actions }) {
+export default function CompanyDetail({ company, contacts, deals, activities, tasks, quotations, settings, perm, currentUserName, onBack, actions }) {
   const [tab, setTab] = useState('info')
   if (!company) return null
 
   const counts = { contacts: contacts.length, deals: deals.length, activities: activities.length, tasks: tasks.length, quotations: quotations.length }
   const pendingTasks = tasks.filter(t => t.status !== 'เสร็จสิ้น').length
+  const canEditCompany = canEdit(company, perm)
 
   return (
     <div>
@@ -36,7 +39,7 @@ export default function CompanyDetail({ company, contacts, deals, activities, ta
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-outline btn-sm" onClick={() => actions.addActivity(company.id)}>+ บันทึกการติดต่อ</button>
               <button className="btn btn-outline btn-sm" onClick={() => actions.addTask(company.id)}>+ เพิ่มงาน</button>
-              <button className="btn btn-primary btn-sm" onClick={() => actions.editCompany(company)}>✏️ แก้ไข</button>
+              {canEditCompany && <button className="btn btn-primary btn-sm" onClick={() => actions.editCompany(company)}>✏️ แก้ไข</button>}
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
@@ -57,11 +60,12 @@ export default function CompanyDetail({ company, contacts, deals, activities, ta
       </div>
 
       {tab === 'info' && <InfoTab company={company} />}
-      {tab === 'contacts' && <ContactsTab contacts={contacts} onAdd={() => actions.addContact(company.id)} onEdit={(c) => actions.editContact(company.id, c)} onDelete={actions.deleteContact} />}
-      {tab === 'deals' && <DealsTab deals={deals} onAdd={() => actions.addDeal(company.id)} onEdit={actions.editDeal} onDelete={actions.deleteDeal} />}
-      {tab === 'activities' && <ActivitiesTab activities={activities} onAdd={() => actions.addActivity(company.id)} onDelete={actions.deleteActivity} />}
-      {tab === 'tasks' && <TasksTab tasks={tasks} onAdd={() => actions.addTask(company.id)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />}
-      {tab === 'quotations' && <QuotationsTab quotations={quotations} company={company} settings={settings} onAdd={() => actions.addQuotation(company.id)} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} />}
+      {tab === 'contacts' && <ContactsTab contacts={contacts} perm={perm} company={company} onAdd={() => actions.addContact(company.id)} onEdit={(c) => actions.editContact(company.id, c)} onDelete={actions.deleteContact} />}
+      {tab === 'deals' && <DealsTab deals={deals} perm={perm} onAdd={() => actions.addDeal(company.id)} onEdit={actions.editDeal} onDelete={actions.deleteDeal} />}
+      {tab === 'activities' && <ActivitiesTab activities={activities} perm={perm} company={company} onAdd={() => actions.addActivity(company.id)} onDelete={actions.deleteActivity} />}
+      {tab === 'tasks' && <TasksTab tasks={tasks} perm={perm} onAdd={() => actions.addTask(company.id)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />}
+      {tab === 'quotations' && <QuotationsTab quotations={quotations} company={company} perm={perm} settings={settings} onAdd={() => actions.addQuotation(company.id)} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} />}
+      {tab === 'attachments' && <AttachmentsTab company={company} perm={perm} currentUserName={currentUserName} />}
     </div>
   )
 }
@@ -95,7 +99,8 @@ function InfoTab({ company }) {
   )
 }
 
-function ContactsTab({ contacts, onAdd, onEdit, onDelete }) {
+function ContactsTab({ contacts, perm, company, onAdd, onEdit, onDelete }) {
+  const manageable = canManageChild(company, perm)
   return (
     <>
       <div className="section-header"><div className="section-title">ผู้ติดต่อ</div><button className="btn btn-primary btn-sm" onClick={onAdd}>+ เพิ่ม</button></div>
@@ -111,8 +116,8 @@ function ContactsTab({ contacts, onAdd, onEdit, onDelete }) {
                 <td style={{ fontSize: 12 }}>{c.email || '-'}</td>
                 <td style={{ fontSize: 12 }}>{c.line_id || '-'}</td>
                 <td className="td-actions">
-                  <button className="btn btn-outline btn-xs" onClick={() => onEdit(c)}>✏️</button>
-                  <button className="btn btn-danger btn-xs" onClick={() => onDelete(c.id)}>🗑</button>
+                  {manageable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(c)}>✏️</button>}
+                  {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(c.id)}>🗑</button>}
                 </td>
               </tr>
             ))}</tbody>
@@ -123,7 +128,7 @@ function ContactsTab({ contacts, onAdd, onEdit, onDelete }) {
   )
 }
 
-function DealsTab({ deals, onAdd, onEdit, onDelete }) {
+function DealsTab({ deals, perm, onAdd, onEdit, onDelete }) {
   return (
     <>
       <div className="section-header"><div className="section-title">ดีลการขาย</div><button className="btn btn-primary btn-sm" onClick={onAdd}>+ เพิ่มดีล</button></div>
@@ -139,8 +144,8 @@ function DealsTab({ deals, onAdd, onEdit, onDelete }) {
                 <td style={{ fontSize: 12 }}>{fmtDate(d.close_date)}</td>
                 <td style={{ fontSize: 12 }}>{d.owner || '-'}</td>
                 <td className="td-actions">
-                  <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>✏️</button>
-                  <button className="btn btn-danger btn-xs" onClick={() => onDelete(d.id)}>🗑</button>
+                  {canEdit(d, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>✏️</button>}
+                  {canDelete(d, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(d.id)}>🗑</button>}
                 </td>
               </tr>
             ))}</tbody>
@@ -151,7 +156,8 @@ function DealsTab({ deals, onAdd, onEdit, onDelete }) {
   )
 }
 
-function ActivitiesTab({ activities, onAdd, onDelete }) {
+function ActivitiesTab({ activities, perm, company, onAdd, onDelete }) {
+  const manageable = canManageChild(company, perm)
   const sorted = [...activities].sort((a, b) => new Date(b.activity_date) - new Date(a.activity_date))
   return (
     <>
@@ -166,7 +172,7 @@ function ActivitiesTab({ activities, onAdd, onDelete }) {
                 <div className="activity-meta"><span>{a.type}</span><span>{fmtDate(a.activity_date)}</span><span>โดย {a.recorded_by}</span></div>
                 {a.detail && <div className="activity-detail">{a.detail}</div>}
               </div>
-              <button className="btn btn-danger btn-xs" onClick={() => onDelete(a.id)}>🗑</button>
+              {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(a.id)}>🗑</button>}
             </div>
           )) : <div className="empty-state"><div className="empty-icon">📝</div><div>ยังไม่มีกิจกรรม</div></div>}
         </div>
@@ -175,7 +181,7 @@ function ActivitiesTab({ activities, onAdd, onDelete }) {
   )
 }
 
-function TasksTab({ tasks, onAdd, onEdit, onComplete, onDelete }) {
+function TasksTab({ tasks, perm, onAdd, onEdit, onComplete, onDelete }) {
   return (
     <>
       <div className="section-header"><div className="section-title">งาน Follow-up</div><button className="btn btn-primary btn-sm" onClick={onAdd}>+ เพิ่มงาน</button></div>
@@ -192,9 +198,9 @@ function TasksTab({ tasks, onAdd, onEdit, onComplete, onDelete }) {
                   <td className={ov ? 'overdue' : isDueToday(t.due_date) ? 'due-today' : ''} style={{ fontSize: 12 }}>{ov ? '🚨 ' : ''}{fmtDate(t.due_date)}</td>
                   <td><span className={`badge ${statusBadgeClass(t.status)}`}>{t.status}</span></td>
                   <td className="td-actions">
-                    {t.status !== 'เสร็จสิ้น' && <button className="btn btn-success btn-xs" onClick={() => onComplete(t.id)}>✓</button>}
-                    <button className="btn btn-outline btn-xs" onClick={() => onEdit(t)}>✏️</button>
-                    <button className="btn btn-danger btn-xs" onClick={() => onDelete(t.id)}>🗑</button>
+                    {t.status !== 'เสร็จสิ้น' && canEdit(t, perm) && <button className="btn btn-success btn-xs" onClick={() => onComplete(t.id)}>✓</button>}
+                    {canEdit(t, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(t)}>✏️</button>}
+                    {canDelete(t, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(t.id)}>🗑</button>}
                   </td>
                 </tr>
               )
@@ -206,7 +212,8 @@ function TasksTab({ tasks, onAdd, onEdit, onComplete, onDelete }) {
   )
 }
 
-function QuotationsTab({ quotations, company, settings, onAdd, onStatusChange, onDelete }) {
+function QuotationsTab({ quotations, company, perm, settings, onAdd, onStatusChange, onDelete }) {
+  const manageable = canManageChild(company, perm)
   return (
     <>
       <div className="section-header"><div className="section-title">ใบเสนอราคา</div><button className="btn btn-primary btn-sm" onClick={onAdd}>+ สร้างใบเสนอราคา</button></div>
@@ -222,16 +229,97 @@ function QuotationsTab({ quotations, company, settings, onAdd, onStatusChange, o
                 <td><span className={`badge ${quotBadgeClass(q.status)}`}>{q.status}</span></td>
                 <td style={{ fontSize: 12 }}>{fmtDate(q.quot_date)}</td>
                 <td className="td-actions">
-                  <select className="filter-select" style={{ fontSize: 11, padding: '3px 6px' }} value={q.status} onChange={e => onStatusChange(q.id, e.target.value)}>
-                    {CONSTANTS.QUOT_STATUSES.map(s => <option key={s}>{s}</option>)}
-                  </select>
+                  {manageable && (
+                    <select className="filter-select" style={{ fontSize: 11, padding: '3px 6px' }} value={q.status} onChange={e => onStatusChange(q.id, e.target.value)}>
+                      {CONSTANTS.QUOT_STATUSES.map(s => <option key={s}>{s}</option>)}
+                    </select>
+                  )}
                   <button className="btn btn-secondary btn-xs" onClick={() => printQuotation(q, company, settings)}>📄 PDF</button>
-                  <button className="btn btn-danger btn-xs" onClick={() => onDelete(q.id)}>🗑</button>
+                  {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(q.id)}>🗑</button>}
                 </td>
               </tr>
             ))}</tbody>
           </table>
         ) : <div className="empty-state"><div className="empty-icon">📋</div><div>ยังไม่มีใบเสนอราคา</div></div>}
+      </div></div>
+    </>
+  )
+}
+
+function AttachmentsTab({ company, perm, currentUserName }) {
+  const { toast, confirm } = useUi()
+  const manageable = canManageChild(company, perm)
+  const [files, setFiles] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+
+  const load = async () => {
+    setLoading(true)
+    try { setFiles(await listAttachments(company.id)) }
+    catch (e) { toast('โหลดเอกสารแนบไม่สำเร็จ: ' + e.message, 'error') }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { load() }, [company.id])
+
+  const onFileChange = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true)
+    try {
+      await uploadAttachment(company.id, file, currentUserName)
+      toast('แนบไฟล์สำเร็จ', 'success')
+      await load()
+    } catch (err) { toast('แนบไฟล์ไม่สำเร็จ: ' + err.message, 'error') }
+    finally { setUploading(false) }
+  }
+
+  const onDownload = async (f) => {
+    try {
+      const url = await getAttachmentUrl(f.file_path)
+      window.open(url, '_blank')
+    } catch (e) { toast('เปิดไฟล์ไม่สำเร็จ: ' + e.message, 'error') }
+  }
+
+  const onDeleteFile = async (f) => {
+    if (!(await confirm('ลบไฟล์นี้?'))) return
+    try {
+      await deleteAttachment(f.id, f.file_path)
+      toast('ลบไฟล์สำเร็จ', 'success')
+      await load()
+    } catch (e) { toast('ลบไฟล์ไม่สำเร็จ: ' + e.message, 'error') }
+  }
+
+  return (
+    <>
+      <div className="section-header">
+        <div className="section-title">เอกสารแนบ</div>
+        {manageable && (
+          <label className="btn btn-primary btn-sm" style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}>
+            {uploading ? 'กำลังอัปโหลด...' : '+ แนบไฟล์'}
+            <input type="file" style={{ display: 'none' }} onChange={onFileChange} disabled={uploading} />
+          </label>
+        )}
+      </div>
+      <div className="card"><div className="table-wrap">
+        {files.length ? (
+          <table>
+            <thead><tr><th>ไฟล์</th><th>ขนาด</th><th>อัปโหลดโดย</th><th>วันที่</th><th>การจัดการ</th></tr></thead>
+            <tbody>{files.map(f => (
+              <tr key={f.id}>
+                <td style={{ fontWeight: 500 }}>📎 {f.file_name}</td>
+                <td style={{ fontSize: 12 }}>{fmtFileSize(f.file_size)}</td>
+                <td style={{ fontSize: 12 }}>{f.uploaded_by || '-'}</td>
+                <td style={{ fontSize: 12 }}>{fmtDate(f.created_at)}</td>
+                <td className="td-actions">
+                  <button className="btn btn-outline btn-xs" onClick={() => onDownload(f)}>⬇ ดาวน์โหลด</button>
+                  {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDeleteFile(f)}>🗑</button>}
+                </td>
+              </tr>
+            ))}</tbody>
+          </table>
+        ) : <div className="empty-state"><div className="empty-icon">📎</div><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีเอกสารแนบ'}</div></div>}
       </div></div>
     </>
   )

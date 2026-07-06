@@ -12,11 +12,19 @@
 ### 1. สร้าง Supabase Project
 1. ไปที่ https://supabase.com สร้างโปรเจกต์ใหม่ (ฟรีได้)
 2. เปิด **SQL Editor** → New query → คัดลอกทั้งหมดจาก `supabase/schema.sql` มาวาง → Run
+   - ไฟล์นี้จะสร้างตารางทั้งหมด, Storage bucket `attachments` สำหรับเอกสารแนบ, และระบบสิทธิ์ Admin/Sale ให้อัตโนมัติ
+   - ไฟล์รันซ้ำได้เสมอ (idempotent) ถ้าอัปเดตโปรเจกต์ในอนาคตให้รันไฟล์นี้ทับได้เลย
 3. ไปที่ **Authentication > Users** → เพิ่มผู้ใช้งาน (อีเมล/รหัสผ่าน) สำหรับพนักงานที่จะเข้าระบบ
    - หรือเปิด **Authentication > Providers** ตั้งค่า sign-up ถ้าต้องการให้สมัครเองได้
+   - ทุกบัญชีใหม่จะได้สิทธิ์ **"พนักงานขาย" (sale)** โดยอัตโนมัติ
 4. ไปที่ **Project Settings > API** คัดลอกค่า:
    - `Project URL` → ใช้เป็น `VITE_SUPABASE_URL`
    - `anon public` key → ใช้เป็น `VITE_SUPABASE_ANON_KEY`
+5. ตั้งให้ตัวเองเป็น **Admin คนแรก** — กลับไปที่ SQL Editor แล้วรัน:
+   ```sql
+   update profiles set role = 'admin' where email = 'you@company.com';
+   ```
+   (ต้อง login เข้าระบบอย่างน้อย 1 ครั้งก่อน เพื่อให้มีแถวใน `profiles` ให้อัปเดต) หลังจากนั้นเมนู "ผู้ใช้งาน" จะปรากฏใน Sidebar ให้จัดการสิทธิ์คนอื่นต่อได้จากในแอปเลย
 
 ### 2. ตั้งค่าโปรเจกต์ในเครื่อง
 ```bash
@@ -47,6 +55,7 @@ on conflict (key) do update set value = excluded.value;
 4. ไปที่ **Site settings > Environment variables** เพิ่ม:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY` — คัดลอกจาก Supabase **Project Settings > API > service_role** (⚠️ **ห้ามใส่ prefix `VITE_`** ไม่งั้น Vite จะฝังคีย์นี้ไปกับโค้ดฝั่ง browser ซึ่งเท่ากับเปิดสิทธิ์สูงสุดให้ใครก็ได้ที่เปิด devtools ดู — ต้องเป็นตัวแปรฝั่ง server สำหรับ Netlify Function เท่านั้น) ใช้สำหรับฟีเจอร์ admin เพิ่มผู้ใช้งานจากในแอป
 5. Deploy
 
 ### วิธีที่ 2: Netlify CLI
@@ -56,8 +65,17 @@ netlify login
 netlify init
 netlify env:set VITE_SUPABASE_URL "https://xxxx.supabase.co"
 netlify env:set VITE_SUPABASE_ANON_KEY "your-anon-key"
+netlify env:set SUPABASE_SERVICE_ROLE_KEY "your-service-role-key"
 netlify deploy --prod
 ```
+
+### ทดสอบฟีเจอร์ "เพิ่มผู้ใช้งาน" ในเครื่อง
+`npm run dev` (Vite) ไม่รัน Netlify Function ให้ ต้องใช้ Netlify CLI แทน:
+```bash
+npm install -g netlify-cli
+netlify dev
+```
+แล้วตั้งค่า `SUPABASE_SERVICE_ROLE_KEY` ไว้ในไฟล์ `.env` ของเครื่อง (Netlify CLI จะอ่านจาก `.env` ให้ฟังก์ชันด้วย) หรือรันแล้ว deploy ขึ้น Netlify จริงเพื่อทดสอบก็ได้เช่นกัน
 
 ## ย้ายข้อมูลเดิมจาก Google Sheets
 ถ้ามีข้อมูลอยู่ใน Google Sheet เดิมอยู่แล้ว:
@@ -66,6 +84,20 @@ netlify deploy --prod
 3. แม็ปคอลัมน์ให้ตรงกับชื่อฟิลด์ภาษาอังกฤษในตาราง (ดูชื่อคอลัมน์ได้จาก `supabase/schema.sql`)
 4. ทำทีละตารางตามลำดับ: companies → contacts/deals → activities/tasks/quotations (เพราะมี foreign key อ้างถึงกัน)
 
-## หมายเหตุ
-- ฟีเจอร์อัปโหลดเอกสารแนบต่อบริษัท (เดิมใช้ Google Drive) ยังไม่ได้ทำในเวอร์ชันนี้ — แนะนำให้ใช้ Supabase Storage ถ้าต้องการฟีเจอร์นี้ต่อ (แจ้งได้)
-- Row Level Security เปิดแบบ "authenticated ทำได้ทุกอย่าง" ไว้ก่อน ถ้าต้องการแยกสิทธิ์ตาม Role (Admin/Sale) แจ้งได้ จะเพิ่ม policy ให้
+## ฟีเจอร์ที่เพิ่มเข้ามา
+
+### เอกสารแนบ (Attachments)
+- แต่ละบริษัทมีแท็บ "เอกสารแนบ" ให้อัปโหลด/ดาวน์โหลด/ลบไฟล์ได้ (จำกัดไฟล์ละไม่เกิน 20MB)
+- ไฟล์เก็บใน Supabase Storage bucket ชื่อ `attachments` (private bucket, เข้าถึงผ่าน signed URL อายุ 60 วินาทีเท่านั้น)
+
+### สิทธิ์การใช้งาน Admin / Sale
+- ผู้ใช้งานใหม่ทุกคนเริ่มต้นเป็น **พนักงานขาย (sale)** อัตโนมัติ — เห็น/แก้ไข/ลบได้เฉพาะข้อมูล (บริษัท, ดีล, งาน) ที่ตัวเองสร้าง บวกกับข้อมูลเก่าที่ยังไม่มีเจ้าของ
+- **ผู้ดูแลระบบ (admin)** เห็น/แก้ไข/ลบได้ทุกอย่าง และมีเมนู "ผู้ใช้งาน" ในการปรับสิทธิ์คนอื่น
+- ผู้ติดต่อ/กิจกรรม/ใบเสนอราคา/เอกสารแนบ สืบสิทธิ์ตามบริษัทแม่ (ถ้าเห็นบริษัทได้ ก็จัดการของในบริษัทนั้นได้)
+- สิทธิ์ถูกบังคับที่ระดับฐานข้อมูล (Row Level Security) เสมอ — ปุ่มที่ซ่อนในหน้าเว็บเป็นแค่ UX เท่านั้น
+- Admin เพิ่มผู้ใช้งานใหม่จากในแอปได้เลยที่หน้า "ผู้ใช้งาน" → **+ เพิ่มผู้ใช้งาน** (กรอกอีเมล/ชื่อ/ตั้งรหัสผ่านให้เลย ยังไม่มีอีเมลแจ้งอัตโนมัติ ต้องคัดลอกรหัสผ่านไปแจ้งพนักงานเอง)
+  - ฟีเจอร์นี้รันผ่าน Netlify Function ที่ใช้ **Service Role Key** (สิทธิ์สูงสุด ข้าม RLS ทั้งหมด) — คีย์นี้อยู่ฝั่ง server เท่านั้น ต้องตั้งค่าเพิ่มก่อนใช้งานได้ (ดูขั้นตอนด้านล่าง)
+
+### Pagination
+- หน้า บริษัทลูกค้า / ผู้ติดต่อ / ประวัติการติดต่อ / งาน Follow-up / ใบเสนอราคา โหลดข้อมูลทีละหน้า (20 รายการ) จากฐานข้อมูลโดยตรง แทนการโหลดทั้งหมดมาไว้ในเบราว์เซอร์
+- Dashboard, ค้นหาส่วนกลาง, หน้ารายละเอียดบริษัท (แท็บย่อย) และ Kanban ดีล ยังใช้ข้อมูลชุดเต็มเหมือนเดิม เพราะต้องคำนวณสรุปข้ามทั้งระบบ — เหมาะกับข้อมูลระดับหลักพันรายการ ถ้าข้อมูลโตกว่านี้มากควรแยกไปคำนวณสรุปฝั่ง Postgres (view/RPC) แทน

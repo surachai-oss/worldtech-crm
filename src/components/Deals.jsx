@@ -1,7 +1,8 @@
 import { CONSTANTS } from '../lib/api'
 import { fmtCurrency, fmtDate, stageColors } from '../lib/format'
+import { canEdit } from '../lib/permissions'
 
-export default function Deals({ deals, companies, onAdd, onAddStage, onEdit, onMoveStage }) {
+export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdit, onMoveStage }) {
   const totalVal = deals.reduce((s, d) => s + (Number(d.value) || 0), 0)
 
   return (
@@ -32,13 +33,15 @@ export default function Deals({ deals, companies, onAdd, onAddStage, onEdit, onM
                       <div className="deal-val">{fmtCurrency(d.value)}</div>
                       {d.close_date && <div className="deal-date">{fmtDate(d.close_date)}</div>}
                       <div className="deal-owner">{d.owner || ''}</div>
-                      <div style={{ marginTop: 8, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>✏️</button>
-                        <select className="filter-select" style={{ fontSize: 10, padding: '2px 4px', maxWidth: 120 }}
-                          value={d.stage} onChange={e => onMoveStage(d.id, e.target.value)}>
-                          {CONSTANTS.DEAL_STAGES.map(s => <option key={s}>{s}</option>)}
-                        </select>
-                      </div>
+                      {canEdit(d, perm) && (
+                        <div style={{ marginTop: 8, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>✏️</button>
+                          <select className="filter-select" style={{ fontSize: 10, padding: '2px 4px', maxWidth: 120 }}
+                            value={d.stage} onChange={e => onMoveStage(d.id, e.target.value)}>
+                            {CONSTANTS.DEAL_STAGES.map(s => <option key={s}>{s}</option>)}
+                          </select>
+                        </div>
+                      )}
                     </div>
                   )
                 })}
