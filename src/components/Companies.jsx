@@ -42,15 +42,15 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">🏢 บริษัทลูกค้า <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
+        <div className="section-title">บริษัทลูกค้า <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-outline" onClick={() => setShowImport(true)}>📥 นำเข้าจากไฟล์</button>
+          <button className="btn btn-outline" onClick={() => setShowImport(true)}>นำเข้าจากไฟล์</button>
           <button className="btn btn-primary" onClick={() => onEdit(null)}>+ เพิ่มบริษัท</button>
         </div>
       </div>
       {showImport && <ImportCompaniesModal perm={perm} onClose={() => setShowImport(false)} onImported={() => setLocalBump(b => b + 1)} />}
       <div className="filter-bar">
-        <input className="filter-input" placeholder="🔍 ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
+        <input className="filter-input" placeholder="ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
           <option value="">ทุกสถานะ</option>
           {list('company_statuses').map(s => <option key={s}>{s}</option>)}
@@ -74,15 +74,15 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
                     <td><span className={`badge ${statusBadgeClass(c.status)}`}>{c.status}</span></td>
                     <td style={{ fontSize: 12 }}>{c.owner || '-'}</td>
                     <td className="td-actions" onClick={e => e.stopPropagation()}>
-                      <button className="btn btn-outline btn-xs" onClick={() => onOpen(c.id)}>👁 ดู</button>
-                      {canEdit(c, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(c)}>✏️</button>}
-                      {canDelete(c, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(c.id)}>🗑</button>}
+                      <button className="btn btn-outline btn-xs" onClick={() => onOpen(c.id)}>ดู</button>
+                      {canEdit(c, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(c)}>แก้ไข</button>}
+                      {canDelete(c, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(c.id)}>ลบ</button>}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : <div className="empty-state"><div className="empty-icon">🏢</div><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีข้อมูลบริษัท'}</div></div>}
+          ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีข้อมูลบริษัท'}</div></div>}
         </div>
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPage={setPage} />
       </div>

@@ -20,7 +20,7 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">🤝 ดีลการขาย <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({filtered.length} ดีล · {fmtCurrency(totalVal)})</span></div>
+        <div className="section-title">ดีลการขาย <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({filtered.length} ดีล · {fmtCurrency(totalVal)})</span></div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่คาดว่าปิดดีล ตั้งแต่" />
           <span style={{ fontSize: 12, color: 'var(--text-light)' }}>ถึง</span>
@@ -53,7 +53,7 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
                       <div className="deal-owner">{d.owner || ''}</div>
                       {canEdit(d, perm) && (
                         <div style={{ marginTop: 8, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                          <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>✏️ แก้ไข</button>
+                          <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>แก้ไข</button>
                           <EditableSelect listKey="deal_stages" value={d.stage} onChange={v => onMoveStage(d.id, v)} isAdmin={perm.isAdmin} style={{ width: 140 }} />
                         </div>
                       )}

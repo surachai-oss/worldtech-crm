@@ -195,6 +195,7 @@ export const listProducts = () => supabase.from('products').select('*').order('c
 export const addProduct = (d) => supabase.from('products').insert(d).select().single().then(handle)
 export const updateProduct = (id, d) => supabase.from('products').update(d).eq('id', id).select().single().then(handle)
 export const deleteProduct = (id) => supabase.from('products').delete().eq('id', id).then(handle)
+export const bulkImportProducts = (rows) => supabase.from('products').insert(rows).select().then(handle)
 
 // ===== TASKS =====
 export const addTask = (d) => supabase.from('tasks').insert(d).select().single().then(handle)

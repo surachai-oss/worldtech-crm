@@ -34,7 +34,7 @@ function AddUserModal({ onClose, onCreated }) {
       <div className="modal">
         <div className="modal-header">
           <div className="modal-title">เพิ่มผู้ใช้งานใหม่</div>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           <div className="form-group">
@@ -56,7 +56,7 @@ function AddUserModal({ onClose, onCreated }) {
         </div>
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onClose}>ยกเลิก</button>
-          <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? 'กำลังบันทึก...' : '💾 สร้างผู้ใช้งาน'}</button>
+          <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? 'กำลังบันทึก...' : 'สร้างผู้ใช้งาน'}</button>
         </div>
       </div>
     </div>
@@ -98,7 +98,7 @@ export default function Users({ currentUserId, accessToken }) {
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">👤 ผู้ใช้งานระบบ <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} คน)</span></div>
+        <div className="section-title">ผู้ใช้งานระบบ <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} คน)</span></div>
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ เพิ่มผู้ใช้งาน</button>
       </div>
       {showAdd && <AddUserModal onClose={() => setShowAdd(false)} onCreated={onCreateUser} />}
@@ -122,7 +122,7 @@ export default function Users({ currentUserId, accessToken }) {
                 ))}
               </tbody>
             </table>
-          ) : <div className="empty-state"><div className="empty-icon">👤</div><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีผู้ใช้งาน'}</div></div>}
+          ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีผู้ใช้งาน'}</div></div>}
         </div>
       </div>
     </div>

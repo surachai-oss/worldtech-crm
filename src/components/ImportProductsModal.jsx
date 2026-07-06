@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { bulkImportCompanies } from '../lib/api'
-import { downloadCompanyTemplate, parseCompanyImportFile, COMPANY_IMPORT_COLUMNS } from '../lib/importExport'
+import { bulkImportProducts } from '../lib/api'
+import { downloadProductTemplate, parseProductImportFile, PRODUCT_IMPORT_COLUMNS } from '../lib/importExport'
 import { useUi } from './UiContext'
 
-export default function ImportCompaniesModal({ perm, onClose, onImported }) {
+export default function ImportProductsModal({ existingProducts, onClose, onImported }) {
   const { toast } = useUi()
   const [parsed, setParsed] = useState(null) // { validRows, invalidRows }
   const [fileName, setFileName] = useState('')
@@ -15,8 +15,8 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
     if (!file) return
     setFileName(file.name)
     try {
-      const result = await parseCompanyImportFile(file)
-      setParsed(result)
+      const existingCodes = new Set(existingProducts.map(p => p.code.trim().toLowerCase()))
+      setParsed(await parseProductImportFile(file, existingCodes))
     } catch (err) {
       toast('อ่านไฟล์ไม่สำเร็จ: ' + err.message, 'error')
     }
@@ -26,9 +26,8 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
     if (!parsed?.validRows.length) return
     setImporting(true)
     try {
-      const rows = parsed.validRows.map(r => ({ ...r, created_by: perm.userId }))
-      await bulkImportCompanies(rows)
-      toast(`นำเข้าสำเร็จ ${rows.length} รายการ`, 'success')
+      await bulkImportProducts(parsed.validRows)
+      toast(`นำเข้าสำเร็จ ${parsed.validRows.length} รายการ`, 'success')
       onImported()
       onClose()
     } catch (err) {
@@ -42,7 +41,7 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={{ maxWidth: 640 }}>
         <div className="modal-header">
-          <div className="modal-title">นำเข้าบริษัทลูกค้าจากไฟล์</div>
+          <div className="modal-title">นำเข้าสินค้าจากไฟล์</div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
@@ -51,7 +50,7 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
               <div style={{ fontSize: 13, marginBottom: 12 }}>
                 1) ดาวน์โหลด Template  2) กรอกข้อมูลใน Excel  3) อัปโหลดไฟล์ .xlsx กลับมาที่นี่
               </div>
-              <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} onClick={downloadCompanyTemplate}>
+              <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} onClick={downloadProductTemplate}>
                 ดาวน์โหลด Template (.xlsx)
               </button>
               <div className="form-group">
@@ -59,7 +58,7 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
                 <input className="form-control" type="file" accept=".xlsx" onChange={onFileChange} />
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-light)' }}>
-                คอลัมน์ที่รองรับ: {COMPANY_IMPORT_COLUMNS.map(c => c.label).join(', ')} (มีแค่ "ชื่อบริษัท" ที่จำเป็น)
+                คอลัมน์ที่รองรับ: {PRODUCT_IMPORT_COLUMNS.map(c => c.label).join(', ')} (ต้องกรอกทั้งสองช่อง)
               </div>
             </>
           ) : (
@@ -87,10 +86,10 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
                 <div className="card" style={{ maxHeight: 220, overflow: 'auto' }}>
                   <div className="table-wrap">
                     <table>
-                      <thead><tr><th>ชื่อบริษัท</th><th>อุตสาหกรรม</th><th>โทรศัพท์</th><th>ที่มา</th></tr></thead>
+                      <thead><tr><th>รหัสสินค้า</th><th>ชื่อสินค้า</th></tr></thead>
                       <tbody>
                         {parsed.validRows.slice(0, 20).map((r, i) => (
-                          <tr key={i}><td>{r.name}</td><td style={{ fontSize: 12 }}>{r.industry || '-'}</td><td style={{ fontSize: 12 }}>{r.phone || '-'}</td><td style={{ fontSize: 12 }}>{r.lead_source || '-'}</td></tr>
+                          <tr key={i}><td>{r.code}</td><td>{r.name}</td></tr>
                         ))}
                       </tbody>
                     </table>

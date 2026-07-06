@@ -40,7 +40,7 @@ export default function Quotations({ perm, reloadKey, settings, onAdd, onStatusC
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">📋 ใบเสนอราคา <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ · {fmtCurrency(total)})</span></div>
+        <div className="section-title">ใบเสนอราคา <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ · {fmtCurrency(total)})</span></div>
         <button className="btn btn-primary" onClick={onAdd}>+ สร้างใบเสนอราคา</button>
       </div>
       <div className="filter-bar">
@@ -48,7 +48,7 @@ export default function Quotations({ perm, reloadKey, settings, onAdd, onStatusC
           <option value="">ทุกสถานะ</option>
           {list('quot_statuses').map(s => <option key={s}>{s}</option>)}
         </select>
-        <input className="filter-input" placeholder="🔍 ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
+        <input className="filter-input" placeholder="ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
       </div>
       <div className="card">
         <div className="table-wrap">
@@ -68,14 +68,14 @@ export default function Quotations({ perm, reloadKey, settings, onAdd, onStatusC
                       {canManageChild(qt.company, perm) && (
                         <EditableSelect listKey="quot_statuses" value={qt.status} onChange={v => onStatusChange(qt.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
                       )}
-                      <button className="btn btn-secondary btn-xs" onClick={() => doPrint(qt)}>📄 PDF</button>
-                      {canManageChild(qt.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(qt.id)}>🗑</button>}
+                      <button className="btn btn-secondary btn-xs" onClick={() => doPrint(qt)}>PDF</button>
+                      {canManageChild(qt.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(qt.id)}>ลบ</button>}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : <div className="empty-state"><div className="empty-icon">📋</div><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีใบเสนอราคา'}</div></div>}
+          ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีใบเสนอราคา'}</div></div>}
         </div>
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPage={setPage} />
       </div>

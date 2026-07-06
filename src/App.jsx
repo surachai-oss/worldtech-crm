@@ -115,7 +115,7 @@ function AppInner({ session }) {
     },
     addTask: (companyId) => setModal({ type: 'task', payload: { defaultCompanyId: companyId } }),
     editTask: (t) => setModal({ type: 'task', payload: { initial: t } }),
-    completeTask: async (id) => { await run(() => api.completeTask(id), 'งานเสร็จสิ้น ✓') },
+    completeTask: async (id) => { await run(() => api.completeTask(id), 'งานเสร็จสิ้น') },
     deleteTask: async (id) => {
       if (!(await confirm('ลบงานนี้?'))) return
       await run(() => api.deleteTask(id), 'ลบสำเร็จ')
@@ -185,7 +185,7 @@ function AppInner({ session }) {
   if (loading) {
     return (
       <div className="loading-screen">
-        <div className="logo-big">⚡ Worldtech</div>
+        <div className="logo-big">Worldtech</div>
         <div className="logo-sub">B2B CRM System</div>
         <div className="spinner" />
       </div>
@@ -209,7 +209,6 @@ function AppInner({ session }) {
         <div className="topbar">
           <div className="topbar-title">{TITLES[view]}</div>
           <div className="search-wrap">
-            <span className="search-icon">🔍</span>
             <input className="search-input" placeholder="ค้นหา..." value={searchQ}
               onChange={e => { setSearchQ(e.target.value); setShowResults(e.target.value.length >= 2) }}
               onBlur={() => setTimeout(() => setShowResults(false), 150)} />
@@ -296,7 +295,7 @@ export default function App() {
   if (session === undefined) {
     return (
       <div className="loading-screen">
-        <div className="logo-big">⚡ Worldtech</div>
+        <div className="logo-big">Worldtech</div>
         <div className="spinner" />
       </div>
     )

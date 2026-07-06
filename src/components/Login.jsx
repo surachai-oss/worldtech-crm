@@ -18,7 +18,7 @@ export default function Login() {
   return (
     <div className="login-screen">
       <form className="login-box" onSubmit={submit}>
-        <div className="brand">⚡ Worldtech B2B CRM</div>
+        <div className="brand">Worldtech B2B CRM</div>
         <div className="brand-sub">เข้าสู่ระบบด้วยบัญชีที่ได้รับสิทธิ์</div>
         <div className="form-group">
           <label className="form-label required">อีเมล</label>

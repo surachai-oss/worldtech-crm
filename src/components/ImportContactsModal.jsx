@@ -47,20 +47,20 @@ export default function ImportContactsModal({ onClose, onImported }) {
       <div className="modal" style={{ maxWidth: 640 }}>
         <div className="modal-header">
           <div className="modal-title">นำเข้าผู้ติดต่อจากไฟล์</div>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           {!parsed ? (
             <>
               <div style={{ fontSize: 13, marginBottom: 12 }}>
-                1) ดาวน์โหลด Template → 2) กรอกข้อมูลใน Excel/Google Sheets (ชื่อบริษัทต้องตรงกับที่มีอยู่ในระบบเป๊ะ) → 3) บันทึกเป็น <b>.csv</b> → 4) อัปโหลดกลับมาที่นี่
+                1) ดาวน์โหลด Template  2) กรอกข้อมูลใน Excel (ชื่อบริษัทต้องตรงกับที่มีอยู่ในระบบเป๊ะ)  3) อัปโหลดไฟล์ .xlsx กลับมาที่นี่
               </div>
               <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} onClick={downloadContactTemplate}>
-                ⬇ ดาวน์โหลด Template (.csv)
+                ดาวน์โหลด Template (.xlsx)
               </button>
               <div className="form-group">
-                <label className="form-label">อัปโหลดไฟล์ (.csv)</label>
-                <input className="form-control" type="file" accept=".csv,text/csv" onChange={onFileChange} disabled={!companies} />
+                <label className="form-label">อัปโหลดไฟล์ (.xlsx)</label>
+                <input className="form-control" type="file" accept=".xlsx" onChange={onFileChange} disabled={!companies} />
                 {!companies && <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>กำลังโหลดรายชื่อบริษัท...</div>}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-light)' }}>
@@ -71,8 +71,8 @@ export default function ImportContactsModal({ onClose, onImported }) {
             <>
               <div style={{ fontSize: 13, marginBottom: 8 }}>ไฟล์: <b>{fileName}</b></div>
               <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-                <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓ ถูกต้อง {parsed.validRows.length} รายการ</span>
-                {parsed.invalidRows.length > 0 && <span style={{ color: 'var(--danger)', fontWeight: 600 }}>✕ ผิดพลาด {parsed.invalidRows.length} รายการ</span>}
+                <span style={{ color: 'var(--success)', fontWeight: 600 }}>ถูกต้อง {parsed.validRows.length} รายการ</span>
+                {parsed.invalidRows.length > 0 && <span style={{ color: 'var(--danger)', fontWeight: 600 }}>ผิดพลาด {parsed.invalidRows.length} รายการ</span>}
               </div>
               {parsed.invalidRows.length > 0 && (
                 <div className="card" style={{ marginBottom: 12, maxHeight: 140, overflow: 'auto' }}>

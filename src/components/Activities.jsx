@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PAGE_SIZE, fetchActivitiesPage } from '../lib/api'
-import { fmtDate, activityIcon, activityColor } from '../lib/format'
+import { fmtDate, activityColor } from '../lib/format'
 import { canManageChild } from '../lib/permissions'
 import { useUi } from './UiContext'
 import { usePicklists } from './PicklistsContext'
@@ -31,7 +31,7 @@ export default function Activities({ perm, reloadKey, onNavCompany, onAdd, onDel
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">📝 ประวัติการติดต่อ <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
+        <div className="section-title">ประวัติการติดต่อ <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
         <button className="btn btn-primary" onClick={onAdd}>+ บันทึกการติดต่อ</button>
       </div>
       <div className="filter-bar">
@@ -45,7 +45,7 @@ export default function Activities({ perm, reloadKey, onNavCompany, onAdd, onDel
           <div className="activity-feed">
             {rows.length ? rows.map(a => (
               <div className="activity-item" key={a.id}>
-                <div className="activity-icon" style={{ background: activityColor(a.type) }}>{activityIcon(a.type)}</div>
+                <div className="activity-icon" style={{ background: activityColor(a.type) }} />
                 <div className="activity-content">
                   <div className="activity-title">{a.subject}</div>
                   <div className="activity-meta">
@@ -54,9 +54,9 @@ export default function Activities({ perm, reloadKey, onNavCompany, onAdd, onDel
                   </div>
                   {a.detail && <div className="activity-detail">{a.detail}</div>}
                 </div>
-                {canManageChild(a.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(a.id)}>🗑</button>}
+                {canManageChild(a.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(a.id)}>ลบ</button>}
               </div>
-            )) : <div className="empty-state"><div className="empty-icon">📝</div><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีการบันทึกกิจกรรม'}</div></div>}
+            )) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีการบันทึกกิจกรรม'}</div></div>}
           </div>
         </div>
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPage={setPage} />

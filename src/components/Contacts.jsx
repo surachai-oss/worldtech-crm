@@ -37,15 +37,15 @@ export default function Contacts({ perm, reloadKey, onNavCompany, onEdit, onDele
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">👥 ผู้ติดต่อทั้งหมด <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
+        <div className="section-title">ผู้ติดต่อทั้งหมด <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-outline" onClick={() => setShowImport(true)}>📥 นำเข้าจากไฟล์</button>
+          <button className="btn btn-outline" onClick={() => setShowImport(true)}>นำเข้าจากไฟล์</button>
           <button className="btn btn-primary" onClick={() => onEdit(null)}>+ เพิ่มผู้ติดต่อ</button>
         </div>
       </div>
       {showImport && <ImportContactsModal onClose={() => setShowImport(false)} onImported={() => setLocalBump(b => b + 1)} />}
       <div className="filter-bar">
-        <input className="filter-input" placeholder="🔍 ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
+        <input className="filter-input" placeholder="ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
       </div>
       <div className="card">
         <div className="table-wrap">
@@ -62,14 +62,14 @@ export default function Contacts({ perm, reloadKey, onNavCompany, onEdit, onDele
                     <td style={{ fontSize: 12 }}>{c.email || '-'}</td>
                     <td style={{ fontSize: 12 }}>{c.line_id || '-'}</td>
                     <td className="td-actions" onClick={e => e.stopPropagation()}>
-                      {canManageChild(c.company, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(c)}>✏️</button>}
-                      {canManageChild(c.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(c.id)}>🗑</button>}
+                      {canManageChild(c.company, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(c)}>แก้ไข</button>}
+                      {canManageChild(c.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(c.id)}>ลบ</button>}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : <div className="empty-state"><div className="empty-icon">👥</div><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีผู้ติดต่อ'}</div></div>}
+          ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีผู้ติดต่อ'}</div></div>}
         </div>
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPage={setPage} />
       </div>

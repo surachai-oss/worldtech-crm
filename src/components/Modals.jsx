@@ -21,13 +21,13 @@ function CompanySelect({ companies, value, onChange }) {
   )
 }
 
-function ModalShell({ title, onClose, onSave, saveLabel = '💾 บันทึก', children, wide }) {
+function ModalShell({ title, onClose, onSave, saveLabel = 'บันทึก', children, wide }) {
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={wide ? { maxWidth: 720 } : undefined}>
         <div className="modal-header">
           <div className="modal-title">{title}</div>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">{children}</div>
         <div className="modal-footer">
@@ -171,7 +171,7 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
                     <td><input className="form-control" type="number" min="0" value={it.quantity} onChange={e => updateItem(i, { quantity: e.target.value })} /></td>
                     <td><input className="form-control" type="number" min="0" value={it.unit_price} onChange={e => updateItem(i, { unit_price: e.target.value })} /></td>
                     <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{lineTotal.toLocaleString('th-TH')}</td>
-                    <td><button type="button" className="btn btn-danger btn-xs" onClick={() => removeItem(i)}>🗑</button></td>
+                    <td><button type="button" className="btn btn-danger btn-xs" onClick={() => removeItem(i)}>ลบ</button></td>
                   </tr>
                 )
               })}

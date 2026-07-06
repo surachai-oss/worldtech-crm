@@ -72,7 +72,7 @@ export function printQuotation(quot, company, companyProfile = {}) {
       </div>
 
       <div class="no-print" style="margin-top:24px;text-align:center">
-        <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer">🖨 พิมพ์ / บันทึกเป็น PDF</button>
+        <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer">พิมพ์ / บันทึกเป็น PDF</button>
       </div>
       <script>window.onload = () => window.print();</script>
     </body>

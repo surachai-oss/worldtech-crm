@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listProducts, addProduct, updateProduct, deleteProduct } from '../lib/api'
 import { useUi } from './UiContext'
+import ImportProductsModal from './ImportProductsModal'
 
 function ProductModal({ initial, onClose, onSave }) {
   const [f, setF] = useState(() => initial || { code: '', name: '' })
@@ -10,7 +11,7 @@ function ProductModal({ initial, onClose, onSave }) {
       <div className="modal">
         <div className="modal-header">
           <div className="modal-title">{initial?.id ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า'}</div>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           <div className="form-group">
@@ -24,7 +25,7 @@ function ProductModal({ initial, onClose, onSave }) {
         </div>
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onClose}>ยกเลิก</button>
-          <button className="btn btn-primary" onClick={() => onSave(f)}>💾 บันทึก</button>
+          <button className="btn btn-primary" onClick={() => onSave(f)}>บันทึก</button>
         </div>
       </div>
     </div>
@@ -36,6 +37,7 @@ export default function Products() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null) // { initial }
+  const [showImport, setShowImport] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -69,10 +71,14 @@ export default function Products() {
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">📦 สินค้า <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} รายการ)</span></div>
-        <button className="btn btn-primary" onClick={() => setModal({ initial: null })}>+ เพิ่มสินค้า</button>
+        <div className="section-title">สินค้า <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} รายการ)</span></div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" onClick={() => setShowImport(true)}>นำเข้าจากไฟล์</button>
+          <button className="btn btn-primary" onClick={() => setModal({ initial: null })}>เพิ่มสินค้า</button>
+        </div>
       </div>
       {modal && <ProductModal initial={modal.initial} onClose={() => setModal(null)} onSave={onSave} />}
+      {showImport && <ImportProductsModal existingProducts={rows} onClose={() => setShowImport(false)} onImported={load} />}
       <div className="card">
         <div className="table-wrap">
           {rows.length ? (
@@ -84,14 +90,14 @@ export default function Products() {
                     <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{p.code}</td>
                     <td>{p.name}</td>
                     <td className="td-actions">
-                      <button className="btn btn-outline btn-xs" onClick={() => setModal({ initial: p })}>✏️</button>
-                      <button className="btn btn-danger btn-xs" onClick={() => onDelete(p)}>🗑</button>
+                      <button className="btn btn-outline btn-xs" onClick={() => setModal({ initial: p })}>แก้ไข</button>
+                      <button className="btn btn-danger btn-xs" onClick={() => onDelete(p)}>ลบ</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : <div className="empty-state"><div className="empty-icon">📦</div><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีสินค้า'}</div></div>}
+          ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีสินค้า'}</div></div>}
         </div>
       </div>
     </div>

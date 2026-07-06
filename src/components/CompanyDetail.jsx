@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fmtCurrency, fmtDate, fmtFileSize, isOverdue, isDueToday, stageBadgeClass, statusBadgeClass, quotBadgeClass, priorityIcon, activityIcon, activityColor } from '../lib/format'
+import { fmtCurrency, fmtDate, fmtFileSize, isOverdue, isDueToday, stageBadgeClass, statusBadgeClass, quotBadgeClass, activityColor } from '../lib/format'
 import { listAttachments, uploadAttachment, deleteAttachment, getAttachmentUrl } from '../lib/api'
 import { printQuotation } from '../lib/printQuotation'
 import { canEdit, canDelete, canManageChild } from '../lib/permissions'
@@ -22,7 +22,7 @@ export default function CompanyDetail({ company, contacts, deals, activities, ta
   return (
     <div>
       <div style={{ marginBottom: 16 }}>
-        <button className="btn btn-outline btn-sm" onClick={onBack}>← กลับ</button>
+        <button className="btn btn-outline btn-sm" onClick={onBack}>กลับ</button>
       </div>
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-body">
@@ -32,15 +32,15 @@ export default function CompanyDetail({ company, contacts, deals, activities, ta
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span className={`badge ${statusBadgeClass(company.status)}`}>{company.status}</span>
                 <span style={{ fontSize: 12, color: 'var(--text-light)' }}>{company.industry}</span>
-                {company.phone && <span style={{ fontSize: 12 }}>📞 {company.phone}</span>}
-                {company.email && <span style={{ fontSize: 12 }}>✉️ {company.email}</span>}
-                {company.website && <a href={company.website} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>🌐 เว็บไซต์</a>}
+                {company.phone && <span style={{ fontSize: 12 }}>{company.phone}</span>}
+                {company.email && <span style={{ fontSize: 12 }}>{company.email}</span>}
+                {company.website && <a href={company.website} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>เว็บไซต์</a>}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-outline btn-sm" onClick={() => actions.addActivity(company.id)}>+ บันทึกการติดต่อ</button>
               <button className="btn btn-outline btn-sm" onClick={() => actions.addTask(company.id)}>+ เพิ่มงาน</button>
-              {canEditCompany && <button className="btn btn-primary btn-sm" onClick={() => actions.editCompany(company)}>✏️ แก้ไข</button>}
+              {canEditCompany && <button className="btn btn-primary btn-sm" onClick={() => actions.editCompany(company)}>แก้ไข</button>}
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
@@ -117,13 +117,13 @@ function ContactsTab({ contacts, perm, company, onAdd, onEdit, onDelete }) {
                 <td style={{ fontSize: 12 }}>{c.email || '-'}</td>
                 <td style={{ fontSize: 12 }}>{c.line_id || '-'}</td>
                 <td className="td-actions">
-                  {manageable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(c)}>✏️</button>}
-                  {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(c.id)}>🗑</button>}
+                  {manageable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(c)}>แก้ไข</button>}
+                  {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(c.id)}>ลบ</button>}
                 </td>
               </tr>
             ))}</tbody>
           </table>
-        ) : <div className="empty-state"><div className="empty-icon">👥</div><div>ยังไม่มีผู้ติดต่อ</div></div>}
+        ) : <div className="empty-state"><div>ยังไม่มีผู้ติดต่อ</div></div>}
       </div></div>
     </>
   )
@@ -145,13 +145,13 @@ function DealsTab({ deals, perm, onAdd, onEdit, onDelete }) {
                 <td style={{ fontSize: 12 }}>{fmtDate(d.close_date)}</td>
                 <td style={{ fontSize: 12 }}>{d.owner || '-'}</td>
                 <td className="td-actions">
-                  {canEdit(d, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>✏️</button>}
-                  {canDelete(d, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(d.id)}>🗑</button>}
+                  {canEdit(d, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>แก้ไข</button>}
+                  {canDelete(d, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(d.id)}>ลบ</button>}
                 </td>
               </tr>
             ))}</tbody>
           </table>
-        ) : <div className="empty-state"><div className="empty-icon">🤝</div><div>ยังไม่มีดีล</div></div>}
+        ) : <div className="empty-state"><div>ยังไม่มีดีล</div></div>}
       </div></div>
     </>
   )
@@ -167,15 +167,15 @@ function ActivitiesTab({ activities, perm, company, onAdd, onDelete }) {
         <div className="activity-feed">
           {sorted.length ? sorted.map(a => (
             <div className="activity-item" key={a.id}>
-              <div className="activity-icon" style={{ background: activityColor(a.type) }}>{activityIcon(a.type)}</div>
+              <div className="activity-icon" style={{ background: activityColor(a.type) }} />
               <div className="activity-content">
                 <div className="activity-title">{a.subject}</div>
                 <div className="activity-meta"><span>{a.type}</span><span>{fmtDate(a.activity_date)}</span><span>โดย {a.recorded_by}</span></div>
                 {a.detail && <div className="activity-detail">{a.detail}</div>}
               </div>
-              {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(a.id)}>🗑</button>}
+              {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(a.id)}>ลบ</button>}
             </div>
-          )) : <div className="empty-state"><div className="empty-icon">📝</div><div>ยังไม่มีกิจกรรม</div></div>}
+          )) : <div className="empty-state"><div>ยังไม่มีกิจกรรม</div></div>}
         </div>
       </div></div>
     </>
@@ -195,19 +195,19 @@ function TasksTab({ tasks, perm, onAdd, onEdit, onComplete, onDelete }) {
               return (
                 <tr key={t.id} style={{ background: ov ? '#fff5f5' : undefined }}>
                   <td><div style={{ fontWeight: 500 }}>{t.subject}</div>{t.note && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{t.note}</div>}</td>
-                  <td>{priorityIcon(t.priority)} {t.priority || '-'}</td>
-                  <td className={ov ? 'overdue' : isDueToday(t.due_date) ? 'due-today' : ''} style={{ fontSize: 12 }}>{ov ? '🚨 ' : ''}{fmtDate(t.due_date)}</td>
+                  <td>{t.priority || '-'}</td>
+                  <td className={ov ? 'overdue' : isDueToday(t.due_date) ? 'due-today' : ''} style={{ fontSize: 12 }}>{fmtDate(t.due_date)}</td>
                   <td><span className={`badge ${statusBadgeClass(t.status)}`}>{t.status}</span></td>
                   <td className="td-actions">
-                    {t.status !== 'เสร็จสิ้น' && canEdit(t, perm) && <button className="btn btn-success btn-xs" onClick={() => onComplete(t.id)}>✓</button>}
-                    {canEdit(t, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(t)}>✏️</button>}
-                    {canDelete(t, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(t.id)}>🗑</button>}
+                    {t.status !== 'เสร็จสิ้น' && canEdit(t, perm) && <button className="btn btn-success btn-xs" onClick={() => onComplete(t.id)}>เสร็จ</button>}
+                    {canEdit(t, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(t)}>แก้ไข</button>}
+                    {canDelete(t, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(t.id)}>ลบ</button>}
                   </td>
                 </tr>
               )
             })}</tbody>
           </table>
-        ) : <div className="empty-state"><div className="empty-icon">✅</div><div>ยังไม่มีงาน</div></div>}
+        ) : <div className="empty-state"><div>ยังไม่มีงาน</div></div>}
       </div></div>
     </>
   )
@@ -233,13 +233,13 @@ function QuotationsTab({ quotations, company, perm, settings, onAdd, onStatusCha
                   {manageable && (
                     <EditableSelect listKey="quot_statuses" value={q.status} onChange={v => onStatusChange(q.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
                   )}
-                  <button className="btn btn-secondary btn-xs" onClick={() => printQuotation(q, company, settings)}>📄 PDF</button>
-                  {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(q.id)}>🗑</button>}
+                  <button className="btn btn-secondary btn-xs" onClick={() => printQuotation(q, company, settings)}>PDF</button>
+                  {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(q.id)}>ลบ</button>}
                 </td>
               </tr>
             ))}</tbody>
           </table>
-        ) : <div className="empty-state"><div className="empty-icon">📋</div><div>ยังไม่มีใบเสนอราคา</div></div>}
+        ) : <div className="empty-state"><div>ยังไม่มีใบเสนอราคา</div></div>}
       </div></div>
     </>
   )
@@ -307,18 +307,18 @@ function AttachmentsTab({ company, perm, currentUserName }) {
             <thead><tr><th>ไฟล์</th><th>ขนาด</th><th>อัปโหลดโดย</th><th>วันที่</th><th>การจัดการ</th></tr></thead>
             <tbody>{files.map(f => (
               <tr key={f.id}>
-                <td style={{ fontWeight: 500 }}>📎 {f.file_name}</td>
+                <td style={{ fontWeight: 500 }}>{f.file_name}</td>
                 <td style={{ fontSize: 12 }}>{fmtFileSize(f.file_size)}</td>
                 <td style={{ fontSize: 12 }}>{f.uploaded_by || '-'}</td>
                 <td style={{ fontSize: 12 }}>{fmtDate(f.created_at)}</td>
                 <td className="td-actions">
-                  <button className="btn btn-outline btn-xs" onClick={() => onDownload(f)}>⬇ ดาวน์โหลด</button>
-                  {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDeleteFile(f)}>🗑</button>}
+                  <button className="btn btn-outline btn-xs" onClick={() => onDownload(f)}>ดาวน์โหลด</button>
+                  {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDeleteFile(f)}>ลบ</button>}
                 </td>
               </tr>
             ))}</tbody>
           </table>
-        ) : <div className="empty-state"><div className="empty-icon">📎</div><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีเอกสารแนบ'}</div></div>}
+        ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีเอกสารแนบ'}</div></div>}
       </div></div>
     </>
   )

@@ -1,5 +1,5 @@
 import { computeDashboard } from '../lib/api'
-import { fmtCurrency, fmtDate, isOverdue, isDueToday, stageBadgeClass, priorityIcon, activityIcon, activityColor, stageColor } from '../lib/format'
+import { fmtCurrency, fmtDate, isOverdue, isDueToday, stageBadgeClass, activityColor, stageColor } from '../lib/format'
 import { usePicklists } from './PicklistsContext'
 
 export default function Dashboard({ data, onNav }) {
@@ -16,36 +16,31 @@ export default function Dashboard({ data, onNav }) {
           <div className="kpi-label">บริษัท Active</div>
           <div className="kpi-value">{s.activeCompanies}</div>
           <div className="kpi-sub">จากทั้งหมด {s.totalCompanies} บริษัท</div>
-          <div className="kpi-icon">🏢</div>
         </div>
         <div className="kpi-card navy">
           <div className="kpi-label">ดีลที่ดำเนินการ</div>
           <div className="kpi-value">{s.openDeals}</div>
           <div className="kpi-sub">{fmtCurrency(s.openValue)}</div>
-          <div className="kpi-icon">🤝</div>
         </div>
         <div className="kpi-card green">
           <div className="kpi-label">ปิดดีลสำเร็จ</div>
           <div className="kpi-value">{s.wonDeals}</div>
           <div className="kpi-sub">{fmtCurrency(s.wonValue)}</div>
-          <div className="kpi-icon">🏆</div>
         </div>
         <div className="kpi-card red">
           <div className="kpi-label">งานเกินกำหนด</div>
           <div className="kpi-value">{s.overdueTasks}</div>
           <div className="kpi-sub">รอดำเนินการ {s.pendingTasks} รายการ</div>
-          <div className="kpi-icon">⚠️</div>
         </div>
         <div className="kpi-card blue">
           <div className="kpi-label">ใบเสนอราคา</div>
           <div className="kpi-value">{s.totalQuotations}</div>
-          <div className="kpi-icon">📋</div>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         <div className="card">
-          <div className="card-header"><div className="card-title">🔢 Pipeline ดีล</div></div>
+          <div className="card-header"><div className="card-title">Pipeline ดีล</div></div>
           <div className="card-body">
             <div className="pipeline-bar">
               {stages.map(st => {
@@ -74,7 +69,7 @@ export default function Dashboard({ data, onNav }) {
           </div>
         </div>
         <div className="card">
-          <div className="card-header"><div className="card-title">🏆 Top Deals</div><button className="btn btn-outline btn-sm" onClick={() => onNav('deals')}>ดูทั้งหมด</button></div>
+          <div className="card-header"><div className="card-title">Top Deals</div><button className="btn btn-outline btn-sm" onClick={() => onNav('deals')}>ดูทั้งหมด</button></div>
           <div className="card-body" style={{ padding: 0 }}>
             <div className="table-wrap" style={{ border: 'none' }}>
               <table>
@@ -97,24 +92,24 @@ export default function Dashboard({ data, onNav }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <div className="card">
-          <div className="card-header"><div className="card-title">📝 กิจกรรมล่าสุด</div><button className="btn btn-outline btn-sm" onClick={() => onNav('activities')}>ดูทั้งหมด</button></div>
+          <div className="card-header"><div className="card-title">กิจกรรมล่าสุด</div><button className="btn btn-outline btn-sm" onClick={() => onNav('activities')}>ดูทั้งหมด</button></div>
           <div className="card-body" style={{ padding: '0 16px' }}>
             <div className="activity-feed">
               {d.recentActivities.length ? d.recentActivities.map(a => (
                 <div className="activity-item" key={a.id}>
-                  <div className="activity-icon" style={{ background: activityColor(a.type) }}>{activityIcon(a.type)}</div>
+                  <div className="activity-icon" style={{ background: activityColor(a.type) }} />
                   <div className="activity-content">
                     <div className="activity-title">{a.subject}</div>
                     <div className="activity-meta"><span>{a.companyName}</span><span>{a.type}</span><span>{fmtDate(a.activity_date)}</span><span>โดย {a.recorded_by}</span></div>
                     {a.detail && <div className="activity-detail">{a.detail}</div>}
                   </div>
                 </div>
-              )) : <div className="empty-state"><div className="empty-icon">📝</div><div>ยังไม่มีกิจกรรม</div></div>}
+              )) : <div className="empty-state"><div>ยังไม่มีกิจกรรม</div></div>}
             </div>
           </div>
         </div>
         <div className="card">
-          <div className="card-header"><div className="card-title">✅ งานที่ต้องทำ (14 วัน)</div><button className="btn btn-outline btn-sm" onClick={() => onNav('tasks')}>ดูทั้งหมด</button></div>
+          <div className="card-header"><div className="card-title">งานที่ต้องทำ (14 วัน)</div><button className="btn btn-outline btn-sm" onClick={() => onNav('tasks')}>ดูทั้งหมด</button></div>
           <div className="card-body" style={{ padding: 0 }}>
             <div className="table-wrap" style={{ border: 'none' }}>
               {d.upcomingTasks.length ? (
@@ -127,14 +122,14 @@ export default function Dashboard({ data, onNav }) {
                         <tr key={t.id}>
                           <td style={{ fontWeight: 500 }}>{t.subject}</td>
                           <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{t.companyName || '-'}</td>
-                          <td className={ov ? 'overdue' : td ? 'due-today' : ''}>{ov ? '🚨 ' : td ? '⏰ ' : ''}{fmtDate(t.due_date)}</td>
-                          <td>{priorityIcon(t.priority)} {t.priority}</td>
+                          <td className={ov ? 'overdue' : td ? 'due-today' : ''}>{fmtDate(t.due_date)}</td>
+                          <td>{t.priority}</td>
                         </tr>
                       )
                     })}
                   </tbody>
                 </table>
-              ) : <div className="empty-state"><div className="empty-icon">✅</div><div>ไม่มีงานใน 14 วัน</div></div>}
+              ) : <div className="empty-state"><div>ไม่มีงานใน 14 วัน</div></div>}
             </div>
           </div>
         </div>

@@ -29,7 +29,6 @@ export function UiProvider({ children }) {
       <div id="toast">
         {toasts.map(t => (
           <div key={t.id} className={`toast-msg ${t.type}`}>
-            <span>{t.type === 'success' ? '✅' : t.type === 'error' ? '❌' : 'ℹ️'}</span>
             <span>{t.msg}</span>
           </div>
         ))}

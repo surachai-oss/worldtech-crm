@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PAGE_SIZE, fetchTasksPage, fetchTaskCounts } from '../lib/api'
-import { fmtDate, isOverdue, isDueToday, priorityIcon, statusBadgeClass } from '../lib/format'
+import { fmtDate, isOverdue, isDueToday, statusBadgeClass } from '../lib/format'
 import { canEdit, canDelete } from '../lib/permissions'
 import { useUi } from './UiContext'
 import { usePicklists } from './PicklistsContext'
@@ -42,7 +42,7 @@ export default function Tasks({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">✅ งาน Follow-up <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
+        <div className="section-title">งาน Follow-up <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
         <button className="btn btn-primary" onClick={onAdd}>+ เพิ่มงาน</button>
       </div>
       <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 14 }}>
@@ -59,7 +59,7 @@ export default function Tasks({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
           <option value="">ทุกลำดับ</option>
           {list('task_priorities').map(p => <option key={p}>{p}</option>)}
         </select>
-        <input className="filter-input" placeholder="🔍 ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
+        <input className="filter-input" placeholder="ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
       </div>
       <div className="card">
         <div className="table-wrap">
@@ -74,21 +74,21 @@ export default function Tasks({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
                     <tr key={t.id} style={{ background: ov ? '#fff5f5' : td ? '#fffbeb' : undefined }}>
                       <td><div style={{ fontWeight: 500 }}>{t.subject}</div>{t.note && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{t.note}</div>}</td>
                       <td>{t.company ? <a onClick={() => onNavCompany(t.company.id)} style={{ fontSize: 12 }}>{t.company.name}</a> : '-'}</td>
-                      <td className={ov ? 'overdue' : td ? 'due-today' : ''} style={{ fontSize: 12 }}>{ov ? '🚨 ' : td ? '⏰ ' : ''}{fmtDate(t.due_date)}</td>
-                      <td>{priorityIcon(t.priority)} {t.priority || '-'}</td>
+                      <td className={ov ? 'overdue' : td ? 'due-today' : ''} style={{ fontSize: 12 }}>{fmtDate(t.due_date)}</td>
+                      <td>{t.priority || '-'}</td>
                       <td><span className={`badge ${statusBadgeClass(t.status)}`}>{t.status}</span></td>
                       <td style={{ fontSize: 12 }}>{t.owner || '-'}</td>
                       <td className="td-actions" onClick={e => e.stopPropagation()}>
-                        {t.status !== 'เสร็จสิ้น' && canEdit(t, perm) && <button className="btn btn-success btn-xs" onClick={() => onComplete(t.id)}>✓ เสร็จ</button>}
-                        {canEdit(t, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(t)}>✏️</button>}
-                        {canDelete(t, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(t.id)}>🗑</button>}
+                        {t.status !== 'เสร็จสิ้น' && canEdit(t, perm) && <button className="btn btn-success btn-xs" onClick={() => onComplete(t.id)}>เสร็จ</button>}
+                        {canEdit(t, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(t)}>แก้ไข</button>}
+                        {canDelete(t, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(t.id)}>ลบ</button>}
                       </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
-          ) : <div className="empty-state"><div className="empty-icon">✅</div><div>{loading ? 'กำลังโหลด...' : 'ไม่มีงาน'}</div></div>}
+          ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ไม่มีงาน'}</div></div>}
         </div>
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPage={setPage} />
       </div>

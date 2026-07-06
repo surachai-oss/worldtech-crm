@@ -34,14 +34,6 @@ export function quotBadgeClass(s) {
   return m[s] || 'badge-gray'
 }
 
-export function priorityIcon(p) {
-  return { 'ต่ำ': '🔵', 'ปกติ': '🟢', 'สูง': '🟠', 'เร่งด่วน': '🔴' }[p] || '⚪'
-}
-
-export function activityIcon(t) {
-  return { 'โทรศัพท์': '📞', 'อีเมล': '📧', 'ประชุม': '🤝', 'Line': '💬', 'เยี่ยมชมลูกค้า': '🚗', 'สาธิตสินค้า': '💻', 'อื่นๆ': '📌' }[t] || '📌'
-}
-
 export function activityColor(t) {
   return { 'โทรศัพท์': '#e6f4fd', 'อีเมล': '#e6f7f0', 'ประชุม': '#fff3cd', 'Line': '#f0faf0', 'เยี่ยมชมลูกค้า': '#f3e6ff', 'สาธิตสินค้า': '#ebf0fa', 'อื่นๆ': '#f7fafc' }[t] || '#f7fafc'
 }
