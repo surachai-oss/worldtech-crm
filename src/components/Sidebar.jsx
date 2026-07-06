@@ -6,6 +6,7 @@ const NAV = [
 ]
 const ADMIN_SECTION = { section: 'ผู้ดูแลระบบ', items: [
   { id: 'users', icon: '👤', label: 'ผู้ใช้งาน' },
+  { id: 'products', icon: '📦', label: 'สินค้า' },
 ] }
 
 export default function Sidebar({ activeView, onNav, user, isAdmin, onLogout }) {

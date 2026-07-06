@@ -65,6 +65,31 @@ create table if not exists deals (
   updated_at   timestamptz default now()
 );
 
+-- follow_up_date = วันที่ต้องติดตามดีลนี้ต่อ, source = ที่มาของดีล (ไลน์/เทเลเซลล์/อีเมลล์ ฯลฯ จาก picklist "deal_sources")
+alter table deals add column if not exists follow_up_date date;
+alter table deals add column if not exists source text;
+
+-- ===== PRODUCTS (รายการสินค้า สำหรับเลือกใส่ในรายการของดีล — รหัส+ชื่อเท่านั้น ไม่เก็บราคา กรอกราคาต่อหน่วยเองทุกครั้งตอนสร้างดีล) =====
+create table if not exists products (
+  id          uuid primary key default uuid_generate_v4(),
+  code        text not null,
+  name        text not null,
+  created_at  timestamptz default now(),
+  unique (code)
+);
+
+-- ===== DEAL ITEMS (รายการสินค้าในแต่ละดีล — ดีลหนึ่งมีได้หลายรายการ) =====
+-- unit_price = ราคาต่อหน่วยที่กรอก (รวม VAT) — มูลค่ารวมของดีล (deals.value) คำนวณจากผลรวมรายการเหล่านี้ที่ฝั่ง frontend
+create table if not exists deal_items (
+  id           uuid primary key default uuid_generate_v4(),
+  deal_id      uuid references deals(id) on delete cascade,
+  product_id   uuid references products(id) on delete set null,
+  quantity     numeric not null default 1,
+  unit_price   numeric not null default 0,
+  sort_order   int default 0,
+  created_at   timestamptz default now()
+);
+
 -- ===== TASKS =====
 create table if not exists tasks (
   id           uuid primary key default uuid_generate_v4(),
@@ -155,6 +180,10 @@ on conflict (list_key, value) do nothing;
 
 insert into picklists (list_key, value, sort_order)
 select 'quot_statuses', v, i from unnest(array['Draft', 'Sent', 'Approved', 'Rejected', 'Expired']) with ordinality as t(v, i)
+on conflict (list_key, value) do nothing;
+
+insert into picklists (list_key, value, sort_order)
+select 'deal_sources', v, i from unnest(array['ไลน์', 'เทเลเซลล์', 'อีเมลล์', 'เว็บไซต์', 'Facebook', 'แนะนำโดยลูกค้าเดิม', 'งานอีเวนต์/ออกบูธ', 'อื่นๆ']) with ordinality as t(v, i)
 on conflict (list_key, value) do nothing;
 
 -- ย้ายรายการ "ที่มาลูกค้า" เดิม (ถ้าเคยเพิ่ม/ลบผ่านหน้าจัดการมาก่อน) เข้ามาอยู่ในระบบ picklists เดียวกัน
@@ -306,6 +335,8 @@ alter table attachments enable row level security;
 alter table profiles    enable row level security;
 alter table lead_sources enable row level security;
 alter table picklists   enable row level security;
+alter table products    enable row level security;
+alter table deal_items  enable row level security;
 
 -- ลบ policy แบบเก่า "authenticated ทำได้ทุกอย่าง" (ถ้ามีจากเวอร์ชันก่อนหน้า)
 drop policy if exists "allow all for authenticated" on companies;
@@ -350,6 +381,16 @@ create policy "deals update" on deals for update using (
 drop policy if exists "deals delete" on deals;
 create policy "deals delete" on deals for delete using (
   is_admin() or created_by = auth.uid()
+);
+
+-- ----- deal_items: สืบสิทธิ์จากดีลแม่ (deal_id) เหมือน contacts สืบจาก company -----
+drop policy if exists "deal_items all" on deal_items;
+create policy "deal_items all" on deal_items for all using (
+  exists (select 1 from deals d where d.id = deal_items.deal_id
+    and (is_admin() or d.created_by = auth.uid() or d.created_by is null))
+) with check (
+  exists (select 1 from deals d where d.id = deal_items.deal_id
+    and (is_admin() or d.created_by = auth.uid() or d.created_by is null))
 );
 
 -- ----- tasks: เหมือน companies -----
@@ -426,6 +467,12 @@ drop policy if exists "picklists select" on picklists;
 create policy "picklists select" on picklists for select using (auth.role() = 'authenticated');
 drop policy if exists "picklists write" on picklists;
 create policy "picklists write" on picklists for all using (is_admin()) with check (is_admin());
+
+-- ----- products: ทุกคนที่ login อ่านได้ (ใช้เลือกในรายการดีล), เพิ่ม/แก้ไข/ลบได้เฉพาะ admin -----
+drop policy if exists "products select" on products;
+create policy "products select" on products for select using (auth.role() = 'authenticated');
+drop policy if exists "products write" on products;
+create policy "products write" on products for all using (is_admin()) with check (is_admin());
 
 -- ----- profiles: เห็นของตัวเอง หรือ admin เห็นทั้งหมด, แก้ไข role ได้เฉพาะ admin -----
 drop policy if exists "profiles select" on profiles;

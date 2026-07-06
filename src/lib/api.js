@@ -145,6 +145,57 @@ export const updateDeal = (id, d) => supabase.from('deals').update(d).eq('id', i
 export const deleteDeal = (id) => supabase.from('deals').delete().eq('id', id).then(handle)
 export const updateDealStage = (id, stage) => updateDeal(id, { stage })
 
+// ===== DEAL ITEMS (รายการสินค้าในดีล) =====
+// unit_price ที่กรอกในฟอร์มถือว่ารวม VAT แล้ว — มูลค่ารวมของดีลคำนวณจากรายการเหล่านี้เสมอ ไม่ให้กรอกเอง
+export const VAT_RATE = 0.07
+
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
+
+// items: [{ quantity, unit_price }] -> { subtotalIncVat, exVat, vatAmount } (ทุกค่ารวม VAT อยู่แล้วในราคาต่อหน่วย)
+export function computeDealTotals(items) {
+  const subtotalIncVat = round2((items || []).reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0))
+  const exVat = round2(subtotalIncVat / (1 + VAT_RATE))
+  const vatAmount = round2(subtotalIncVat - exVat)
+  return { subtotalIncVat, exVat, vatAmount }
+}
+
+export const listDealItems = (dealId) =>
+  supabase.from('deal_items').select('*, product:products(id,code,name)').eq('deal_id', dealId)
+    .order('sort_order', { ascending: true }).then(handle)
+
+// สร้างดีล + รายการสินค้าในทีเดียว — มูลค่ารวม (value) คำนวณจาก items ให้อัตโนมัติ
+export async function addDealWithItems(dealFields, items) {
+  const totals = computeDealTotals(items)
+  const deal = await addDeal({ ...dealFields, value: totals.subtotalIncVat })
+  if (items?.length) {
+    const rows = items.map((it, i) => ({
+      deal_id: deal.id, product_id: it.product_id, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
+    }))
+    await supabase.from('deal_items').insert(rows).then(handle)
+  }
+  return deal
+}
+
+// แก้ไขดีล — ลบรายการเดิมทั้งหมดแล้วใส่ชุดใหม่ทั้งหมด (ง่ายกว่า diff รายแถว และจำนวนรายการต่อดีลน้อยอยู่แล้ว)
+export async function updateDealWithItems(id, dealFields, items) {
+  const totals = computeDealTotals(items)
+  const deal = await updateDeal(id, { ...dealFields, value: totals.subtotalIncVat })
+  await supabase.from('deal_items').delete().eq('deal_id', id).then(handle)
+  if (items?.length) {
+    const rows = items.map((it, i) => ({
+      deal_id: id, product_id: it.product_id, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
+    }))
+    await supabase.from('deal_items').insert(rows).then(handle)
+  }
+  return deal
+}
+
+// ===== PRODUCTS (รายการสินค้า สำหรับเลือกในรายการของดีล) =====
+export const listProducts = () => supabase.from('products').select('*').order('code', { ascending: true }).then(handle)
+export const addProduct = (d) => supabase.from('products').insert(d).select().single().then(handle)
+export const updateProduct = (id, d) => supabase.from('products').update(d).eq('id', id).select().single().then(handle)
+export const deleteProduct = (id) => supabase.from('products').delete().eq('id', id).then(handle)
+
 // ===== TASKS =====
 export const addTask = (d) => supabase.from('tasks').insert(d).select().single().then(handle)
 export const updateTask = (id, d) => supabase.from('tasks').update(d).eq('id', id).select().single().then(handle)

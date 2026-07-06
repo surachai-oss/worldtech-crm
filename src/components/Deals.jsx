@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { fmtCurrency, fmtDate, stageColor } from '../lib/format'
 import { canEdit } from '../lib/permissions'
 import { usePicklists } from './PicklistsContext'
@@ -5,17 +6,32 @@ import EditableSelect from './EditableSelect'
 
 export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdit, onMoveStage }) {
   const { list } = usePicklists()
-  const totalVal = deals.reduce((s, d) => s + (Number(d.value) || 0), 0)
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+
+  // กรองตามวันที่คาดว่าปิดดีล (close_date) — ดีลที่ยังไม่ระบุวันที่จะถูกซ่อนเมื่อตั้งช่วงเวลาไว้
+  const filtered = deals.filter(d => {
+    if (fromDate && (!d.close_date || d.close_date < fromDate)) return false
+    if (toDate && (!d.close_date || d.close_date > toDate)) return false
+    return true
+  })
+  const totalVal = filtered.reduce((s, d) => s + (Number(d.value) || 0), 0)
 
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">🤝 ดีลการขาย <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({deals.length} ดีล · {fmtCurrency(totalVal)})</span></div>
-        <button className="btn btn-primary" onClick={onAdd}>+ เพิ่มดีล</button>
+        <div className="section-title">🤝 ดีลการขาย <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({filtered.length} ดีล · {fmtCurrency(totalVal)})</span></div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่คาดว่าปิดดีล ตั้งแต่" />
+          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>ถึง</span>
+          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่คาดว่าปิดดีล ถึง" />
+          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
+          <button className="btn btn-primary" onClick={onAdd}>+ เพิ่มดีล</button>
+        </div>
       </div>
       <div className="kanban-board">
         {list('deal_stages').map(stage => {
-          const sd = deals.filter(d => d.stage === stage)
+          const sd = filtered.filter(d => d.stage === stage)
           const sv = sd.reduce((s, d) => s + (Number(d.value) || 0), 0)
           const color = stageColor(stage)
           return (

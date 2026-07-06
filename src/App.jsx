@@ -13,6 +13,7 @@ import Activities from './components/Activities'
 import Tasks from './components/Tasks'
 import Quotations from './components/Quotations'
 import Users from './components/Users'
+import Products from './components/Products'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal } from './components/Modals'
 import './App.css'
@@ -20,7 +21,7 @@ import './App.css'
 const TITLES = {
   dashboard: 'แดชบอร์ด', companies: 'บริษัทลูกค้า', 'company-detail': 'รายละเอียดบริษัท',
   contacts: 'ผู้ติดต่อ', deals: 'ดีลการขาย', activities: 'ประวัติการติดต่อ', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา',
-  users: 'ผู้ใช้งาน'
+  users: 'ผู้ใช้งาน', products: 'สินค้า'
 }
 
 function AppInner({ session }) {
@@ -151,12 +152,12 @@ function AppInner({ session }) {
     if (f.id) await run(() => api.updateContact(f.id, f), 'อัปเดตสำเร็จ')
     else await run(() => api.addContact(f), 'เพิ่มผู้ติดต่อสำเร็จ')
   }
-  const saveDeal = async (f) => {
+  const saveDeal = async (f, items = []) => {
     closeModal()
     if (!f.name?.trim()) { toast('กรุณากรอกชื่อดีล', 'error'); return }
     if (!f.company_id) { toast('กรุณาเลือกบริษัท', 'error'); return }
-    if (f.id) await run(() => api.updateDeal(f.id, f), 'อัปเดตดีลสำเร็จ')
-    else await run(() => api.addDeal({ ...f, created_by: session.user.id }), 'เพิ่มดีลสำเร็จ')
+    if (f.id) await run(() => api.updateDealWithItems(f.id, f, items), 'อัปเดตดีลสำเร็จ')
+    else await run(() => api.addDealWithItems({ ...f, created_by: session.user.id }, items), 'เพิ่มดีลสำเร็จ')
   }
   const saveActivity = async (f) => {
     closeModal()
@@ -269,6 +270,7 @@ function AppInner({ session }) {
             <Quotations perm={perm} reloadKey={reloadKey} settings={settings} onAdd={() => actions.addQuotation(null)} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} />
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
+          {view === 'products' && isAdmin && <Products />}
         </div>
       </div>
 
