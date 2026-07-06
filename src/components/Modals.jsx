@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import EditableSelect from './EditableSelect'
 import { useUi } from './UiContext'
-import { listProducts, listDealItems, computeDealTotals } from '../lib/api'
+import { listProducts, listDealItems, computeDealTotals, getProductImageUrl } from '../lib/api'
 
 function Field({ label, required, children }) {
   return (
@@ -250,27 +250,65 @@ export function TaskModal({ initial, companies, defaultCompanyId, currentUserNam
   )
 }
 
+// เงื่อนไข/หมายเหตุมาตรฐานของบริษัท — เติมให้อัตโนมัติตอนสร้างใบเสนอราคาใหม่ เซลล์แก้ไขได้ตามเงื่อนไขที่ตกลงกับลูกค้าจริง
+const DEFAULT_QUOTATION_NOTE = `*ทางบริษัทไม่มีบริการติดตั้งสินค้าหลังการขาย
+*การจัดส่งสินค้า หลังจากได้รับการชำระค่าสินค้าเสร็จสมบูรณ์ ภายใน 3-7 วันทำการ
+*รับประกันเปลี่ยนเครื่องใหม่ภายใน 15 วัน (บริษัทรับผิดชอบในเรื่องค่าจัดส่งสินค้าเคลม)
+*เครื่องใช้ไฟฟ้า , TV ,เครื่องชงกาแฟ , เตาอบไฟฟ้า , รับประกันซ่อมฟรี 1 ปี (รวมค่าอะไหล่และค่าแรงช่าง)
+*ตู้เย็น, ตู้แช่ , เครื่องซักผ้า รับประกันซ่อมฟรี 3 ปี (รวมค่าอะไหล่และค่าแรงช่าง)
+*เครื่องเสียงติดรถยนต์ รับประกันซ่อมฟรี 1 ปี (รวมค่าอะไหล่และค่าแรงช่าง)`
+
 export function QuotationModal({ companies, defaultCompanyId, isAdmin, onClose, onSave }) {
+  const { toast } = useUi()
   const [f, setF] = useState({
-    company_id: defaultCompanyId || '', subject: '', value: '', status: 'Draft',
-    quot_date: new Date().toISOString().split('T')[0], expire_date: '', note: ''
+    company_id: defaultCompanyId || '', product_id: '', subject: '', quantity: 1, unit_price: '', status: 'Draft',
+    quot_date: new Date().toISOString().split('T')[0], expire_date: '', note: DEFAULT_QUOTATION_NOTE
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
+
+  const [products, setProducts] = useState(null) // null = กำลังโหลดรายการสินค้า
+  useEffect(() => {
+    listProducts().then(setProducts).catch(e => { toast('โหลดรายการสินค้าไม่สำเร็จ: ' + e.message, 'error'); setProducts([]) })
+  }, [])
+
+  const selectedProduct = (products || []).find(p => p.id === f.product_id)
+  const imageUrl = selectedProduct ? getProductImageUrl(selectedProduct.image_path) : null
+  const total = (Number(f.quantity) || 0) * (Number(f.unit_price) || 0)
+
+  // เลือกสินค้าแล้วเติมหัวข้อให้อัตโนมัติจากชื่อสินค้า (แก้เองต่อได้)
+  const onProductChange = (productId) => {
+    const p = (products || []).find(x => x.id === productId)
+    setF(s => ({ ...s, product_id: productId, subject: p ? p.name : s.subject }))
+  }
+
+  const submit = () => onSave({ ...f, value: total })
+
   return (
-    <ModalShell title="สร้างใบเสนอราคา" onClose={onClose} onSave={() => onSave(f)}>
+    <ModalShell title="สร้างใบเสนอราคา" onClose={onClose} onSave={submit}>
       <Field label="บริษัท"><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
+      <Field label="สินค้า">
+        <select className="form-control" value={f.product_id} onChange={e => onProductChange(e.target.value)} disabled={!products}>
+          <option value="">{products ? '-- เลือกสินค้า (ไม่บังคับ) --' : 'กำลังโหลด...'}</option>
+          {(products || []).map(p => <option key={p.id} value={p.id}>{p.code} - {p.name}</option>)}
+        </select>
+        {imageUrl && <img src={imageUrl} alt="" style={{ maxWidth: 100, maxHeight: 100, marginTop: 8, borderRadius: 6, border: '1px solid var(--border)' }} />}
+      </Field>
       <Field label="หัวข้อใบเสนอราคา" required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder="ใบเสนอราคาสำหรับ..." /></Field>
       <div className="form-row">
-        <Field label="มูลค่า (บาท)"><input className="form-control" type="number" value={f.value || ''} onChange={set('value')} /></Field>
+        <Field label="จำนวน"><input className="form-control" type="number" min="0" value={f.quantity} onChange={set('quantity')} /></Field>
+        <Field label="ราคาต่อหน่วย (บาท)"><input className="form-control" type="number" min="0" value={f.unit_price} onChange={set('unit_price')} /></Field>
+      </div>
+      <Field label="มูลค่ารวม (บาท)">
+        <input className="form-control" value={total.toLocaleString('th-TH')} disabled style={{ fontWeight: 600, color: 'var(--navy)' }} />
+      </Field>
+      <div className="form-row">
         <Field label="สถานะ">
           <EditableSelect listKey="quot_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} isAdmin={isAdmin} />
         </Field>
-      </div>
-      <div className="form-row">
-        <Field label="วันที่"><input className="form-control" type="date" value={f.quot_date} onChange={set('quot_date')} /></Field>
         <Field label="วันหมดอายุ"><input className="form-control" type="date" value={f.expire_date || ''} onChange={set('expire_date')} /></Field>
       </div>
-      <Field label="หมายเหตุ"><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
+      <Field label="วันที่"><input className="form-control" type="date" value={f.quot_date} onChange={set('quot_date')} /></Field>
+      <Field label="หมายเหตุ"><textarea className="form-control" rows={6} value={f.note || ''} onChange={set('note')} /></Field>
     </ModalShell>
   )
 }

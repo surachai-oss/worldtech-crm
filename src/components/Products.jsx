@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react'
-import { listProducts, addProduct, updateProduct, deleteProduct } from '../lib/api'
+import { listProducts, addProduct, updateProduct, deleteProduct, uploadProductImage, deleteProductImage, getProductImageUrl } from '../lib/api'
 import { useUi } from './UiContext'
 import ImportProductsModal from './ImportProductsModal'
 
 function ProductModal({ initial, onClose, onSave }) {
   const [f, setF] = useState(() => initial || { code: '', name: '' })
+  const [imageFile, setImageFile] = useState(null)
+  const [removeImage, setRemoveImage] = useState(false)
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
+
+  const currentUrl = !removeImage && initial?.image_path ? getProductImageUrl(initial.image_path) : null
+  const previewUrl = imageFile ? URL.createObjectURL(imageFile) : currentUrl
+
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal">
@@ -22,10 +28,19 @@ function ProductModal({ initial, onClose, onSave }) {
             <label className="form-label required">ชื่อสินค้า</label>
             <input className="form-control" value={f.name} onChange={set('name')} />
           </div>
+          <div className="form-group">
+            <label className="form-label">รูปสินค้า</label>
+            {previewUrl && <img src={previewUrl} alt="" style={{ maxWidth: 140, maxHeight: 140, display: 'block', marginBottom: 8, borderRadius: 6, border: '1px solid var(--border)' }} />}
+            <input className="form-control" type="file" accept="image/*" onChange={e => { setImageFile(e.target.files?.[0] || null); setRemoveImage(false) }} />
+            {previewUrl && (
+              <button type="button" className="btn btn-outline btn-xs" style={{ marginTop: 6 }}
+                onClick={() => { setImageFile(null); setRemoveImage(true) }}>ลบรูป</button>
+            )}
+          </div>
         </div>
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onClose}>ยกเลิก</button>
-          <button className="btn btn-primary" onClick={() => onSave(f)}>บันทึก</button>
+          <button className="btn btn-primary" onClick={() => onSave(f, imageFile, removeImage)}>บันทึก</button>
         </div>
       </div>
     </div>
@@ -48,12 +63,13 @@ export default function Products() {
 
   useEffect(() => { load() }, [])
 
-  const onSave = async (f) => {
+  const onSave = async (f, imageFile, removeImage) => {
     if (!f.code?.trim() || !f.name?.trim()) { toast('กรุณากรอกรหัสและชื่อสินค้า', 'error'); return }
     setModal(null)
     try {
-      if (f.id) await updateProduct(f.id, f)
-      else await addProduct(f)
+      const product = f.id ? await updateProduct(f.id, { code: f.code, name: f.name }) : await addProduct({ code: f.code, name: f.name })
+      if (imageFile) await uploadProductImage(product.id, imageFile)
+      else if (removeImage && f.image_path) await deleteProductImage(product.id, f.image_path)
       toast(f.id ? 'อัปเดตสำเร็จ' : 'เพิ่มสินค้าสำเร็จ', 'success')
       await load()
     } catch (e) { toast('เกิดข้อผิดพลาด: ' + e.message, 'error') }
@@ -83,18 +99,24 @@ export default function Products() {
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>รหัสสินค้า</th><th>ชื่อสินค้า</th><th>การจัดการ</th></tr></thead>
+              <thead><tr><th></th><th>รหัสสินค้า</th><th>ชื่อสินค้า</th><th>การจัดการ</th></tr></thead>
               <tbody>
-                {rows.map(p => (
-                  <tr key={p.id}>
-                    <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{p.code}</td>
-                    <td>{p.name}</td>
-                    <td className="td-actions">
-                      <button className="btn btn-outline btn-xs" onClick={() => setModal({ initial: p })}>แก้ไข</button>
-                      <button className="btn btn-danger btn-xs" onClick={() => onDelete(p)}>ลบ</button>
-                    </td>
-                  </tr>
-                ))}
+                {rows.map(p => {
+                  const imgUrl = getProductImageUrl(p.image_path)
+                  return (
+                    <tr key={p.id}>
+                      <td style={{ width: 44 }}>
+                        {imgUrl && <img src={imgUrl} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)' }} />}
+                      </td>
+                      <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{p.code}</td>
+                      <td>{p.name}</td>
+                      <td className="td-actions">
+                        <button className="btn btn-outline btn-xs" onClick={() => setModal({ initial: p })}>แก้ไข</button>
+                        <button className="btn btn-danger btn-xs" onClick={() => onDelete(p)}>ลบ</button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีสินค้า'}</div></div>}

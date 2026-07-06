@@ -1,4 +1,5 @@
 import { fmtCurrency, fmtDate } from './format'
+import { getProductImageUrl } from './api'
 
 const VAT_RATE = 0.07
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
@@ -9,7 +10,8 @@ function escapeHtml(s) {
 
 // แยก HTML generation ออกจาก window.open เพื่อให้ทดสอบได้ตรงๆ โดยไม่ต้องพึ่ง browser API
 // รูปแบบอ้างอิงจากตัวอย่างใบเสนอราคาจริงของบริษัท — value ที่กรอกถือว่ารวม VAT แล้ว เหมือนราคาต่อหน่วยในดีล
-export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/worldtech-logo.png') {
+// productImageUrl รับเป็น URL ที่ resolve มาแล้ว (ไม่ import api.js ตรงๆ ในฟังก์ชันนี้ เพื่อให้เทสได้โดยไม่ต้องพึ่ง supabase client)
+export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/worldtech-logo.png', productImageUrl = null) {
   const name = settings.COMPANY_NAME || 'Worldtech Co., Ltd.'
   const address = settings.COMPANY_ADDRESS || ''
   const phone = settings.COMPANY_PHONE || ''
@@ -114,9 +116,12 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
         </thead>
         <tbody>
           <tr>
-            <td>1</td>
-            <td>${escapeHtml(quot.subject) || '-'}</td>
-            <td class="num">${fmtCurrency(value)}</td>
+            <td>${Number(quot.quantity) || 1}</td>
+            <td>
+              ${escapeHtml(quot.subject) || '-'}
+              ${productImageUrl ? `<br/><img src="${productImageUrl}" style="max-width:140px;max-height:100px;margin-top:6px;border-radius:4px" onerror="this.style.display='none'" />` : ''}
+            </td>
+            <td class="num">${fmtCurrency(Number(quot.unit_price) || value)}</td>
             <td class="num">-</td>
             <td class="num" style="font-weight:700">${fmtCurrency(value)}</td>
           </tr>
@@ -161,6 +166,7 @@ export function printQuotation(quot, company, settings = {}) {
   const w = window.open('', '_blank', 'width=800,height=1000')
   if (!w) { alert('เบราว์เซอร์บล็อกป๊อปอัป กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้'); return }
   const logoUrl = `${window.location.origin}/worldtech-logo.png`
-  w.document.write(buildQuotationHtml(quot, company, settings, logoUrl))
+  const productImageUrl = quot.product?.image_path ? getProductImageUrl(quot.product.image_path) : null
+  w.document.write(buildQuotationHtml(quot, company, settings, logoUrl, productImageUrl))
   w.document.close()
 }

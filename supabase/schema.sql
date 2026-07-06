@@ -78,6 +78,9 @@ create table if not exists products (
   unique (code)
 );
 
+-- image_path = path ในไฟล์รูปสินค้า (bucket "product-images" — bucket นี้เป็น public ต่างจาก "attachments")
+alter table products add column if not exists image_path text;
+
 -- ===== DEAL ITEMS (รายการสินค้าในแต่ละดีล — ดีลหนึ่งมีได้หลายรายการ) =====
 -- unit_price = ราคาต่อหน่วยที่กรอก (รวม VAT) — มูลค่ารวมของดีล (deals.value) คำนวณจากผลรวมรายการเหล่านี้ที่ฝั่ง frontend
 create table if not exists deal_items (
@@ -119,6 +122,12 @@ create table if not exists quotations (
   note          text,
   created_at    timestamptz default now()
 );
+
+-- product_id/quantity/unit_price = รายการสินค้าของใบเสนอราคานี้ (ใบเสนอราคามีได้แค่ 1 รายการต่อใบ ต่างจากดีลที่มีได้หลายรายการ)
+-- unit_price ถือว่ารวม VAT แล้วเหมือนกับดีล — value คำนวณจาก quantity*unit_price ที่ฝั่ง frontend
+alter table quotations add column if not exists product_id uuid references products(id) on delete set null;
+alter table quotations add column if not exists quantity numeric default 1;
+alter table quotations add column if not exists unit_price numeric default 0;
 
 -- signed_file_name = ชื่อไฟล์เดิมที่อัปโหลด (ใช้แสดงผล) คู่กับ file_url ที่เป็น path จริงใน storage
 alter table quotations add column if not exists signed_file_name text;
@@ -326,6 +335,23 @@ create policy "attachments: authenticated upload" on storage.objects
 drop policy if exists "attachments: authenticated delete" on storage.objects;
 create policy "attachments: authenticated delete" on storage.objects
   for delete using (bucket_id = 'attachments' and auth.role() = 'authenticated');
+
+-- ===== Storage bucket สำหรับรูปสินค้า (public — ต่างจาก attachments ที่เป็น private) =====
+insert into storage.buckets (id, name, public)
+values ('product-images', 'product-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists "product-images: public read" on storage.objects;
+create policy "product-images: public read" on storage.objects
+  for select using (bucket_id = 'product-images');
+
+drop policy if exists "product-images: admin upload" on storage.objects;
+create policy "product-images: admin upload" on storage.objects
+  for insert with check (bucket_id = 'product-images' and is_admin());
+
+drop policy if exists "product-images: admin delete" on storage.objects;
+create policy "product-images: admin delete" on storage.objects
+  for delete using (bucket_id = 'product-images' and is_admin());
 
 -- ===== Row Level Security =====
 alter table companies   enable row level security;

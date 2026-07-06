@@ -24,7 +24,7 @@ export async function getAllData() {
     supabase.from('deals').select('*').order('created_at', { ascending: false }).then(handle),
     supabase.from('activities').select('*').order('activity_date', { ascending: false }).then(handle),
     supabase.from('tasks').select('*').order('due_date', { ascending: true }).then(handle),
-    supabase.from('quotations').select('*').order('created_at', { ascending: false }).then(handle),
+    supabase.from('quotations').select('*, product:products(id,code,name,image_path)').order('created_at', { ascending: false }).then(handle),
   ])
   return { companies, contacts, deals, activities, tasks, quotations }
 }
@@ -99,7 +99,7 @@ export async function fetchQuotationsTotal({ status = '', q = '', dateFrom = '',
 }
 
 export async function fetchQuotationsPage({ page = 0, status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
-  let query = supabase.from('quotations').select('*, company:companies(id,name,address,tax_id,phone,created_by)', { count: 'exact' }).order('created_at', { ascending: false })
+  let query = supabase.from('quotations').select('*, company:companies(id,name,address,tax_id,phone,created_by), product:products(id,code,name,image_path)', { count: 'exact' }).order('created_at', { ascending: false })
   if (status) query = query.eq('status', status)
   const sq = safeLike(q)
   if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
@@ -219,6 +219,29 @@ export const addProduct = (d) => supabase.from('products').insert(d).select().si
 export const updateProduct = (id, d) => supabase.from('products').update(d).eq('id', id).select().single().then(handle)
 export const deleteProduct = (id) => supabase.from('products').delete().eq('id', id).then(handle)
 export const bulkImportProducts = (rows) => supabase.from('products').insert(rows).select().then(handle)
+
+// ===== รูปสินค้า (Supabase Storage bucket "product-images" — public ต่างจาก "attachments") =====
+export const PRODUCT_IMAGES_BUCKET = 'product-images'
+
+// bucket เป็น public เลยได้ URL ตรงๆ ไม่ต้องขอ signed URL แบบ attachments
+export function getProductImageUrl(imagePath) {
+  if (!imagePath) return null
+  return supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(imagePath).data.publicUrl
+}
+
+export async function uploadProductImage(productId, file) {
+  if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('ไฟล์ใหญ่เกิน 20MB')
+  const safeName = file.name.replace(/[^\w.\-ก-๙ ]/g, '_')
+  const path = `${productId}/${Date.now()}_${safeName}`
+  const { error: upErr } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, file)
+  if (upErr) throw upErr
+  return updateProduct(productId, { image_path: path })
+}
+
+export async function deleteProductImage(productId, imagePath) {
+  if (imagePath) await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove([imagePath])
+  return updateProduct(productId, { image_path: null })
+}
 
 // ===== TASKS =====
 export const addTask = (d) => supabase.from('tasks').insert(d).select().single().then(handle)
