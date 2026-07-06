@@ -115,10 +115,13 @@ create table if not exists quotations (
   status        text default 'Draft',
   quot_date     date default current_date,
   expire_date   date,
-  file_url      text,
+  file_url      text,          -- path ในไฟล์แนบ (bucket "attachments") ของใบเสนอราคาที่ลูกค้าเซ็นกลับมา
   note          text,
   created_at    timestamptz default now()
 );
+
+-- signed_file_name = ชื่อไฟล์เดิมที่อัปโหลด (ใช้แสดงผล) คู่กับ file_url ที่เป็น path จริงใน storage
+alter table quotations add column if not exists signed_file_name text;
 
 -- ===== SETTINGS =====
 create table if not exists settings (
@@ -138,6 +141,7 @@ insert into lead_sources (name) values
 on conflict (name) do nothing;
 
 alter table companies add column if not exists lead_source text;
+alter table companies add column if not exists tax_id text; -- เลขประจำตัวผู้เสียภาษี ใช้พิมพ์ในใบเสนอราคา
 
 -- ===== PICKLISTS (รายการ dropdown ที่แก้ไข/เพิ่ม/ลบได้เองทุกคนในระบบ แบบเดียวกับ dropdown list ใน Google Sheets) =====
 -- แทนที่ CONSTANTS ที่เคยฮาร์ดโค้ดในโค้ดฝั่ง frontend — list_key คือชื่อรายการ, value คือตัวเลือกแต่ละอัน

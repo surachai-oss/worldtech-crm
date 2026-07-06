@@ -86,24 +86,47 @@ export async function fetchTasksPage({ page = 0, status = '', priority = '', q =
   return { rows: data, count, pageSize: PAGE_SIZE }
 }
 
-export async function fetchQuotationsTotal({ status = '', q = '' } = {}) {
+export async function fetchQuotationsTotal({ status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
   let query = supabase.from('quotations').select('value')
   if (status) query = query.eq('status', status)
   const sq = safeLike(q)
   if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
+  if (dateFrom) query = query.gte('quot_date', dateFrom)
+  if (dateTo) query = query.lte('quot_date', dateTo)
   const { data, error } = await query
   if (error) throw error
   return data.reduce((s, x) => s + (Number(x.value) || 0), 0)
 }
 
-export async function fetchQuotationsPage({ page = 0, status = '', q = '' } = {}) {
-  let query = supabase.from('quotations').select('*, company:companies(id,name,created_by)', { count: 'exact' }).order('created_at', { ascending: false })
+export async function fetchQuotationsPage({ page = 0, status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
+  let query = supabase.from('quotations').select('*, company:companies(id,name,address,tax_id,phone,created_by)', { count: 'exact' }).order('created_at', { ascending: false })
   if (status) query = query.eq('status', status)
   const sq = safeLike(q)
   if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
+  if (dateFrom) query = query.gte('quot_date', dateFrom)
+  if (dateTo) query = query.lte('quot_date', dateTo)
   const { data, error, count } = await query.range(...range(page))
   if (error) throw error
   return { rows: data, count, pageSize: PAGE_SIZE }
+}
+
+// สรุปจำนวน+มูลค่าใบเสนอราคาแยกตามสถานะ (ไม่กรองด้วย status เอง เพราะต้องการเห็นทุกสถานะพร้อมกัน)
+// คืนค่าเป็น { [status]: { count, total } }
+export async function fetchQuotationsSummary({ q = '', dateFrom = '', dateTo = '' } = {}) {
+  let query = supabase.from('quotations').select('status, value')
+  const sq = safeLike(q)
+  if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
+  if (dateFrom) query = query.gte('quot_date', dateFrom)
+  if (dateTo) query = query.lte('quot_date', dateTo)
+  const { data, error } = await query
+  if (error) throw error
+  const byStatus = {}
+  data.forEach(r => {
+    const s = (byStatus[r.status] ||= { count: 0, total: 0 })
+    s.count++
+    s.total += Number(r.value) || 0
+  })
+  return byStatus
 }
 
 // ===== COMPANIES =====
@@ -216,6 +239,24 @@ export async function addQuotation(d) {
 export const updateQuotationStatus = (id, status) =>
   supabase.from('quotations').update({ status }).eq('id', id).select().single().then(handle)
 export const deleteQuotation = (id) => supabase.from('quotations').delete().eq('id', id).then(handle)
+
+// ไฟล์ใบเสนอราคาที่ลูกค้าเซ็นแล้วส่งกลับมา — เก็บใน bucket "attachments" เดียวกับเอกสารแนบอื่น
+// ใช้ quotations.file_url เป็น path ในไฟล์แนบ (คอลัมน์เดิมที่มีอยู่แล้วแต่ไม่เคยใช้งาน) + signed_file_name เก็บชื่อไฟล์เดิมไว้แสดงผล
+export async function uploadSignedQuotation(quotationId, file) {
+  if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('ไฟล์ใหญ่เกิน 20MB')
+  const safeName = file.name.replace(/[^\w.\-ก-๙ ]/g, '_')
+  const path = `signed-quotations/${quotationId}/${Date.now()}_${safeName}`
+  const { error: upErr } = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file)
+  if (upErr) throw upErr
+  return supabase.from('quotations').update({ file_url: path, signed_file_name: file.name })
+    .eq('id', quotationId).select().single().then(handle)
+}
+
+export async function deleteSignedQuotation(quotationId, filePath) {
+  await supabase.storage.from(ATTACHMENTS_BUCKET).remove([filePath])
+  return supabase.from('quotations').update({ file_url: null, signed_file_name: null })
+    .eq('id', quotationId).select().single().then(handle)
+}
 
 // ===== ATTACHMENTS (Supabase Storage bucket "attachments") =====
 export const ATTACHMENTS_BUCKET = 'attachments'

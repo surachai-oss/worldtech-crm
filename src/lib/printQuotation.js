@@ -1,70 +1,145 @@
 import { fmtCurrency, fmtDate } from './format'
 
-// เปิดหน้าต่างใหม่พร้อมใบเสนอราคาที่จัดรูปแบบสำหรับพิมพ์ / บันทึกเป็น PDF
-// (ใช้ browser print dialog แทนการสร้างไฟล์ฝั่ง server เพราะไม่มี Google Docs/Drive แล้ว)
-export function printQuotation(quot, company, companyProfile = {}) {
-  const w = window.open('', '_blank', 'width=800,height=1000')
-  if (!w) { alert('เบราว์เซอร์บล็อกป๊อปอัป กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้'); return }
+const VAT_RATE = 0.07
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
-  const name = companyProfile.name || 'Worldtech Co., Ltd.'
-  const address = companyProfile.address || ''
-  const phone = companyProfile.phone || ''
-  const email = companyProfile.email || ''
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+}
 
-  w.document.write(`
+// แยก HTML generation ออกจาก window.open เพื่อให้ทดสอบได้ตรงๆ โดยไม่ต้องพึ่ง browser API
+// รูปแบบอ้างอิงจากตัวอย่างใบเสนอราคาจริงของบริษัท — value ที่กรอกถือว่ารวม VAT แล้ว เหมือนราคาต่อหน่วยในดีล
+export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/worldtech-logo.png') {
+  const name = settings.COMPANY_NAME || 'Worldtech Co., Ltd.'
+  const address = settings.COMPANY_ADDRESS || ''
+  const phone = settings.COMPANY_PHONE || ''
+  const email = settings.COMPANY_EMAIL || ''
+  const line = settings.COMPANY_LINE || ''
+  const taxId = settings.COMPANY_TAX_ID || ''
+
+  const value = Number(quot.value) || 0
+  const exVat = round2(value / (1 + VAT_RATE))
+  const vatAmount = round2(value - exVat)
+
+  const customerLines = [
+    company?.address,
+    company?.tax_id ? `เลขประจำตัวผู้เสียภาษี : ${company.tax_id}` : '',
+    company?.phone ? `โทร ${company.phone}` : '',
+  ].filter(Boolean).map(escapeHtml).join('<br/>')
+
+  const noteHtml = quot.note
+    ? `<div class="remark-label">หมายเหตุ</div><div class="remark-body">${escapeHtml(quot.note).replace(/\n/g, '<br/>')}</div>`
+    : ''
+
+  const contactLines = [
+    line ? `Line@ : ${line}` : '',
+    [phone && `โทร: ${phone}`, email && `อีเมล: ${email}`].filter(Boolean).join('   '),
+  ].filter(Boolean).map(escapeHtml).join('<br/>')
+
+  return `
     <!DOCTYPE html>
     <html lang="th">
     <head>
       <meta charset="UTF-8">
-      <title>${quot.quot_no}</title>
+      <title>${escapeHtml(quot.quot_no)}</title>
       <style>
-        @page { size: A4; margin: 20mm; }
-        body { font-family: 'Sarabun', 'Tahoma', sans-serif; color:#2d3748; font-size: 13px; }
-        .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #1b315e; padding-bottom:12px; margin-bottom:16px; }
-        .company-name { font-size:18px; font-weight:700; color:#1b315e; }
-        .doc-title { font-size:18px; font-weight:700; color:#1b315e; text-align:right; }
-        .meta { font-size:11px; color:#718096; margin-top:4px; }
-        table { width:100%; border-collapse:collapse; margin-top:16px; }
+        @page { size: A4; margin: 14mm; }
+        body { font-family: 'Sarabun', 'Tahoma', sans-serif; color:#2d3748; font-size: 13px; margin:0; }
+        .banner { background:#1b315e; color:#fff; text-align:center; font-weight:700; font-size:16px; padding:10px; border-radius:4px; margin-bottom:18px; }
+        .topinfo { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; }
+        .company-block { display:flex; gap:10px; align-items:flex-start; }
+        .logo { height:44px; }
+        .company-name { font-weight:700; font-size:14px; }
+        .meta { font-size:11.5px; color:#4a5568; margin-top:2px; line-height:1.5; }
+        .doc-meta { text-align:right; font-size:12px; }
+        .doc-meta .label { font-weight:700; margin-top:10px; }
+        .doc-meta .label:first-child { margin-top:0; }
+        .section-label { font-weight:700; margin-bottom:6px; }
+        .customer-block { margin-bottom:16px; }
+        .customer-info { padding-left:16px; font-size:12.5px; line-height:1.6; }
+        table { width:100%; border-collapse:collapse; margin-bottom:12px; }
         th { background:#1b315e; color:#fff; text-align:left; padding:8px 10px; font-size:12px; }
-        td { padding:8px 10px; border-bottom:1px solid #e0e4ea; font-size:13px; }
-        .total-row td { font-weight:700; border-top:2px solid #1b315e; }
-        .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; font-size:12px; }
-        .sign { display:flex; justify-content:space-between; margin-top:60px; font-size:12px; }
+        th.num, td.num { text-align:right; }
+        td { padding:8px 10px; border-bottom:1px solid #e0e4ea; font-size:13px; vertical-align:top; }
+        .below-table { display:flex; justify-content:space-between; gap:16px; margin-bottom:16px; }
+        .notes-left { color:#e53e3e; font-style:italic; font-size:12px; flex:1; }
+        .totals-box { min-width:280px; font-size:12.5px; }
+        .totals-box .row { display:flex; justify-content:space-between; padding:4px 10px; }
+        .totals-box .grand { background:#1b315e; color:#fff; font-weight:700; border-radius:2px; }
+        .remark-label { display:inline-block; background:#1b315e; color:#fff; font-size:11.5px; font-weight:700; padding:2px 10px; border-radius:2px; margin-bottom:6px; }
+        .remark-body { font-size:12px; color:#4a5568; line-height:1.6; margin-bottom:16px; }
+        .contact-box { background:#f4f6f9; padding:10px 14px; border-radius:4px; font-size:12px; line-height:1.6; }
+        .sign { display:flex; justify-content:space-between; margin-top:50px; font-size:12px; }
         .sign div { width:45%; text-align:center; border-top:1px solid #999; padding-top:6px; }
         @media print { .no-print { display:none; } }
       </style>
     </head>
     <body>
-      <div class="header">
-        <div>
-          <div class="company-name">${name}</div>
-          <div class="meta">${address}</div>
-          <div class="meta">${phone ? 'โทร: ' + phone + '  ' : ''}${email ? 'อีเมล: ' + email : ''}</div>
+      <div class="banner">ใบเสนอราคา</div>
+
+      <div class="topinfo">
+        <div class="company-block">
+          <img class="logo" src="${logoUrl}" onerror="this.style.display='none'" />
+          <div>
+            <div class="company-name">${escapeHtml(name)}</div>
+            <div class="meta">${escapeHtml(address)}</div>
+            ${taxId ? `<div class="meta">เลขประจำตัวผู้เสียภาษี : ${escapeHtml(taxId)}</div>` : ''}
+          </div>
         </div>
-        <div>
-          <div class="doc-title">ใบเสนอราคา<br/>QUOTATION</div>
-          <div class="meta">เลขที่: ${quot.quot_no}</div>
+        <div class="doc-meta">
+          <div class="label">วันที่:</div>
+          <div>${fmtDate(quot.quot_date)}</div>
+          <div class="label">เลขที่</div>
+          <div>${escapeHtml(quot.quot_no)}</div>
         </div>
       </div>
 
-      <div class="info-grid">
-        <div><b>เสนอราคาให้:</b><br/>${company ? company.name : '-'}<br/>${company?.address || ''}</div>
-        <div style="text-align:right">
-          วันที่: ${fmtDate(quot.quot_date)}<br/>
-          วันหมดอายุ: ${fmtDate(quot.expire_date) || '-'}<br/>
-          สถานะ: ${quot.status}
+      <div class="customer-block">
+        <div class="section-label">ชื่อลูกค้า</div>
+        <div class="customer-info">
+          ${escapeHtml(company ? company.name : '-')}<br/>
+          ${customerLines}
         </div>
       </div>
 
       <table>
-        <thead><tr><th>รายการ</th><th style="text-align:right">จำนวนเงิน (บาท)</th></tr></thead>
+        <thead>
+          <tr>
+            <th style="width:60px">จำนวน</th>
+            <th>รายการสินค้า</th>
+            <th class="num" style="width:120px">ราคาต่อหน่วย</th>
+            <th class="num" style="width:110px">ส่วนลด(บาท)</th>
+            <th class="num" style="width:120px">ยอดรวม</th>
+          </tr>
+        </thead>
         <tbody>
-          <tr><td>${quot.subject || '-'}</td><td style="text-align:right">${fmtCurrency(quot.value)}</td></tr>
-          <tr class="total-row"><td>รวมทั้งสิ้น</td><td style="text-align:right">${fmtCurrency(quot.value)}</td></tr>
+          <tr>
+            <td>1</td>
+            <td>${escapeHtml(quot.subject) || '-'}</td>
+            <td class="num">${fmtCurrency(value)}</td>
+            <td class="num">-</td>
+            <td class="num" style="font-weight:700">${fmtCurrency(value)}</td>
+          </tr>
         </tbody>
       </table>
 
-      ${quot.note ? `<p style="margin-top:16px"><b>หมายเหตุ:</b><br/>${quot.note}</p>` : ''}
+      <div class="below-table">
+        <div class="notes-left">
+          ${quot.expire_date ? `ยืนราคาถึง ${fmtDate(quot.expire_date)}` : ''}
+        </div>
+        <div class="totals-box">
+          <div class="row"><span>จำนวนเงินรวมก่อน Vat</span><span>${fmtCurrency(exVat)}</span></div>
+          <div class="row"><span>Vat 7%</span><span>${fmtCurrency(vatAmount)}</span></div>
+          <div class="row grand"><span>จำนวนเงินที่ต้องชำระ</span><span>${fmtCurrency(value)}</span></div>
+        </div>
+      </div>
+
+      ${noteHtml}
+
+      <div class="contact-box">
+        <div style="font-weight:700; margin-bottom:2px">ติดต่อสอบถามข้อมูลเพิ่มเติมได้ที่</div>
+        ${contactLines}
+      </div>
 
       <div class="sign">
         <div>ผู้เสนอราคา</div>
@@ -77,6 +152,15 @@ export function printQuotation(quot, company, companyProfile = {}) {
       <script>window.onload = () => window.print();</script>
     </body>
     </html>
-  `)
+  `
+}
+
+// เปิดหน้าต่างใหม่พร้อมใบเสนอราคาที่จัดรูปแบบสำหรับพิมพ์ / บันทึกเป็น PDF
+// (ใช้ browser print dialog แทนการสร้างไฟล์ฝั่ง server เพราะไม่มี Google Docs/Drive แล้ว)
+export function printQuotation(quot, company, settings = {}) {
+  const w = window.open('', '_blank', 'width=800,height=1000')
+  if (!w) { alert('เบราว์เซอร์บล็อกป๊อปอัป กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้'); return }
+  const logoUrl = `${window.location.origin}/worldtech-logo.png`
+  w.document.write(buildQuotationHtml(quot, company, settings, logoUrl))
   w.document.close()
 }

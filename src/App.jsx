@@ -126,6 +126,7 @@ function AppInner({ session }) {
       if (!(await confirm('ลบใบเสนอราคานี้?'))) return
       await run(() => api.deleteQuotation(id), 'ลบสำเร็จ')
     },
+    refreshData: reload,
   }
 
   const saveCompany = async (f, files = []) => {

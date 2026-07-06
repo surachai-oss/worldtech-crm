@@ -40,7 +40,7 @@ function ModalShell({ title, onClose, onSave, saveLabel = 'บันทึก', 
 }
 
 export function CompanyModal({ initial, isAdmin, onClose, onSave }) {
-  const [f, setF] = useState(() => initial || { name: '', industry: '', status: 'Active', phone: '', email: '', website: '', address: '', owner: '', lead_source: '', note: '' })
+  const [f, setF] = useState(() => initial || { name: '', industry: '', status: 'Active', phone: '', email: '', website: '', address: '', tax_id: '', owner: '', lead_source: '', note: '' })
   const [files, setFiles] = useState([])
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
 
@@ -68,11 +68,12 @@ export function CompanyModal({ initial, isAdmin, onClose, onSave }) {
       <Field label="เว็บไซต์"><input className="form-control" value={f.website || ''} onChange={set('website')} placeholder="https://www.company.com" /></Field>
       <Field label="ที่อยู่"><textarea className="form-control" rows={2} value={f.address || ''} onChange={set('address')} /></Field>
       <div className="form-row">
+        <Field label="เลขประจำตัวผู้เสียภาษี"><input className="form-control" value={f.tax_id || ''} onChange={set('tax_id')} placeholder="0-0000-00000-00-0" /></Field>
         <Field label="ผู้รับผิดชอบ"><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
-        <Field label="ที่มา">
-          <EditableSelect listKey="lead_sources" value={f.lead_source} onChange={v => setF(s => ({ ...s, lead_source: v }))} placeholder="-- ไม่ระบุ --" isAdmin={isAdmin} />
-        </Field>
       </div>
+      <Field label="ที่มา">
+        <EditableSelect listKey="lead_sources" value={f.lead_source} onChange={v => setF(s => ({ ...s, lead_source: v }))} placeholder="-- ไม่ระบุ --" isAdmin={isAdmin} />
+      </Field>
       <Field label="หมายเหตุ"><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
     </ModalShell>
   )
