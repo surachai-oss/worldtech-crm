@@ -420,9 +420,12 @@ create policy "lead_sources select" on lead_sources for select using (auth.role(
 drop policy if exists "lead_sources write" on lead_sources;
 create policy "lead_sources write" on lead_sources for all using (is_admin()) with check (is_admin());
 
--- ----- picklists: ทุกคนที่ login แล้วแก้ไขได้เลย (เหมือน dropdown list ที่แก้ไขร่วมกันได้ใน Google Sheets) -----
+-- ----- picklists: ทุกคนที่ login อ่านได้ (ใช้แสดงตัวเลือกใน dropdown), แก้ไข/เพิ่ม/ลบได้เฉพาะ admin -----
 drop policy if exists "picklists all" on picklists;
-create policy "picklists all" on picklists for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+drop policy if exists "picklists select" on picklists;
+create policy "picklists select" on picklists for select using (auth.role() = 'authenticated');
+drop policy if exists "picklists write" on picklists;
+create policy "picklists write" on picklists for all using (is_admin()) with check (is_admin());
 
 -- ----- profiles: เห็นของตัวเอง หรือ admin เห็นทั้งหมด, แก้ไข role ได้เฉพาะ admin -----
 drop policy if exists "profiles select" on profiles;

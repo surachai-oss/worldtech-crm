@@ -38,7 +38,7 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
                       {canEdit(d, perm) && (
                         <div style={{ marginTop: 8, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                           <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>✏️ แก้ไข</button>
-                          <EditableSelect listKey="deal_stages" value={d.stage} onChange={v => onMoveStage(d.id, v)} style={{ width: 140 }} />
+                          <EditableSelect listKey="deal_stages" value={d.stage} onChange={v => onMoveStage(d.id, v)} isAdmin={perm.isAdmin} style={{ width: 140 }} />
                         </div>
                       )}
                     </div>

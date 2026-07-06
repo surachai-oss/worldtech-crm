@@ -37,7 +37,7 @@ function ModalShell({ title, onClose, onSave, saveLabel = '💾 บันทึ�
   )
 }
 
-export function CompanyModal({ initial, onClose, onSave }) {
+export function CompanyModal({ initial, isAdmin, onClose, onSave }) {
   const [f, setF] = useState(() => initial || { name: '', industry: '', status: 'Active', phone: '', email: '', website: '', address: '', owner: '', lead_source: '', note: '' })
   const [files, setFiles] = useState([])
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
@@ -53,10 +53,10 @@ export function CompanyModal({ initial, onClose, onSave }) {
       </Field>
       <div className="form-row">
         <Field label="อุตสาหกรรม">
-          <EditableSelect listKey="industries" value={f.industry} onChange={v => setF(s => ({ ...s, industry: v }))} />
+          <EditableSelect listKey="industries" value={f.industry} onChange={v => setF(s => ({ ...s, industry: v }))} isAdmin={isAdmin} />
         </Field>
         <Field label="สถานะ">
-          <EditableSelect listKey="company_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} />
+          <EditableSelect listKey="company_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} isAdmin={isAdmin} />
         </Field>
       </div>
       <div className="form-row">
@@ -68,7 +68,7 @@ export function CompanyModal({ initial, onClose, onSave }) {
       <div className="form-row">
         <Field label="ผู้รับผิดชอบ"><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
         <Field label="ที่มา">
-          <EditableSelect listKey="lead_sources" value={f.lead_source} onChange={v => setF(s => ({ ...s, lead_source: v }))} placeholder="-- ไม่ระบุ --" />
+          <EditableSelect listKey="lead_sources" value={f.lead_source} onChange={v => setF(s => ({ ...s, lead_source: v }))} placeholder="-- ไม่ระบุ --" isAdmin={isAdmin} />
         </Field>
       </div>
       <Field label="หมายเหตุ"><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
@@ -99,7 +99,7 @@ export function ContactModal({ initial, companies, defaultCompanyId, onClose, on
   )
 }
 
-export function DealModal({ initial, companies, defaultCompanyId, defaultStage, onClose, onSave }) {
+export function DealModal({ initial, companies, defaultCompanyId, defaultStage, isAdmin, onClose, onSave }) {
   const [f, setF] = useState(() => initial || { company_id: defaultCompanyId || '', name: '', stage: defaultStage || 'Lead', value: '', close_date: '', owner: '', note: '' })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
   return (
@@ -108,7 +108,7 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
       <Field label="ชื่อดีล" required><input className="form-control" value={f.name} onChange={set('name')} placeholder="โปรเจกต์ / สินค้าที่ขาย" /></Field>
       <div className="form-row">
         <Field label="Stage">
-          <EditableSelect listKey="deal_stages" value={f.stage} onChange={v => setF(s => ({ ...s, stage: v }))} />
+          <EditableSelect listKey="deal_stages" value={f.stage} onChange={v => setF(s => ({ ...s, stage: v }))} isAdmin={isAdmin} />
         </Field>
         <Field label="มูลค่า (บาท)"><input className="form-control" type="number" value={f.value || ''} onChange={set('value')} /></Field>
       </div>
@@ -121,7 +121,7 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
   )
 }
 
-export function ActivityModal({ companies, contacts, defaultCompanyId, currentUserName, onClose, onSave }) {
+export function ActivityModal({ companies, contacts, defaultCompanyId, currentUserName, isAdmin, onClose, onSave }) {
   const [f, setF] = useState({
     company_id: defaultCompanyId || '', contact_id: '', type: '',
     subject: '', detail: '', activity_date: new Date().toISOString().split('T')[0], recorded_by: currentUserName || ''
@@ -133,7 +133,7 @@ export function ActivityModal({ companies, contacts, defaultCompanyId, currentUs
       <Field label="บริษัท"><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v, contact_id: '' }))} /></Field>
       <div className="form-row">
         <Field label="ประเภทการติดต่อ" required>
-          <EditableSelect listKey="activity_types" value={f.type} onChange={v => setF(s => ({ ...s, type: v }))} />
+          <EditableSelect listKey="activity_types" value={f.type} onChange={v => setF(s => ({ ...s, type: v }))} isAdmin={isAdmin} />
         </Field>
         <Field label="วันที่"><input className="form-control" type="date" value={f.activity_date} onChange={set('activity_date')} /></Field>
       </div>
@@ -150,7 +150,7 @@ export function ActivityModal({ companies, contacts, defaultCompanyId, currentUs
   )
 }
 
-export function TaskModal({ initial, companies, defaultCompanyId, currentUserName, onClose, onSave }) {
+export function TaskModal({ initial, companies, defaultCompanyId, currentUserName, isAdmin, onClose, onSave }) {
   const [f, setF] = useState(() => initial || {
     company_id: defaultCompanyId || '', subject: '', due_date: '', priority: 'ปกติ', status: 'รอดำเนินการ', owner: currentUserName || '', note: ''
   })
@@ -162,12 +162,12 @@ export function TaskModal({ initial, companies, defaultCompanyId, currentUserNam
       <div className="form-row">
         <Field label="วันครบกำหนด"><input className="form-control" type="date" value={f.due_date || ''} onChange={set('due_date')} /></Field>
         <Field label="ลำดับความสำคัญ">
-          <EditableSelect listKey="task_priorities" value={f.priority} onChange={v => setF(s => ({ ...s, priority: v }))} />
+          <EditableSelect listKey="task_priorities" value={f.priority} onChange={v => setF(s => ({ ...s, priority: v }))} isAdmin={isAdmin} />
         </Field>
       </div>
       <div className="form-row">
         <Field label="สถานะ">
-          <EditableSelect listKey="task_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} />
+          <EditableSelect listKey="task_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} isAdmin={isAdmin} />
         </Field>
         <Field label="ผู้รับผิดชอบ"><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
       </div>
@@ -176,7 +176,7 @@ export function TaskModal({ initial, companies, defaultCompanyId, currentUserNam
   )
 }
 
-export function QuotationModal({ companies, defaultCompanyId, onClose, onSave }) {
+export function QuotationModal({ companies, defaultCompanyId, isAdmin, onClose, onSave }) {
   const [f, setF] = useState({
     company_id: defaultCompanyId || '', subject: '', value: '', status: 'Draft',
     quot_date: new Date().toISOString().split('T')[0], expire_date: '', note: ''
@@ -189,7 +189,7 @@ export function QuotationModal({ companies, defaultCompanyId, onClose, onSave })
       <div className="form-row">
         <Field label="มูลค่า (บาท)"><input className="form-control" type="number" value={f.value || ''} onChange={set('value')} /></Field>
         <Field label="สถานะ">
-          <EditableSelect listKey="quot_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} />
+          <EditableSelect listKey="quot_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} isAdmin={isAdmin} />
         </Field>
       </div>
       <div className="form-row">

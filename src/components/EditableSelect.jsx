@@ -3,15 +3,17 @@ import { usePicklists } from './PicklistsContext'
 import { addPicklistValue, deletePicklistValue } from '../lib/api'
 import { useUi } from './UiContext'
 
-// select ที่ผูกกับ picklists — ถ้า editable=true จะมีปุ่ม ✏️ ให้เพิ่ม/ลบตัวเลือกได้ทันที
+// select ที่ผูกกับ picklists — ถ้า editable=true และ isAdmin=true จะมีปุ่ม ✏️ ให้เพิ่ม/ลบตัวเลือกได้ทันที
 // (แบบเดียวกับ dropdown list ที่แก้ไขได้ใน Google Sheets) โดยไม่ต้องไปหน้าตั้งค่าแยก
-export default function EditableSelect({ listKey, value, onChange, placeholder = '-- เลือก --', editable = true, style }) {
+// จำกัดเฉพาะ admin เพราะตัวเลือกบางตัวผูกกับ logic คำนวณสรุปในระบบ (ดู README) — บังคับจริงที่ RLS policy "picklists write"
+export default function EditableSelect({ listKey, value, onChange, placeholder = '-- เลือก --', editable = true, isAdmin = false, style }) {
   const { picklists, list, reload } = usePicklists()
   const { toast, confirm } = useUi()
   const [open, setOpen] = useState(false)
   const [newVal, setNewVal] = useState('')
   const [busy, setBusy] = useState(false)
 
+  const canEditOptions = editable && isAdmin
   const options = list(listKey)
   const rows = picklists[listKey] || []
 
@@ -47,10 +49,10 @@ export default function EditableSelect({ listKey, value, onChange, placeholder =
         <option value="">{placeholder}</option>
         {options.map(o => <option key={o}>{o}</option>)}
       </select>
-      {editable && (
+      {canEditOptions && (
         <button type="button" className="btn btn-outline btn-xs" onClick={() => setOpen(o => !o)} title="แก้ไขตัวเลือก">✏️</button>
       )}
-      {open && (
+      {canEditOptions && open && (
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
           <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 50, width: 240, marginTop: 4, boxShadow: '0 4px 16px rgba(0,0,0,.18)' }}>

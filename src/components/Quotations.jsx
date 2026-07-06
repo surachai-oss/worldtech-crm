@@ -66,7 +66,7 @@ export default function Quotations({ perm, reloadKey, settings, onAdd, onStatusC
                     <td style={{ fontSize: 12 }}>{fmtDate(qt.quot_date)}</td>
                     <td className="td-actions" onClick={e => e.stopPropagation()}>
                       {canManageChild(qt.company, perm) && (
-                        <EditableSelect listKey="quot_statuses" value={qt.status} onChange={v => onStatusChange(qt.id, v)} style={{ display: 'inline-flex', width: 160 }} />
+                        <EditableSelect listKey="quot_statuses" value={qt.status} onChange={v => onStatusChange(qt.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
                       )}
                       <button className="btn btn-secondary btn-xs" onClick={() => doPrint(qt)}>📄 PDF</button>
                       {canManageChild(qt.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(qt.id)}>🗑</button>}

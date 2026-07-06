@@ -272,12 +272,12 @@ function AppInner({ session }) {
         </div>
       </div>
 
-      {modal?.type === 'company' && <CompanyModal initial={modal.payload} onClose={closeModal} onSave={saveCompany} />}
+      {modal?.type === 'company' && <CompanyModal initial={modal.payload} isAdmin={isAdmin} onClose={closeModal} onSave={saveCompany} />}
       {modal?.type === 'contact' && <ContactModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} onClose={closeModal} onSave={saveContact} />}
-      {modal?.type === 'deal' && <DealModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} defaultStage={modal.payload?.defaultStage} onClose={closeModal} onSave={saveDeal} />}
-      {modal?.type === 'activity' && <ActivityModal companies={data.companies} contacts={data.contacts} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} onClose={closeModal} onSave={saveActivity} />}
-      {modal?.type === 'task' && <TaskModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} onClose={closeModal} onSave={saveTask} />}
-      {modal?.type === 'quotation' && <QuotationModal companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} onClose={closeModal} onSave={saveQuotation} />}
+      {modal?.type === 'deal' && <DealModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} defaultStage={modal.payload?.defaultStage} isAdmin={isAdmin} onClose={closeModal} onSave={saveDeal} />}
+      {modal?.type === 'activity' && <ActivityModal companies={data.companies} contacts={data.contacts} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveActivity} />}
+      {modal?.type === 'task' && <TaskModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveTask} />}
+      {modal?.type === 'quotation' && <QuotationModal companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
     </div>
   )
 }

@@ -231,7 +231,7 @@ function QuotationsTab({ quotations, company, perm, settings, onAdd, onStatusCha
                 <td style={{ fontSize: 12 }}>{fmtDate(q.quot_date)}</td>
                 <td className="td-actions">
                   {manageable && (
-                    <EditableSelect listKey="quot_statuses" value={q.status} onChange={v => onStatusChange(q.id, v)} style={{ display: 'inline-flex', width: 160 }} />
+                    <EditableSelect listKey="quot_statuses" value={q.status} onChange={v => onStatusChange(q.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
                   )}
                   <button className="btn btn-secondary btn-xs" onClick={() => printQuotation(q, company, settings)}>📄 PDF</button>
                   {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(q.id)}>🗑</button>}
