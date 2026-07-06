@@ -19,6 +19,29 @@ function CompanySelect({ companies, value, onChange }) {
   )
 }
 
+// select ที่มีตัวเลือก "อื่นๆ" — เลือกแล้วโผล่ช่องให้พิมพ์ระบุเอง ค่าที่พิมพ์จะถูกใช้เป็นค่าจริงที่บันทึก
+function OtherableSelect({ value, onChange, options, otherLabel = 'อื่นๆ', placeholder = '-- เลือก --', otherPlaceholder = 'ระบุ...' }) {
+  const [forceOther, setForceOther] = useState(false)
+  const isKnown = value && options.includes(value)
+  const isOther = forceOther || (!!value && !isKnown)
+  const selectValue = isOther ? otherLabel : (value || '')
+  return (
+    <>
+      <select className="form-control" value={selectValue} onChange={e => {
+        const v = e.target.value
+        if (v === otherLabel) { setForceOther(true); onChange('') }
+        else { setForceOther(false); onChange(v) }
+      }}>
+        <option value="">{placeholder}</option>
+        {options.map(o => <option key={o}>{o}</option>)}
+      </select>
+      {isOther && (
+        <input className="form-control" style={{ marginTop: 6 }} placeholder={otherPlaceholder} value={value || ''} onChange={e => onChange(e.target.value)} autoFocus />
+      )}
+    </>
+  )
+}
+
 function ModalShell({ title, onClose, onSave, saveLabel = '💾 บันทึก', children, wide }) {
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
@@ -52,10 +75,8 @@ export function CompanyModal({ initial, onClose, onSave }) {
       <Field label="ชื่อบริษัท" required><input className="form-control" value={f.name} onChange={set('name')} placeholder="บริษัท ตัวอย่าง จำกัด" /></Field>
       <div className="form-row">
         <Field label="อุตสาหกรรม">
-          <select className="form-control" value={f.industry || ''} onChange={set('industry')}>
-            <option value="">-- เลือก --</option>
-            {CONSTANTS.INDUSTRIES.map(i => <option key={i}>{i}</option>)}
-          </select>
+          <OtherableSelect value={f.industry} onChange={v => setF(s => ({ ...s, industry: v }))}
+            options={CONSTANTS.INDUSTRIES} otherPlaceholder="ระบุอุตสาหกรรม" />
         </Field>
         <Field label="สถานะ">
           <select className="form-control" value={f.status || 'Active'} onChange={set('status')}>
@@ -72,10 +93,8 @@ export function CompanyModal({ initial, onClose, onSave }) {
       <div className="form-row">
         <Field label="ผู้รับผิดชอบ"><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
         <Field label="ที่มา">
-          <select className="form-control" value={f.lead_source || ''} onChange={set('lead_source')}>
-            <option value="">-- ไม่ระบุ --</option>
-            {leadSources.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-          </select>
+          <OtherableSelect value={f.lead_source} onChange={v => setF(s => ({ ...s, lead_source: v }))}
+            options={leadSources.map(s => s.name)} placeholder="-- ไม่ระบุ --" otherPlaceholder="ระบุที่มา" />
         </Field>
       </div>
       <Field label="หมายเหตุ"><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
