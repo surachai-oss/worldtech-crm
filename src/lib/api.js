@@ -120,6 +120,14 @@ export async function fetchQuotationsPage({ page = 0, status = '', q = '' } = {}
 export const addCompany = (d) => supabase.from('companies').insert(d).select().single().then(handle)
 export const updateCompany = (id, d) => supabase.from('companies').update(d).eq('id', id).select().single().then(handle)
 export const deleteCompany = (id) => supabase.from('companies').delete().eq('id', id).then(handle)
+export const bulkImportCompanies = (rows) => supabase.from('companies').insert(rows).select().then(handle)
+
+// ===== LEAD SOURCES (ที่มาของลูกค้า) =====
+export async function listLeadSources() {
+  return supabase.from('lead_sources').select('*').order('name', { ascending: true }).then(handle)
+}
+export const addLeadSource = (name) => supabase.from('lead_sources').insert({ name }).select().single().then(handle)
+export const deleteLeadSource = (id) => supabase.from('lead_sources').delete().eq('id', id).then(handle)
 
 // ===== CONTACTS =====
 export const addContact = (d) => supabase.from('contacts').insert(d).select().single().then(handle)

@@ -101,6 +101,19 @@ create table if not exists settings (
   value  text
 );
 
+-- ===== LEAD SOURCES (ที่มาของลูกค้า — รายการที่ admin เพิ่ม/ลบได้เอง) =====
+create table if not exists lead_sources (
+  id          uuid primary key default uuid_generate_v4(),
+  name        text unique not null,
+  created_at  timestamptz default now()
+);
+
+insert into lead_sources (name) values
+  ('เว็บไซต์'), ('Facebook'), ('Line'), ('แนะนำโดยลูกค้าเดิม'), ('งานอีเวนต์/ออกบูธ'), ('โทรเข้ามาเอง'), ('อื่นๆ')
+on conflict (name) do nothing;
+
+alter table companies add column if not exists lead_source text;
+
 -- ===== ATTACHMENTS (เอกสารแนบต่อบริษัท, ไฟล์เก็บใน Supabase Storage bucket "attachments") =====
 create table if not exists attachments (
   id           uuid primary key default uuid_generate_v4(),
@@ -243,6 +256,7 @@ alter table quotations  enable row level security;
 alter table settings    enable row level security;
 alter table attachments enable row level security;
 alter table profiles    enable row level security;
+alter table lead_sources enable row level security;
 
 -- ลบ policy แบบเก่า "authenticated ทำได้ทุกอย่าง" (ถ้ามีจากเวอร์ชันก่อนหน้า)
 drop policy if exists "allow all for authenticated" on companies;
@@ -349,6 +363,12 @@ drop policy if exists "settings select" on settings;
 create policy "settings select" on settings for select using (auth.role() = 'authenticated');
 drop policy if exists "settings write" on settings;
 create policy "settings write" on settings for all using (is_admin()) with check (is_admin());
+
+-- ----- lead_sources: ทุกคนอ่านได้ (ใช้เลือกในฟอร์ม), เพิ่ม/ลบได้เฉพาะ admin -----
+drop policy if exists "lead_sources select" on lead_sources;
+create policy "lead_sources select" on lead_sources for select using (auth.role() = 'authenticated');
+drop policy if exists "lead_sources write" on lead_sources;
+create policy "lead_sources write" on lead_sources for all using (is_admin()) with check (is_admin());
 
 -- ----- profiles: เห็นของตัวเอง หรือ admin เห็นทั้งหมด, แก้ไข role ได้เฉพาะ admin -----
 drop policy if exists "profiles select" on profiles;

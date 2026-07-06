@@ -13,13 +13,14 @@ import Activities from './components/Activities'
 import Tasks from './components/Tasks'
 import Quotations from './components/Quotations'
 import Users from './components/Users'
+import LeadSources from './components/LeadSources'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal } from './components/Modals'
 import './App.css'
 
 const TITLES = {
   dashboard: 'แดชบอร์ด', companies: 'บริษัทลูกค้า', 'company-detail': 'รายละเอียดบริษัท',
   contacts: 'ผู้ติดต่อ', deals: 'ดีลการขาย', activities: 'ประวัติการติดต่อ', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา',
-  users: 'ผู้ใช้งาน'
+  users: 'ผู้ใช้งาน', 'lead-sources': 'ที่มาลูกค้า'
 }
 
 function AppInner({ session }) {
@@ -126,11 +127,22 @@ function AppInner({ session }) {
     },
   }
 
-  const saveCompany = async (f) => {
+  const saveCompany = async (f, files = []) => {
     closeModal()
     if (!f.name?.trim()) { toast('กรุณากรอกชื่อบริษัท', 'error'); return }
-    if (f.id) await run(() => api.updateCompany(f.id, f), 'อัปเดตสำเร็จ')
-    else await run(() => api.addCompany({ ...f, created_by: session.user.id }), 'เพิ่มบริษัทสำเร็จ')
+    try {
+      const company = f.id
+        ? await api.updateCompany(f.id, f)
+        : await api.addCompany({ ...f, created_by: session.user.id })
+      if (files.length) {
+        await Promise.all(files.map(file => api.uploadAttachment(company.id, file, currentUser.name)))
+      }
+      toast(f.id ? 'อัปเดตสำเร็จ' : 'เพิ่มบริษัทสำเร็จ', 'success')
+      await reload()
+      setReloadKey(k => k + 1)
+    } catch (e) {
+      toast('เกิดข้อผิดพลาด: ' + e.message, 'error')
+    }
   }
   const saveContact = async (f) => {
     closeModal()
@@ -257,6 +269,7 @@ function AppInner({ session }) {
             <Quotations perm={perm} reloadKey={reloadKey} settings={settings} onAdd={() => actions.addQuotation(null)} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} />
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
+          {view === 'lead-sources' && isAdmin && <LeadSources />}
         </div>
       </div>
 

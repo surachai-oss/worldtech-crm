@@ -4,7 +4,10 @@ const NAV = [
   { section: 'การขาย', items: [{ id: 'deals', icon: '🤝', label: 'ดีลการขาย' }, { id: 'quotations', icon: '📋', label: 'ใบเสนอราคา' }] },
   { section: 'ติดตาม', items: [{ id: 'activities', icon: '📝', label: 'ประวัติการติดต่อ' }, { id: 'tasks', icon: '✅', label: 'งาน Follow-up' }] },
 ]
-const ADMIN_SECTION = { section: 'ผู้ดูแลระบบ', items: [{ id: 'users', icon: '👤', label: 'ผู้ใช้งาน' }] }
+const ADMIN_SECTION = { section: 'ผู้ดูแลระบบ', items: [
+  { id: 'users', icon: '👤', label: 'ผู้ใช้งาน' },
+  { id: 'lead-sources', icon: '🏷️', label: 'ที่มาลูกค้า' },
+] }
 
 export default function Sidebar({ activeView, onNav, user, isAdmin, onLogout }) {
   const name = user?.name || 'ผู้ใช้งาน'

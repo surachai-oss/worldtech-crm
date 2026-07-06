@@ -4,6 +4,7 @@ import { statusBadgeClass } from '../lib/format'
 import { canEdit, canDelete } from '../lib/permissions'
 import { useUi } from './UiContext'
 import Pagination from './Pagination'
+import ImportCompaniesModal from './ImportCompaniesModal'
 
 export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete }) {
   const { toast } = useUi()
@@ -14,6 +15,8 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
   const [rows, setRows] = useState([])
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [showImport, setShowImport] = useState(false)
+  const [localBump, setLocalBump] = useState(0)
 
   useEffect(() => { setPage(0) }, [q, status, industry])
 
@@ -32,14 +35,18 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
       }
     }, 250)
     return () => { alive = false; clearTimeout(t) }
-  }, [page, q, status, industry, reloadKey])
+  }, [page, q, status, industry, reloadKey, localBump])
 
   return (
     <div>
       <div className="section-header">
         <div className="section-title">🏢 บริษัทลูกค้า <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
-        <button className="btn btn-primary" onClick={() => onEdit(null)}>+ เพิ่มบริษัท</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" onClick={() => setShowImport(true)}>📥 นำเข้าจากไฟล์</button>
+          <button className="btn btn-primary" onClick={() => onEdit(null)}>+ เพิ่มบริษัท</button>
+        </div>
       </div>
+      {showImport && <ImportCompaniesModal perm={perm} onClose={() => setShowImport(false)} onImported={() => setLocalBump(b => b + 1)} />}
       <div className="filter-bar">
         <input className="filter-input" placeholder="🔍 ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
