@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { fmtCurrency, fmtDate, stageColor } from '../lib/format'
+import { fmtCurrency, fmtDate, stageColor, toLocalDateStr } from '../lib/format'
 import { canEdit } from '../lib/permissions'
 import { usePicklists } from './PicklistsContext'
 import EditableSelect from './EditableSelect'
@@ -9,10 +9,11 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
 
-  // กรองตามวันที่คาดว่าปิดดีล (close_date) — ดีลที่ยังไม่ระบุวันที่จะถูกซ่อนเมื่อตั้งช่วงเวลาไว้
+  // กรองตามวันที่สร้างดีล (created_at) — เทียบเป็นวันที่ตามเวลาเครื่อง ไม่ใช่ UTC เพราะ created_at เก็บเป็น timestamptz
   const filtered = deals.filter(d => {
-    if (fromDate && (!d.close_date || d.close_date < fromDate)) return false
-    if (toDate && (!d.close_date || d.close_date > toDate)) return false
+    const created = toLocalDateStr(d.created_at)
+    if (fromDate && created < fromDate) return false
+    if (toDate && created > toDate) return false
     return true
   })
   const totalVal = filtered.reduce((s, d) => s + (Number(d.value) || 0), 0)
@@ -22,9 +23,9 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
       <div className="section-header">
         <div className="section-title">ดีลการขาย <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({filtered.length} ดีล · {fmtCurrency(totalVal)})</span></div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่คาดว่าปิดดีล ตั้งแต่" />
+          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่สร้างดีล ตั้งแต่" />
           <span style={{ fontSize: 12, color: 'var(--text-light)' }}>ถึง</span>
-          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่คาดว่าปิดดีล ถึง" />
+          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่สร้างดีล ถึง" />
           {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
           <button className="btn btn-primary" onClick={onAdd}>+ เพิ่มดีล</button>
         </div>

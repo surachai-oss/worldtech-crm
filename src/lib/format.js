@@ -19,6 +19,16 @@ export function isDueToday(ds) {
   return new Date(ds).toDateString() === new Date().toDateString()
 }
 
+// แปลง timestamp เป็น 'YYYY-MM-DD' ตามเวลาเครื่อง (ไม่ใช่ UTC) — ใช้เทียบกับค่าจาก <input type="date"> ซึ่งเป็นเวลาท้องถิ่นเสมอ
+export function toLocalDateStr(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export function stageBadgeClass(s) {
   const m = { 'Lead': 'badge-gray', 'Qualified': 'badge-blue', 'Proposal': 'badge-yellow', 'Negotiation': 'badge-orange', 'Closed Won': 'badge-green', 'Closed Lost': 'badge-red' }
   return m[s] || 'badge-gray'
