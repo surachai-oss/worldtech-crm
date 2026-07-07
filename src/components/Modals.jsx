@@ -44,23 +44,36 @@ function ModalShell({ title, onClose, onSave, saveLabel = 'บันทึก', 
 }
 
 export function CompanyModal({ initial, isAdmin, onClose, onSave }) {
-  const [f, setF] = useState(() => initial || { name: '', industry: '', status: 'Active', phone: '', email: '', website: '', address: '', tax_id: '', owner: '', lead_source: '', note: '' })
+  const [f, setF] = useState(() => {
+    const base = { name: '', customer_type: 'นิติบุคคล/บริษัท', industry: '', status: 'Active', phone: '', email: '', website: '', address: '', tax_id: '', owner: '', lead_source: '', note: '' }
+    return initial ? { ...base, ...initial } : base
+  })
   const [files, setFiles] = useState([])
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
 
   const onFilesChange = (e) => setFiles(Array.from(e.target.files || []))
 
+  // บุคคลธรรมดา (ลูกค้าซื้อไปใช้เอง) ใช้ฟอร์มย่อกว่า — ไม่บังคับอุตสาหกรรม/เว็บไซต์/เลขผู้เสียภาษีที่มีแต่นิติบุคคล
+  const isIndividual = f.customer_type === 'บุคคลธรรมดา'
+
   return (
-    <ModalShell title={initial?.id ? 'แก้ไขบริษัท' : 'เพิ่มบริษัทลูกค้า'} onClose={onClose} onSave={() => onSave(f, files)}>
-      <Field label="ชื่อบริษัท" required><input className="form-control" value={f.name} onChange={set('name')} placeholder="บริษัท ตัวอย่าง จำกัด" /></Field>
+    <ModalShell title={initial?.id ? 'แก้ไขลูกค้า' : 'เพิ่มลูกค้า'} onClose={onClose} onSave={() => onSave(f, files)}>
+      <Field label="ประเภทลูกค้า">
+        <EditableSelect listKey="customer_types" value={f.customer_type} onChange={v => setF(s => ({ ...s, customer_type: v }))} isAdmin={isAdmin} />
+      </Field>
+      <Field label={isIndividual ? 'ชื่อ-นามสกุล' : 'ชื่อบริษัท'} required>
+        <input className="form-control" value={f.name} onChange={set('name')} placeholder={isIndividual ? 'ชื่อ-นามสกุลลูกค้า' : 'บริษัท ตัวอย่าง จำกัด'} />
+      </Field>
       <Field label="เอกสารแนบ (ภพ20, หนังสือรับรองบริษัท ฯลฯ)">
         <input className="form-control" type="file" multiple onChange={onFilesChange} />
         {files.length > 0 && <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>เลือกแล้ว {files.length} ไฟล์: {files.map(file => file.name).join(', ')}</div>}
       </Field>
       <div className="form-row">
-        <Field label="อุตสาหกรรม">
-          <EditableSelect listKey="industries" value={f.industry} onChange={v => setF(s => ({ ...s, industry: v }))} isAdmin={isAdmin} />
-        </Field>
+        {!isIndividual && (
+          <Field label="อุตสาหกรรม">
+            <EditableSelect listKey="industries" value={f.industry} onChange={v => setF(s => ({ ...s, industry: v }))} isAdmin={isAdmin} />
+          </Field>
+        )}
         <Field label="สถานะ">
           <EditableSelect listKey="company_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} isAdmin={isAdmin} />
         </Field>
@@ -69,10 +82,10 @@ export function CompanyModal({ initial, isAdmin, onClose, onSave }) {
         <Field label="โทรศัพท์"><input className="form-control" value={f.phone || ''} onChange={set('phone')} placeholder="02-xxx-xxxx" /></Field>
         <Field label="อีเมล"><input className="form-control" type="email" value={f.email || ''} onChange={set('email')} /></Field>
       </div>
-      <Field label="เว็บไซต์"><input className="form-control" value={f.website || ''} onChange={set('website')} placeholder="https://www.company.com" /></Field>
+      {!isIndividual && <Field label="เว็บไซต์"><input className="form-control" value={f.website || ''} onChange={set('website')} placeholder="https://www.company.com" /></Field>}
       <Field label="ที่อยู่"><textarea className="form-control" rows={2} value={f.address || ''} onChange={set('address')} /></Field>
       <div className="form-row">
-        <Field label="เลขประจำตัวผู้เสียภาษี"><input className="form-control" value={f.tax_id || ''} onChange={set('tax_id')} placeholder="0-0000-00000-00-0" /></Field>
+        {!isIndividual && <Field label="เลขประจำตัวผู้เสียภาษี"><input className="form-control" value={f.tax_id || ''} onChange={set('tax_id')} placeholder="0-0000-00000-00-0" /></Field>}
         <Field label="ผู้รับผิดชอบ"><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
       </div>
       <Field label="ที่มา">

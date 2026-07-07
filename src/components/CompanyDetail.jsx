@@ -83,7 +83,7 @@ function Stat({ n, label }) {
 
 function InfoTab({ company }) {
   const rows = [
-    ['ที่อยู่', company.address], ['ผู้รับผิดชอบ', company.owner],
+    ['ประเภทลูกค้า', company.customer_type], ['ที่อยู่', company.address], ['ผู้รับผิดชอบ', company.owner],
     ['วันที่สร้าง', fmtDate(company.created_at)], ['อัปเดตล่าสุด', fmtDate(company.updated_at)],
     ['หมายเหตุ', company.note]
   ].filter(r => r[1])

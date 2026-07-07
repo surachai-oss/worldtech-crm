@@ -37,12 +37,13 @@ function range(page) {
   return [from, from + PAGE_SIZE - 1]
 }
 
-export async function fetchCompaniesPage({ page = 0, q = '', status = '', industry = '' } = {}) {
+export async function fetchCompaniesPage({ page = 0, q = '', status = '', industry = '', customerType = '' } = {}) {
   let query = supabase.from('companies').select('*', { count: 'exact' }).order('created_at', { ascending: false })
   const sq = safeLike(q)
   if (sq) query = query.or(`name.ilike.%${sq}%,phone.ilike.%${sq}%,email.ilike.%${sq}%`)
   if (status) query = query.eq('status', status)
   if (industry) query = query.eq('industry', industry)
+  if (customerType) query = query.eq('customer_type', customerType)
   const { data, error, count } = await query.range(...range(page))
   if (error) throw error
   return { rows: data, count, pageSize: PAGE_SIZE }
@@ -449,4 +450,30 @@ export function searchAll(data, query) {
     })
 
   return result.slice(0, 15)
+}
+
+// ===== LEADS (ลีดจากฟอร์มสาธารณะ) =====
+export async function fetchLeadsPage({ page = 0, status = '', q = '' } = {}) {
+  let query = supabase.from('leads').select('*, company:companies(id,name)', { count: 'exact' }).order('created_at', { ascending: false })
+  if (status) query = query.eq('status', status)
+  const sq = safeLike(q)
+  if (sq) query = query.or(`full_name.ilike.%${sq}%,phone.ilike.%${sq}%,email.ilike.%${sq}%`)
+  const { data, error, count } = await query.range(...range(page))
+  if (error) throw error
+  return { rows: data, count, pageSize: PAGE_SIZE }
+}
+
+export const updateLead = (id, d) => supabase.from('leads').update(d).eq('id', id).select().single().then(handle)
+export const deleteLead = (id) => supabase.from('leads').delete().eq('id', id).then(handle)
+
+// ฟอร์มลีดสาธารณะไม่ต้อง login — ส่งผ่าน Netlify Function ที่ใช้ Service Role Key เขียนแทน ไม่เรียก supabase client ตรงๆ
+export async function submitPublicLead({ full_name, phone, email, interested_product, message, source }) {
+  const res = await fetch('/.netlify/functions/submit-lead', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ full_name, phone, email, interested_product, message, source })
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(json.error || 'ส่งข้อมูลไม่สำเร็จ')
+  return json
 }

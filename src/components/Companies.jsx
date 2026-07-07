@@ -13,6 +13,7 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
   const [q, setQ] = useState('')
   const [status, setStatus] = useState('')
   const [industry, setIndustry] = useState('')
+  const [customerType, setCustomerType] = useState('')
   const [page, setPage] = useState(0)
   const [rows, setRows] = useState([])
   const [count, setCount] = useState(0)
@@ -20,14 +21,14 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
   const [showImport, setShowImport] = useState(false)
   const [localBump, setLocalBump] = useState(0)
 
-  useEffect(() => { setPage(0) }, [q, status, industry])
+  useEffect(() => { setPage(0) }, [q, status, industry, customerType])
 
   useEffect(() => {
     let alive = true
     setLoading(true)
     const t = setTimeout(async () => {
       try {
-        const r = await fetchCompaniesPage({ page, q, status, industry })
+        const r = await fetchCompaniesPage({ page, q, status, industry, customerType })
         if (!alive) return
         setRows(r.rows); setCount(r.count)
       } catch (e) {
@@ -37,7 +38,7 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
       }
     }, 250)
     return () => { alive = false; clearTimeout(t) }
-  }, [page, q, status, industry, reloadKey, localBump])
+  }, [page, q, status, industry, customerType, reloadKey, localBump])
 
   return (
     <div>
@@ -59,6 +60,10 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
           <option value="">ทุกอุตสาหกรรม</option>
           {list('industries').map(i => <option key={i}>{i}</option>)}
         </select>
+        <select className="filter-select" value={customerType} onChange={e => setCustomerType(e.target.value)}>
+          <option value="">ทุกประเภทลูกค้า</option>
+          {list('customer_types').map(t => <option key={t}>{t}</option>)}
+        </select>
       </div>
       <div className="card">
         <div className="table-wrap">
@@ -68,7 +73,13 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
               <tbody>
                 {rows.map(c => (
                   <tr key={c.id} onClick={() => onOpen(c.id)}>
-                    <td><div style={{ fontWeight: 600, color: 'var(--navy)' }}>{c.name}</div><div style={{ fontSize: 11, color: 'var(--text-light)' }}>{c.email}</div></td>
+                    <td>
+                      <div style={{ fontWeight: 600, color: 'var(--navy)' }}>
+                        {c.name}
+                        {c.customer_type === 'บุคคลธรรมดา' && <span className="badge badge-blue" style={{ marginLeft: 6, fontSize: 10, fontWeight: 400 }}>บุคคล</span>}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{c.email}</div>
+                    </td>
                     <td style={{ fontSize: 12 }}>{c.industry || '-'}</td>
                     <td style={{ fontSize: 12 }}>{c.phone || '-'}</td>
                     <td><span className={`badge ${statusBadgeClass(c.status)}`}>{c.status}</span></td>

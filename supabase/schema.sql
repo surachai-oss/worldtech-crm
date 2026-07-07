@@ -164,6 +164,20 @@ from quotations q
 where q.product_id is not null
   and not exists (select 1 from quotation_items qi where qi.quotation_id = q.id);
 
+-- ===== LEADS (ลีดจากฟอร์มสาธารณะ เช่น Facebook/เว็บไซต์ — insert ผ่าน Netlify Function ด้วย service role key เท่านั้น ไม่เปิด RLS ให้ anon insert ตรงๆ) =====
+create table if not exists leads (
+  id                  uuid primary key default uuid_generate_v4(),
+  full_name           text not null,
+  phone               text not null,
+  email               text,
+  interested_product  text,       -- สินค้า/รุ่นที่สนใจ กรอกเป็นข้อความอิสระจากฟอร์มสาธารณะ
+  message             text,       -- ข้อความเพิ่มเติมจากลูกค้า
+  source              text,       -- ที่มา แท็กอัตโนมัติจาก query param ของลิงก์ฟอร์ม (เช่น facebook, website)
+  status              text default 'ใหม่',
+  converted_company_id uuid references companies(id) on delete set null, -- ผูกไปยังลูกค้าที่เซลล์กด "สร้างเป็นลูกค้า" แปลงมาจากลีดนี้
+  created_at          timestamptz default now()
+);
+
 -- ===== SETTINGS =====
 create table if not exists settings (
   key    text primary key,
@@ -183,6 +197,10 @@ on conflict (name) do nothing;
 
 alter table companies add column if not exists lead_source text;
 alter table companies add column if not exists tax_id text; -- เลขประจำตัวผู้เสียภาษี ใช้พิมพ์ในใบเสนอราคา
+
+-- customer_type แยกลูกค้านิติบุคคล (ฟอร์มเต็ม) กับบุคคลธรรมดา (ฟอร์มย่อ ไม่บังคับอุตสาหกรรม/เว็บไซต์/เลขผู้เสียภาษี)
+-- ยังใช้ตาราง companies เดียวกัน ไม่แยกตารางใหม่ เพื่อให้ deals/quotations เลือกลูกค้าประเภทไหนก็ได้จาก dropdown เดิม
+alter table companies add column if not exists customer_type text default 'นิติบุคคล/บริษัท';
 
 -- ===== PICKLISTS (รายการ dropdown ที่แก้ไข/เพิ่ม/ลบได้เองทุกคนในระบบ แบบเดียวกับ dropdown list ใน Google Sheets) =====
 -- แทนที่ CONSTANTS ที่เคยฮาร์ดโค้ดในโค้ดฝั่ง frontend — list_key คือชื่อรายการ, value คือตัวเลือกแต่ละอัน
@@ -229,6 +247,14 @@ on conflict (list_key, value) do nothing;
 
 insert into picklists (list_key, value, sort_order)
 select 'deal_sources', v, i from unnest(array['ไลน์', 'เทเลเซลล์', 'อีเมลล์', 'เว็บไซต์', 'Facebook', 'แนะนำโดยลูกค้าเดิม', 'งานอีเวนต์/ออกบูธ', 'อื่นๆ']) with ordinality as t(v, i)
+on conflict (list_key, value) do nothing;
+
+insert into picklists (list_key, value, sort_order)
+select 'customer_types', v, i from unnest(array['นิติบุคคล/บริษัท', 'บุคคลธรรมดา']) with ordinality as t(v, i)
+on conflict (list_key, value) do nothing;
+
+insert into picklists (list_key, value, sort_order)
+select 'lead_statuses', v, i from unnest(array['ใหม่', 'ติดต่อแล้ว', 'ปิดเป็นลูกค้าแล้ว', 'ไม่สนใจ']) with ordinality as t(v, i)
 on conflict (list_key, value) do nothing;
 
 -- ย้ายรายการ "ที่มาลูกค้า" เดิม (ถ้าเคยเพิ่ม/ลบผ่านหน้าจัดการมาก่อน) เข้ามาอยู่ในระบบ picklists เดียวกัน
@@ -403,6 +429,7 @@ alter table picklists   enable row level security;
 alter table products    enable row level security;
 alter table deal_items  enable row level security;
 alter table quotation_items enable row level security;
+alter table leads       enable row level security;
 
 -- ลบ policy แบบเก่า "authenticated ทำได้ทุกอย่าง" (ถ้ามีจากเวอร์ชันก่อนหน้า)
 drop policy if exists "allow all for authenticated" on companies;
@@ -561,3 +588,14 @@ create policy "profiles update" on profiles for update using (
 ) with check (
   is_admin()
 );
+
+-- ----- leads: ทุกคนที่ login แล้วอ่าน/เพิ่ม/แก้ไขได้ (ไม่มีเจ้าของเฉพาะคน เพราะเซลล์คนไหนก็ตามลีดต่อได้), ลบได้เฉพาะ admin -----
+-- ไม่มี policy ให้ anon (คนนอกไม่ login) insert ตรงๆ เด็ดขาด — ฟอร์มสาธารณะต้องส่งผ่าน Netlify Function ที่ใช้ Service Role Key เขียนแทนเท่านั้น
+drop policy if exists "leads select" on leads;
+create policy "leads select" on leads for select using (auth.role() = 'authenticated');
+drop policy if exists "leads insert" on leads;
+create policy "leads insert" on leads for insert with check (auth.role() = 'authenticated');
+drop policy if exists "leads update" on leads;
+create policy "leads update" on leads for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+drop policy if exists "leads delete" on leads;
+create policy "leads delete" on leads for delete using (is_admin());

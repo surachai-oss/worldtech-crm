@@ -14,6 +14,7 @@ import Tasks from './components/Tasks'
 import Quotations from './components/Quotations'
 import Users from './components/Users'
 import Products from './components/Products'
+import Leads from './components/Leads'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal } from './components/Modals'
 import './App.css'
@@ -21,7 +22,7 @@ import './App.css'
 const TITLES = {
   dashboard: 'แดชบอร์ด', companies: 'บริษัทลูกค้า', 'company-detail': 'รายละเอียดบริษัท',
   contacts: 'ผู้ติดต่อ', deals: 'ดีลการขาย', activities: 'ประวัติการติดต่อ', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา',
-  users: 'ผู้ใช้งาน', products: 'สินค้า'
+  users: 'ผู้ใช้งาน', products: 'สินค้า', leads: 'ลีดที่เข้ามา'
 }
 
 function AppInner({ session }) {
@@ -86,7 +87,7 @@ function AppInner({ session }) {
   }
 
   const actions = {
-    editCompany: (c) => setModal({ type: 'company', payload: c }),
+    editCompany: (c) => setModal({ type: 'company', payload: { initial: c } }),
     deleteCompany: async (id) => {
       if (!(await confirm('ลบบริษัทนี้? ข้อมูลจะถูกลบถาวร'))) return
       await run(() => api.deleteCompany(id), 'ลบสำเร็จ')
@@ -143,10 +144,27 @@ function AppInner({ session }) {
         setModal({ type: 'deal', payload: { initial: { company_id: quot.company_id, name: quot.subject, items }, linkQuotationId: quot.id } })
       } catch (e) { toast('โหลดรายการสินค้าของใบเสนอราคาไม่สำเร็จ: ' + e.message, 'error') }
     },
+    leadStatus: async (id, status) => { await run(() => api.updateLead(id, { status }), 'อัปเดตสถานะสำเร็จ') },
+    deleteLead: async (id) => {
+      if (!(await confirm('ลบลีดนี้?'))) return
+      await run(() => api.deleteLead(id), 'ลบสำเร็จ')
+    },
+    // ก็อปชื่อ/เบอร์/อีเมลจากลีดไปตั้งต้นลูกค้าใหม่ ตั้งเป็นบุคคลธรรมดาโดย default (เซลล์แก้เป็นนิติบุคคลได้ถ้าจริงๆเป็นบริษัท) — ผูกกลับไปที่ลีดต้นทางหลังบันทึกสำเร็จ (ดู saveCompany)
+    convertLeadToCompany: (lead) => {
+      setModal({
+        type: 'company',
+        payload: {
+          initial: { name: lead.full_name, customer_type: 'บุคคลธรรมดา', phone: lead.phone || '', email: lead.email || '', note: lead.message || '' },
+          linkLeadId: lead.id
+        }
+      })
+    },
     refreshData: reload,
   }
 
   const saveCompany = async (f, files = []) => {
+    // ถ้าลูกค้านี้ถูกสร้างจากปุ่ม "สร้างเป็นลูกค้า" ในหน้าลีด ต้องผูก converted_company_id กลับไปที่ลีดต้นทางหลังสร้างสำเร็จ
+    const linkLeadId = modal?.payload?.linkLeadId
     closeModal()
     if (!f.name?.trim()) { toast('กรุณากรอกชื่อบริษัท', 'error'); return }
     try {
@@ -155,6 +173,9 @@ function AppInner({ session }) {
         : await api.addCompany({ ...f, created_by: session.user.id })
       if (files.length) {
         await Promise.all(files.map(file => api.uploadAttachment(company.id, file, currentUser.name)))
+      }
+      if (!f.id && linkLeadId) {
+        await api.updateLead(linkLeadId, { converted_company_id: company.id, status: 'ปิดเป็นลูกค้าแล้ว' })
       }
       toast(f.id ? 'อัปเดตสำเร็จ' : 'เพิ่มบริษัทสำเร็จ', 'success')
       await reload()
@@ -279,6 +300,9 @@ function AppInner({ session }) {
           {view === 'contacts' && (
             <Contacts perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onEdit={(c) => actions.editContact(c?.company_id, c)} onDelete={actions.deleteContact} />
           )}
+          {view === 'leads' && (
+            <Leads perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onCreateCompany={actions.convertLeadToCompany} onStatusChange={actions.leadStatus} onDelete={actions.deleteLead} />
+          )}
           {view === 'deals' && (
             <Deals perm={perm} deals={data.deals} companies={data.companies} quotations={data.quotations} onAdd={() => actions.addDeal(null)} onAddStage={actions.addDealStage} onEdit={actions.editDeal} onMoveStage={actions.moveDealStage} onCreateQuotation={actions.createQuotationFromDeal} />
           )}
@@ -296,7 +320,7 @@ function AppInner({ session }) {
         </div>
       </div>
 
-      {modal?.type === 'company' && <CompanyModal initial={modal.payload} isAdmin={isAdmin} onClose={closeModal} onSave={saveCompany} />}
+      {modal?.type === 'company' && <CompanyModal initial={modal.payload?.initial} isAdmin={isAdmin} onClose={closeModal} onSave={saveCompany} />}
       {modal?.type === 'contact' && <ContactModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} onClose={closeModal} onSave={saveContact} />}
       {modal?.type === 'deal' && <DealModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} defaultStage={modal.payload?.defaultStage} isAdmin={isAdmin} onClose={closeModal} onSave={saveDeal} />}
       {modal?.type === 'activity' && <ActivityModal companies={data.companies} contacts={data.contacts} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveActivity} />}
