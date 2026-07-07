@@ -70,12 +70,13 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
         .banner { background:#1b315e; color:#fff; text-align:center; padding:10px; border-radius:4px; margin-bottom:18px; }
         .banner .th { font-weight:700; font-size:16px; }
         .banner .en { font-size:11px; letter-spacing:1px; opacity:.85; }
-        .topinfo { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; }
-        .company-block { display:flex; gap:10px; align-items:flex-start; }
-        .logo { height:44px; }
+        .topinfo { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:18px; }
+        .company-block { display:flex; gap:10px; align-items:center; max-width:380px; }
+        .company-block > div { min-width:0; }
+        .logo { height:44px; flex-shrink:0; }
         .company-name { font-weight:700; font-size:14px; }
         .meta { font-size:11.5px; color:#4a5568; margin-top:2px; line-height:1.5; }
-        .doc-meta { text-align:right; font-size:12px; }
+        .doc-meta { text-align:right; font-size:12px; flex-shrink:0; white-space:nowrap; }
         .doc-meta .label { font-weight:700; margin-top:10px; }
         .doc-meta .label:first-child { margin-top:0; }
         .section-label { font-weight:700; margin-bottom:6px; }
@@ -106,7 +107,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
           <img class="logo" src="${logoUrl}" onerror="this.style.display='none'" />
           <div>
             <div class="company-name">${escapeHtml(name)}</div>
-            <div class="meta">${escapeHtml(address)}</div>
+            <div class="meta">${escapeHtml(address).replace(/\n/g, '<br/>')}</div>
             ${taxId ? `<div class="meta">เลขประจำตัวผู้เสียภาษี : ${escapeHtml(taxId)}</div>` : ''}
           </div>
         </div>
