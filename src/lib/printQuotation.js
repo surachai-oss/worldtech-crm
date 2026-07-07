@@ -71,7 +71,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
         .banner .th { font-weight:700; font-size:16px; }
         .banner .en { font-size:11px; letter-spacing:1px; opacity:.85; }
         .topinfo { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:18px; }
-        .company-block { display:flex; gap:10px; align-items:center; max-width:380px; }
+        .company-block { display:flex; gap:10px; align-items:center; flex:1; min-width:0; }
         .company-block > div { min-width:0; }
         .logo { height:44px; flex-shrink:0; }
         .company-name { font-weight:700; font-size:14px; }
