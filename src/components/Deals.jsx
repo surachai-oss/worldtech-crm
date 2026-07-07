@@ -69,7 +69,7 @@ function FollowUpSummary({ deals, companies, onEdit }) {
   )
 }
 
-export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdit, onMoveStage }) {
+export default function Deals({ perm, deals, companies, quotations, onAdd, onAddStage, onEdit, onMoveStage, onCreateQuotation }) {
   const { list } = usePicklists()
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
@@ -111,6 +111,7 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
                 {sd.map(d => {
                   const co = companies.find(c => c.id === d.company_id)
+                  const qCount = quotations.filter(q => q.deal_id === d.id).length
                   return (
                     <div className="kanban-card" key={d.id}>
                       <div className="deal-name">{d.name}</div>
@@ -118,9 +119,11 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
                       <div className="deal-val">{fmtCurrency(d.value)}</div>
                       {d.close_date && <div className="deal-date">{fmtDate(d.close_date)}</div>}
                       <div className="deal-owner">{d.owner || ''}</div>
+                      {qCount > 0 && <div style={{ fontSize: 10, color: 'var(--text-light)' }}>ออกใบเสนอราคาแล้ว {qCount} ใบ</div>}
                       {canEdit(d, perm) && (
                         <div style={{ marginTop: 8, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                           <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>แก้ไข</button>
+                          <button className="btn btn-secondary btn-xs" onClick={() => onCreateQuotation(d)}>ออกใบเสนอราคา</button>
                           <EditableSelect listKey="deal_stages" value={d.stage} onChange={v => onMoveStage(d.id, v)} isAdmin={perm.isAdmin} style={{ width: 140 }} />
                         </div>
                       )}

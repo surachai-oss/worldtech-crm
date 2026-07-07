@@ -9,7 +9,7 @@ import EditableSelect from './EditableSelect'
 import SignedQuotationControl from './SignedQuotationControl'
 import Pagination from './Pagination'
 
-export default function Quotations({ perm, reloadKey, settings, onAdd, onEdit, onStatusChange, onDelete }) {
+export default function Quotations({ perm, reloadKey, settings, deals, onAdd, onEdit, onStatusChange, onDelete, onCreateDeal }) {
   const { toast } = useUi()
   const { list } = usePicklists()
   const [status, setStatus] = useState('')
@@ -81,25 +81,29 @@ export default function Quotations({ perm, reloadKey, settings, onAdd, onEdit, o
             <table>
               <thead><tr><th>เลขที่</th><th>หัวข้อ</th><th>บริษัท</th><th>มูลค่า</th><th>สถานะ</th><th>วันที่</th><th>การจัดการ</th></tr></thead>
               <tbody>
-                {rows.map(qt => (
-                  <tr key={qt.id}>
-                    <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{qt.quot_no}</td>
-                    <td style={{ fontWeight: 500 }}>{qt.subject}</td>
-                    <td>{qt.company ? qt.company.name : '-'}</td>
-                    <td style={{ fontWeight: 600 }}>{fmtCurrency(qt.value)}</td>
-                    <td><span className={`badge ${quotBadgeClass(qt.status)}`}>{qt.status}</span></td>
-                    <td style={{ fontSize: 12 }}>{fmtDate(qt.quot_date)}</td>
-                    <td className="td-actions" onClick={e => e.stopPropagation()}>
-                      {canManageChild(qt.company, perm) && (
-                        <EditableSelect listKey="quot_statuses" value={qt.status} onChange={v => onStatusChange(qt.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
-                      )}
-                      {canManageChild(qt.company, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(qt)}>แก้ไข</button>}
-                      <button className="btn btn-secondary btn-xs" onClick={() => doPrint(qt)}>PDF</button>
-                      <SignedQuotationControl quotation={qt} manageable={canManageChild(qt.company, perm)} onChanged={() => setLocalBump(b => b + 1)} />
-                      {canManageChild(qt.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(qt.id)}>ลบ</button>}
-                    </td>
-                  </tr>
-                ))}
+                {rows.map(qt => {
+                  const fromDeal = qt.deal_id ? deals.find(d => d.id === qt.deal_id) : null
+                  return (
+                    <tr key={qt.id}>
+                      <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{qt.quot_no}</td>
+                      <td style={{ fontWeight: 500 }}>{qt.subject}{fromDeal && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>จากดีล: {fromDeal.name}</div>}</td>
+                      <td>{qt.company ? qt.company.name : '-'}</td>
+                      <td style={{ fontWeight: 600 }}>{fmtCurrency(qt.value)}</td>
+                      <td><span className={`badge ${quotBadgeClass(qt.status)}`}>{qt.status}</span></td>
+                      <td style={{ fontSize: 12 }}>{fmtDate(qt.quot_date)}</td>
+                      <td className="td-actions" onClick={e => e.stopPropagation()}>
+                        {canManageChild(qt.company, perm) && (
+                          <EditableSelect listKey="quot_statuses" value={qt.status} onChange={v => onStatusChange(qt.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
+                        )}
+                        {canManageChild(qt.company, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(qt)}>แก้ไข</button>}
+                        {canManageChild(qt.company, perm) && !qt.deal_id && <button className="btn btn-secondary btn-xs" onClick={() => onCreateDeal(qt)}>สร้างดีล</button>}
+                        <button className="btn btn-secondary btn-xs" onClick={() => doPrint(qt)}>PDF</button>
+                        <SignedQuotationControl quotation={qt} manageable={canManageChild(qt.company, perm)} onChanged={() => setLocalBump(b => b + 1)} />
+                        {canManageChild(qt.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(qt.id)}>ลบ</button>}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีใบเสนอราคา'}</div></div>}

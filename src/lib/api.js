@@ -192,7 +192,7 @@ export async function addDealWithItems(dealFields, items) {
   const deal = await addDeal({ ...dealFields, value: totals.subtotalIncVat })
   if (items?.length) {
     const rows = items.map((it, i) => ({
-      deal_id: deal.id, product_id: it.product_id, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
+      deal_id: deal.id, product_id: it.product_id, description: it.description, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
     }))
     await supabase.from('deal_items').insert(rows).then(handle)
   }
@@ -206,7 +206,7 @@ export async function updateDealWithItems(id, dealFields, items) {
   await supabase.from('deal_items').delete().eq('deal_id', id).then(handle)
   if (items?.length) {
     const rows = items.map((it, i) => ({
-      deal_id: id, product_id: it.product_id, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
+      deal_id: id, product_id: it.product_id, description: it.description, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
     }))
     await supabase.from('deal_items').insert(rows).then(handle)
   }

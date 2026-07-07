@@ -107,18 +107,21 @@ export function ContactModal({ initial, companies, defaultCompanyId, onClose, on
 }
 
 // แถวรายการสินค้าว่างเปล่า 1 แถวเริ่มต้น — quantity เริ่มที่ 1 เพื่อลดการพิมพ์ซ้ำๆ
-const EMPTY_ITEM = { product_id: '', quantity: 1, unit_price: '' }
+const EMPTY_ITEM = { product_id: '', description: '', quantity: 1, unit_price: '' }
 
 export function DealModal({ initial, companies, defaultCompanyId, defaultStage, isAdmin, onClose, onSave }) {
   const { toast } = useUi()
-  const [f, setF] = useState(() => initial || {
-    company_id: defaultCompanyId || '', name: '', stage: defaultStage || 'Lead',
-    close_date: '', follow_up_date: '', source: '', owner: '', note: ''
+  const [f, setF] = useState(() => {
+    const base = { company_id: defaultCompanyId || '', name: '', stage: defaultStage || 'Lead', close_date: '', follow_up_date: '', source: '', owner: '', note: '' }
+    if (!initial) return base
+    const { items: _seedItems, ...rest } = initial // items เป็นแค่ค่าตั้งต้นสำหรับ seed ไม่ใช่คอลัมน์ในตาราง deals ตัดออกก่อนเก็บใน f
+    return { ...base, ...rest }
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
 
   const [products, setProducts] = useState(null) // null = กำลังโหลดรายการสินค้า
-  const [items, setItems] = useState([{ ...EMPTY_ITEM }])
+  // initial.items = รายการที่ก็อปมาจากใบเสนอราคา (ตอนยังไม่มี initial.id) — ถ้ามีให้ใช้เป็นค่าเริ่มต้นแทนแถวเปล่า
+  const [items, setItems] = useState(() => initial?.items?.length ? initial.items.map(it => ({ product_id: it.product_id || '', description: it.description || '', quantity: it.quantity, unit_price: it.unit_price })) : [{ ...EMPTY_ITEM }])
 
   useEffect(() => {
     listProducts().then(setProducts).catch(e => { toast('โหลดรายการสินค้าไม่สำเร็จ: ' + e.message, 'error'); setProducts([]) })
@@ -127,7 +130,7 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
   useEffect(() => {
     if (!initial?.id) return
     listDealItems(initial.id)
-      .then(rows => { if (rows.length) setItems(rows.map(r => ({ product_id: r.product_id || '', quantity: r.quantity, unit_price: r.unit_price }))) })
+      .then(rows => { if (rows.length) setItems(rows.map(r => ({ product_id: r.product_id || '', description: r.description || '', quantity: r.quantity, unit_price: r.unit_price }))) })
       .catch(e => toast('โหลดรายการสินค้าของดีลไม่สำเร็จ: ' + e.message, 'error'))
   }, [initial?.id])
 
@@ -135,10 +138,16 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
   const addItem = () => setItems(rows => [...rows, { ...EMPTY_ITEM }])
   const removeItem = (i) => setItems(rows => rows.filter((_, idx) => idx !== i))
 
+  // เลือกสินค้าแล้วเติมชื่อรายการให้อัตโนมัติจากชื่อสินค้า (แก้เองต่อได้) — เหมือนพฤติกรรมในใบเสนอราคา
+  const onProductChange = (i, productId) => {
+    const p = (products || []).find(x => x.id === productId)
+    updateItem(i, { product_id: productId, description: p ? p.name : items[i].description })
+  }
+
   const totals = computeDealTotals(items)
 
-  // แถวที่ไม่ได้เลือกสินค้าถือว่าเป็นช่องว่างที่ยังไม่ได้ใช้ ตัดทิ้งก่อนบันทึก
-  const submit = () => onSave(f, items.filter(it => it.product_id))
+  // แถวที่ไม่ได้เลือกสินค้าและไม่ได้พิมพ์ชื่อรายการเอง ถือว่าเป็นช่องว่างที่ยังไม่ได้ใช้ ตัดทิ้งก่อนบันทึก
+  const submit = () => onSave(f, items.filter(it => it.product_id || it.description?.trim()))
 
   return (
     <ModalShell title={initial?.id ? 'แก้ไขดีล' : 'เพิ่มดีล'} onClose={onClose} onSave={submit} wide>
@@ -161,7 +170,7 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
       <Field label="รายการสินค้า (ราคาต่อหน่วยกรอกแบบรวม VAT แล้ว)">
         <div className="table-wrap" style={{ marginBottom: 8 }}>
           <table>
-            <thead><tr><th>สินค้า</th><th style={{ width: 90 }}>จำนวน</th><th style={{ width: 120 }}>ราคา/หน่วย</th><th style={{ width: 110 }}>รวม</th><th></th></tr></thead>
+            <thead><tr><th>สินค้า / รายการ</th><th style={{ width: 90 }}>จำนวน</th><th style={{ width: 120 }}>ราคา/หน่วย</th><th style={{ width: 110 }}>รวม</th><th></th></tr></thead>
             <tbody>
               {items.map((it, i) => {
                 const lineTotal = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0)
@@ -171,8 +180,10 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
                       <SearchableSelect
                         options={products || []}
                         value={it.product_id}
-                        onChange={v => updateItem(i, { product_id: v })}
-                        placeholder={products ? '-- เลือกสินค้า (พิมพ์เพื่อค้นหา) --' : 'กำลังโหลด...'}
+                        onChange={v => onProductChange(i, v)}
+                        freeText={it.description}
+                        onFreeTextChange={v => updateItem(i, { description: v })}
+                        placeholder={products ? '-- พิมพ์ชื่อสินค้าเพื่อค้นหา หรือพิมพ์ชื่อรายการเอง --' : 'กำลังโหลด...'}
                         getOptionLabel={p => `${p.code} - ${p.name}`}
                         disabled={!products}
                       />
@@ -270,14 +281,20 @@ const EMPTY_QUOT_ITEM = { product_id: '', description: '', quantity: 1, unit_pri
 
 export function QuotationModal({ initial, companies, defaultCompanyId, currentUserName, isAdmin, onClose, onSave }) {
   const { toast } = useUi()
-  const [f, setF] = useState(() => initial || {
-    company_id: defaultCompanyId || '', subject: '', status: 'Draft', sale_phone: '', proposer_name: currentUserName || '',
-    quot_date: new Date().toISOString().split('T')[0], expire_date: '', note: DEFAULT_QUOTATION_NOTE
+  const [f, setF] = useState(() => {
+    const base = {
+      company_id: defaultCompanyId || '', subject: '', status: 'Draft', sale_phone: '', proposer_name: currentUserName || '',
+      quot_date: new Date().toISOString().split('T')[0], expire_date: '', note: DEFAULT_QUOTATION_NOTE, deal_id: null
+    }
+    if (!initial) return base
+    const { items: _seedItems, ...rest } = initial // items เป็นแค่ค่าตั้งต้นสำหรับ seed ไม่ใช่คอลัมน์ในตาราง quotations ตัดออกก่อนเก็บใน f
+    return { ...base, ...rest }
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
 
   const [products, setProducts] = useState(null) // null = กำลังโหลดรายการสินค้า
-  const [items, setItems] = useState([{ ...EMPTY_QUOT_ITEM }])
+  // initial.items = รายการที่ก็อปมาจากดีล (ตอนยังไม่มี initial.id) — ถ้ามีให้ใช้เป็นค่าเริ่มต้นแทนแถวเปล่า
+  const [items, setItems] = useState(() => initial?.items?.length ? initial.items.map(it => ({ product_id: it.product_id || '', description: it.description || '', quantity: it.quantity, unit_price: it.unit_price })) : [{ ...EMPTY_QUOT_ITEM }])
 
   useEffect(() => {
     listProducts().then(setProducts).catch(e => { toast('โหลดรายการสินค้าไม่สำเร็จ: ' + e.message, 'error'); setProducts([]) })

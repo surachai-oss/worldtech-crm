@@ -63,10 +63,10 @@ export default function CompanyDetail({ company, contacts, deals, activities, ta
 
       {tab === 'info' && <InfoTab company={company} />}
       {tab === 'contacts' && <ContactsTab contacts={contacts} perm={perm} company={company} onAdd={() => actions.addContact(company.id)} onEdit={(c) => actions.editContact(company.id, c)} onDelete={actions.deleteContact} />}
-      {tab === 'deals' && <DealsTab deals={deals} perm={perm} onAdd={() => actions.addDeal(company.id)} onEdit={actions.editDeal} onDelete={actions.deleteDeal} />}
+      {tab === 'deals' && <DealsTab deals={deals} quotations={quotations} perm={perm} onAdd={() => actions.addDeal(company.id)} onEdit={actions.editDeal} onDelete={actions.deleteDeal} onCreateQuotation={actions.createQuotationFromDeal} />}
       {tab === 'activities' && <ActivitiesTab activities={activities} perm={perm} company={company} onAdd={() => actions.addActivity(company.id)} onDelete={actions.deleteActivity} />}
       {tab === 'tasks' && <TasksTab tasks={tasks} perm={perm} onAdd={() => actions.addTask(company.id)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />}
-      {tab === 'quotations' && <QuotationsTab quotations={quotations} company={company} perm={perm} settings={settings} onAdd={() => actions.addQuotation(company.id)} onEdit={actions.editQuotation} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} onRefresh={actions.refreshData} />}
+      {tab === 'quotations' && <QuotationsTab quotations={quotations} deals={deals} company={company} perm={perm} settings={settings} onAdd={() => actions.addQuotation(company.id)} onEdit={actions.editQuotation} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} onRefresh={actions.refreshData} onCreateDeal={actions.createDealFromQuotation} />}
       {tab === 'attachments' && <AttachmentsTab company={company} perm={perm} currentUserName={currentUserName} />}
     </div>
   )
@@ -130,7 +130,7 @@ function ContactsTab({ contacts, perm, company, onAdd, onEdit, onDelete }) {
   )
 }
 
-function DealsTab({ deals, perm, onAdd, onEdit, onDelete }) {
+function DealsTab({ deals, quotations, perm, onAdd, onEdit, onDelete, onCreateQuotation }) {
   return (
     <>
       <div className="section-header"><div className="section-title">ดีลการขาย</div><button className="btn btn-primary btn-sm" onClick={onAdd}>+ เพิ่มดีล</button></div>
@@ -138,19 +138,23 @@ function DealsTab({ deals, perm, onAdd, onEdit, onDelete }) {
         {deals.length ? (
           <table>
             <thead><tr><th>ชื่อดีล</th><th>Stage</th><th>มูลค่า</th><th>วันปิดดีล</th><th>ผู้รับผิดชอบ</th><th>การจัดการ</th></tr></thead>
-            <tbody>{deals.map(d => (
-              <tr key={d.id}>
-                <td style={{ fontWeight: 500 }}>{d.name}</td>
-                <td><span className={`badge ${stageBadgeClass(d.stage)}`}>{d.stage}</span></td>
-                <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(d.value)}</td>
-                <td style={{ fontSize: 12 }}>{fmtDate(d.close_date)}</td>
-                <td style={{ fontSize: 12 }}>{d.owner || '-'}</td>
-                <td className="td-actions">
-                  {canEdit(d, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>แก้ไข</button>}
-                  {canDelete(d, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(d.id)}>ลบ</button>}
-                </td>
-              </tr>
-            ))}</tbody>
+            <tbody>{deals.map(d => {
+              const qCount = quotations.filter(q => q.deal_id === d.id).length
+              return (
+                <tr key={d.id}>
+                  <td style={{ fontWeight: 500 }}>{d.name}{qCount > 0 && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>ออกใบเสนอราคาแล้ว {qCount} ใบ</div>}</td>
+                  <td><span className={`badge ${stageBadgeClass(d.stage)}`}>{d.stage}</span></td>
+                  <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(d.value)}</td>
+                  <td style={{ fontSize: 12 }}>{fmtDate(d.close_date)}</td>
+                  <td style={{ fontSize: 12 }}>{d.owner || '-'}</td>
+                  <td className="td-actions">
+                    {canEdit(d, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>แก้ไข</button>}
+                    {canEdit(d, perm) && <button className="btn btn-secondary btn-xs" onClick={() => onCreateQuotation(d)}>ออกใบเสนอราคา</button>}
+                    {canDelete(d, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(d.id)}>ลบ</button>}
+                  </td>
+                </tr>
+              )
+            })}</tbody>
           </table>
         ) : <div className="empty-state"><div>ยังไม่มีดีล</div></div>}
       </div></div>
@@ -214,7 +218,7 @@ function TasksTab({ tasks, perm, onAdd, onEdit, onComplete, onDelete }) {
   )
 }
 
-function QuotationsTab({ quotations, company, perm, settings, onAdd, onEdit, onStatusChange, onDelete, onRefresh }) {
+function QuotationsTab({ quotations, deals, company, perm, settings, onAdd, onEdit, onStatusChange, onDelete, onRefresh, onCreateDeal }) {
   const manageable = canManageChild(company, perm)
   return (
     <>
@@ -223,24 +227,28 @@ function QuotationsTab({ quotations, company, perm, settings, onAdd, onEdit, onS
         {quotations.length ? (
           <table>
             <thead><tr><th>เลขที่</th><th>หัวข้อ</th><th>มูลค่า</th><th>สถานะ</th><th>วันที่</th><th>การจัดการ</th></tr></thead>
-            <tbody>{quotations.map(q => (
-              <tr key={q.id}>
-                <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{q.quot_no}</td>
-                <td>{q.subject}</td>
-                <td style={{ fontWeight: 600 }}>{fmtCurrency(q.value)}</td>
-                <td><span className={`badge ${quotBadgeClass(q.status)}`}>{q.status}</span></td>
-                <td style={{ fontSize: 12 }}>{fmtDate(q.quot_date)}</td>
-                <td className="td-actions">
-                  {manageable && (
-                    <EditableSelect listKey="quot_statuses" value={q.status} onChange={v => onStatusChange(q.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
-                  )}
-                  {manageable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(q)}>แก้ไข</button>}
-                  <button className="btn btn-secondary btn-xs" onClick={() => printQuotation(q, company, settings)}>PDF</button>
-                  <SignedQuotationControl quotation={q} manageable={manageable} onChanged={onRefresh} />
-                  {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(q.id)}>ลบ</button>}
-                </td>
-              </tr>
-            ))}</tbody>
+            <tbody>{quotations.map(q => {
+              const fromDeal = q.deal_id ? deals.find(d => d.id === q.deal_id) : null
+              return (
+                <tr key={q.id}>
+                  <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{q.quot_no}</td>
+                  <td>{q.subject}{fromDeal && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>จากดีล: {fromDeal.name}</div>}</td>
+                  <td style={{ fontWeight: 600 }}>{fmtCurrency(q.value)}</td>
+                  <td><span className={`badge ${quotBadgeClass(q.status)}`}>{q.status}</span></td>
+                  <td style={{ fontSize: 12 }}>{fmtDate(q.quot_date)}</td>
+                  <td className="td-actions">
+                    {manageable && (
+                      <EditableSelect listKey="quot_statuses" value={q.status} onChange={v => onStatusChange(q.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
+                    )}
+                    {manageable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(q)}>แก้ไข</button>}
+                    {manageable && !q.deal_id && <button className="btn btn-secondary btn-xs" onClick={() => onCreateDeal(q)}>สร้างดีล</button>}
+                    <button className="btn btn-secondary btn-xs" onClick={() => printQuotation(q, company, settings)}>PDF</button>
+                    <SignedQuotationControl quotation={q} manageable={manageable} onChanged={onRefresh} />
+                    {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(q.id)}>ลบ</button>}
+                  </td>
+                </tr>
+              )
+            })}</tbody>
           </table>
         ) : <div className="empty-state"><div>ยังไม่มีใบเสนอราคา</div></div>}
       </div></div>

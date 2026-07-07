@@ -93,6 +93,10 @@ create table if not exists deal_items (
   created_at   timestamptz default now()
 );
 
+-- description = ชื่อรายการที่พิมพ์เอง (เผื่อไม่ได้เลือกสินค้าจากระบบ) — เพิ่มให้ตรงกับ quotation_items เป๊ะ
+-- เพื่อให้คัดลอกรายการสินค้าไปมาระหว่างดีล/ใบเสนอราคาได้ตรงๆ ไม่มีข้อจำกัดเรื่องรูปแบบข้อมูลต่างกัน
+alter table deal_items add column if not exists description text;
+
 -- ===== TASKS =====
 create table if not exists tasks (
   id           uuid primary key default uuid_generate_v4(),

@@ -127,6 +127,22 @@ function AppInner({ session }) {
       if (!(await confirm('ลบใบเสนอราคานี้?'))) return
       await run(() => api.deleteQuotation(id), 'ลบสำเร็จ')
     },
+    // ก็อปรายการสินค้า+บริษัทจากดีลไปตั้งต้นใบเสนอราคาใหม่ กันเซลล์ต้องกรอกซ้ำ — ผูก deal_id ไว้ให้เลย แก้ต่อในใบเสนอราคาได้อิสระไม่กระทบดีลเดิม
+    createQuotationFromDeal: async (deal) => {
+      try {
+        const rows = await api.listDealItems(deal.id)
+        const items = rows.map(r => ({ product_id: r.product_id || '', description: r.description || r.product?.name || '', quantity: r.quantity, unit_price: r.unit_price }))
+        setModal({ type: 'quotation', payload: { initial: { company_id: deal.company_id, subject: deal.name, deal_id: deal.id, items } } })
+      } catch (e) { toast('โหลดรายการสินค้าของดีลไม่สำเร็จ: ' + e.message, 'error') }
+    },
+    // ก็อปรายการสินค้า+บริษัทจากใบเสนอราคาไปตั้งต้นดีลใหม่ — ผูกกลับไปที่ deal_id ของใบเสนอราคานี้หลังบันทึกดีลสำเร็จ (ดู saveDeal)
+    createDealFromQuotation: async (quot) => {
+      try {
+        const rows = await api.listQuotationItems(quot.id)
+        const items = rows.map(r => ({ product_id: r.product_id || '', description: r.description || '', quantity: r.quantity, unit_price: r.unit_price }))
+        setModal({ type: 'deal', payload: { initial: { company_id: quot.company_id, name: quot.subject, items }, linkQuotationId: quot.id } })
+      } catch (e) { toast('โหลดรายการสินค้าของใบเสนอราคาไม่สำเร็จ: ' + e.message, 'error') }
+    },
     refreshData: reload,
   }
 
@@ -155,11 +171,19 @@ function AppInner({ session }) {
     else await run(() => api.addContact(f), 'เพิ่มผู้ติดต่อสำเร็จ')
   }
   const saveDeal = async (f, items = []) => {
+    // ถ้าดีลนี้ถูกสร้างจากปุ่ม "สร้างดีล" ในใบเสนอราคา ต้องผูก deal_id กลับไปที่ใบเสนอราคาต้นทางหลังสร้างสำเร็จ
+    const linkQuotationId = modal?.payload?.linkQuotationId
     closeModal()
     if (!f.name?.trim()) { toast('กรุณากรอกชื่อดีล', 'error'); return }
     if (!f.company_id) { toast('กรุณาเลือกบริษัท', 'error'); return }
-    if (f.id) await run(() => api.updateDealWithItems(f.id, f, items), 'อัปเดตดีลสำเร็จ')
-    else await run(() => api.addDealWithItems({ ...f, created_by: session.user.id }, items), 'เพิ่มดีลสำเร็จ')
+    if (f.id) {
+      await run(() => api.updateDealWithItems(f.id, f, items), 'อัปเดตดีลสำเร็จ')
+    } else {
+      await run(async () => {
+        const deal = await api.addDealWithItems({ ...f, created_by: session.user.id }, items)
+        if (linkQuotationId) await api.updateQuotation(linkQuotationId, { deal_id: deal.id })
+      }, 'เพิ่มดีลสำเร็จ')
+    }
   }
   const saveActivity = async (f) => {
     closeModal()
@@ -256,7 +280,7 @@ function AppInner({ session }) {
             <Contacts perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onEdit={(c) => actions.editContact(c?.company_id, c)} onDelete={actions.deleteContact} />
           )}
           {view === 'deals' && (
-            <Deals perm={perm} deals={data.deals} companies={data.companies} onAdd={() => actions.addDeal(null)} onAddStage={actions.addDealStage} onEdit={actions.editDeal} onMoveStage={actions.moveDealStage} />
+            <Deals perm={perm} deals={data.deals} companies={data.companies} quotations={data.quotations} onAdd={() => actions.addDeal(null)} onAddStage={actions.addDealStage} onEdit={actions.editDeal} onMoveStage={actions.moveDealStage} onCreateQuotation={actions.createQuotationFromDeal} />
           )}
           {view === 'activities' && (
             <Activities perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addActivity(null)} onDelete={actions.deleteActivity} />
@@ -265,7 +289,7 @@ function AppInner({ session }) {
             <Tasks perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addTask(null)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />
           )}
           {view === 'quotations' && (
-            <Quotations perm={perm} reloadKey={reloadKey} settings={settings} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} />
+            <Quotations perm={perm} reloadKey={reloadKey} settings={settings} deals={data.deals} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} onCreateDeal={actions.createDealFromQuotation} />
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products />}
