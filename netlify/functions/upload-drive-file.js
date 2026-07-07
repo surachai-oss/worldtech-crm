@@ -8,11 +8,14 @@ const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files'
 
 // รับได้ทั้ง JSON ตรงๆ หรือ Base64 ของ JSON (แนะนำให้ใช้ Base64 เพราะ private_key มี \n ฝังอยู่ วาง JSON ตรงๆ ผ่านช่อง env var มักเพี้ยน)
 function parseServiceAccountKey(raw) {
-  try { return JSON.parse(raw) } catch { /* ลอง base64 ต่อ */ }
+  const trimmed = String(raw).trim()
+  try { return JSON.parse(trimmed) } catch { /* ลอง base64 ต่อ */ }
   try {
-    const decoded = Buffer.from(raw, 'base64').toString('utf8')
+    const decoded = Buffer.from(trimmed, 'base64').toString('utf8')
     return JSON.parse(decoded)
-  } catch { throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY ไม่ใช่ JSON หรือ Base64 ของ JSON ที่ถูกต้อง') }
+  } catch { /* ตกไป throw ข้างล่างพร้อม diagnostic ที่ไม่หลุด secret */ }
+  // แสดงความยาว + ตัวอักษรหัว-ท้ายเพื่อ debug โดยไม่โชว์ private_key (อยู่กลางไฟล์ ไม่ใช่หัว/ท้าย)
+  throw new Error(`GOOGLE_SERVICE_ACCOUNT_KEY ไม่ใช่ JSON หรือ Base64 ของ JSON ที่ถูกต้อง (ยาว ${trimmed.length} ตัวอักษร ขึ้นต้นด้วย "${trimmed.slice(0, 12)}" ลงท้ายด้วย "${trimmed.slice(-12)}")`)
 }
 
 async function getAccessToken() {
