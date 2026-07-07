@@ -66,7 +66,7 @@ export default function CompanyDetail({ company, contacts, deals, activities, ta
       {tab === 'deals' && <DealsTab deals={deals} perm={perm} onAdd={() => actions.addDeal(company.id)} onEdit={actions.editDeal} onDelete={actions.deleteDeal} />}
       {tab === 'activities' && <ActivitiesTab activities={activities} perm={perm} company={company} onAdd={() => actions.addActivity(company.id)} onDelete={actions.deleteActivity} />}
       {tab === 'tasks' && <TasksTab tasks={tasks} perm={perm} onAdd={() => actions.addTask(company.id)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />}
-      {tab === 'quotations' && <QuotationsTab quotations={quotations} company={company} perm={perm} settings={settings} onAdd={() => actions.addQuotation(company.id)} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} onRefresh={actions.refreshData} />}
+      {tab === 'quotations' && <QuotationsTab quotations={quotations} company={company} perm={perm} settings={settings} onAdd={() => actions.addQuotation(company.id)} onEdit={actions.editQuotation} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} onRefresh={actions.refreshData} />}
       {tab === 'attachments' && <AttachmentsTab company={company} perm={perm} currentUserName={currentUserName} />}
     </div>
   )
@@ -214,7 +214,7 @@ function TasksTab({ tasks, perm, onAdd, onEdit, onComplete, onDelete }) {
   )
 }
 
-function QuotationsTab({ quotations, company, perm, settings, onAdd, onStatusChange, onDelete, onRefresh }) {
+function QuotationsTab({ quotations, company, perm, settings, onAdd, onEdit, onStatusChange, onDelete, onRefresh }) {
   const manageable = canManageChild(company, perm)
   return (
     <>
@@ -234,6 +234,7 @@ function QuotationsTab({ quotations, company, perm, settings, onAdd, onStatusCha
                   {manageable && (
                     <EditableSelect listKey="quot_statuses" value={q.status} onChange={v => onStatusChange(q.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
                   )}
+                  {manageable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(q)}>แก้ไข</button>}
                   <button className="btn btn-secondary btn-xs" onClick={() => printQuotation(q, company, settings)}>PDF</button>
                   <SignedQuotationControl quotation={q} manageable={manageable} onChanged={onRefresh} />
                   {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(q.id)}>ลบ</button>}

@@ -1,5 +1,5 @@
 import { fmtCurrency, fmtDate } from './format'
-import { getProductImageUrl } from './api'
+import { listQuotationItems, getProductImageUrl } from './api'
 
 const VAT_RATE = 0.07
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
@@ -9,9 +9,9 @@ function escapeHtml(s) {
 }
 
 // แยก HTML generation ออกจาก window.open เพื่อให้ทดสอบได้ตรงๆ โดยไม่ต้องพึ่ง browser API
-// รูปแบบอ้างอิงจากตัวอย่างใบเสนอราคาจริงของบริษัท — value ที่กรอกถือว่ารวม VAT แล้ว เหมือนราคาต่อหน่วยในดีล
-// productImageUrl รับเป็น URL ที่ resolve มาแล้ว (ไม่ import api.js ตรงๆ ในฟังก์ชันนี้ เพื่อให้เทสได้โดยไม่ต้องพึ่ง supabase client)
-export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/worldtech-logo.png', productImageUrl = null) {
+// รูปแบบอ้างอิงจากตัวอย่างใบเสนอราคาจริงของบริษัท — unit_price ที่กรอกถือว่ารวม VAT แล้ว เหมือนราคาต่อหน่วยในดีล
+// items รับเป็น array ที่ resolve รูปมาแล้ว [{ description, quantity, unit_price, imageUrl }] (ไม่ import api.js ตรงๆ ในฟังก์ชันนี้ เพื่อให้เทสได้โดยไม่ต้องพึ่ง supabase client)
+export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/worldtech-logo.png', items = []) {
   const name = settings.COMPANY_NAME || 'Worldtech Co., Ltd.'
   const address = settings.COMPANY_ADDRESS || ''
   const phone = settings.COMPANY_PHONE || ''
@@ -19,7 +19,10 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
   const line = settings.COMPANY_LINE || ''
   const taxId = settings.COMPANY_TAX_ID || ''
 
-  const value = Number(quot.value) || 0
+  // ใบเสนอราคาเก่าที่ไม่มีรายการสินค้าเลย (ก่อนมีระบบรายการหลายชิ้น) — ใช้ subject/value เดิมเป็นรายการเดียว
+  const rows = items.length ? items : [{ description: quot.subject, quantity: 1, unit_price: Number(quot.value) || 0, imageUrl: null }]
+
+  const value = round2(rows.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0))
   const exVat = round2(value / (1 + VAT_RATE))
   const vatAmount = round2(value - exVat)
 
@@ -36,7 +39,24 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
   const contactLines = [
     line ? `Line@ : ${line}` : '',
     [phone && `โทร: ${phone}`, email && `อีเมล: ${email}`].filter(Boolean).join('   '),
+    quot.sale_phone ? `ติดต่อเซลล์ : ${quot.sale_phone}` : '',
   ].filter(Boolean).map(escapeHtml).join('<br/>')
+
+  const itemRows = rows.map(it => {
+    const qty = Number(it.quantity) || 0
+    const unitPrice = Number(it.unit_price) || 0
+    return `
+      <tr>
+        <td>${qty}</td>
+        <td>
+          ${escapeHtml(it.description) || '-'}
+          ${it.imageUrl ? `<br/><img src="${it.imageUrl}" style="max-width:220px;max-height:160px;margin-top:6px;border-radius:4px" onerror="this.style.display='none'" />` : ''}
+        </td>
+        <td class="num">${fmtCurrency(unitPrice)}</td>
+        <td class="num">-</td>
+        <td class="num" style="font-weight:700">${fmtCurrency(qty * unitPrice)}</td>
+      </tr>`
+  }).join('')
 
   return `
     <!DOCTYPE html>
@@ -47,7 +67,9 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
       <style>
         @page { size: A4; margin: 14mm; }
         body { font-family: 'Sarabun', 'Tahoma', sans-serif; color:#2d3748; font-size: 13px; margin:0; }
-        .banner { background:#1b315e; color:#fff; text-align:center; font-weight:700; font-size:16px; padding:10px; border-radius:4px; margin-bottom:18px; }
+        .banner { background:#1b315e; color:#fff; text-align:center; padding:10px; border-radius:4px; margin-bottom:18px; }
+        .banner .th { font-weight:700; font-size:16px; }
+        .banner .en { font-size:11px; letter-spacing:1px; opacity:.85; }
         .topinfo { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; }
         .company-block { display:flex; gap:10px; align-items:flex-start; }
         .logo { height:44px; }
@@ -77,7 +99,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
       </style>
     </head>
     <body>
-      <div class="banner">ใบเสนอราคา</div>
+      <div class="banner"><div class="th">ใบเสนอราคา</div><div class="en">QUOTATION</div></div>
 
       <div class="topinfo">
         <div class="company-block">
@@ -115,16 +137,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td>${Number(quot.quantity) || 1}</td>
-            <td>
-              ${escapeHtml(quot.subject) || '-'}
-              ${productImageUrl ? `<br/><img src="${productImageUrl}" style="max-width:140px;max-height:100px;margin-top:6px;border-radius:4px" onerror="this.style.display='none'" />` : ''}
-            </td>
-            <td class="num">${fmtCurrency(Number(quot.unit_price) || value)}</td>
-            <td class="num">-</td>
-            <td class="num" style="font-weight:700">${fmtCurrency(value)}</td>
-          </tr>
+          ${itemRows}
         </tbody>
       </table>
 
@@ -160,13 +173,29 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
   `
 }
 
-// เปิดหน้าต่างใหม่พร้อมใบเสนอราคาที่จัดรูปแบบสำหรับพิมพ์ / บันทึกเป็น PDF
+// เปิดหน้าต่างใหม่ก่อน (sync ตอน click) กันโดน popup blocker แล้วค่อยโหลดรายการสินค้า/รูปแบบ async
 // (ใช้ browser print dialog แทนการสร้างไฟล์ฝั่ง server เพราะไม่มี Google Docs/Drive แล้ว)
-export function printQuotation(quot, company, settings = {}) {
+export async function printQuotation(quot, company, settings = {}) {
   const w = window.open('', '_blank', 'width=800,height=1000')
   if (!w) { alert('เบราว์เซอร์บล็อกป๊อปอัป กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้'); return }
-  const logoUrl = `${window.location.origin}/worldtech-logo.png`
-  const productImageUrl = quot.product?.image_path ? getProductImageUrl(quot.product.image_path) : null
-  w.document.write(buildQuotationHtml(quot, company, settings, logoUrl, productImageUrl))
-  w.document.close()
+  w.document.write('<html><body style="font-family:sans-serif;padding:40px;text-align:center;color:#718096">กำลังโหลดข้อมูล...</body></html>')
+
+  try {
+    const rawItems = await listQuotationItems(quot.id)
+    const items = rawItems.map(it => ({
+      description: it.description || it.product?.name || '',
+      quantity: it.quantity,
+      unit_price: it.unit_price,
+      imageUrl: it.product?.image_path ? getProductImageUrl(it.product.image_path) : null
+    }))
+    const logoUrl = `${window.location.origin}/worldtech-logo.png`
+    const html = buildQuotationHtml(quot, company, settings, logoUrl, items)
+    w.document.open()
+    w.document.write(html)
+    w.document.close()
+  } catch (e) {
+    w.document.open()
+    w.document.write(`<html><body style="font-family:sans-serif;padding:40px;text-align:center;color:#e53e3e">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(e.message)}</body></html>`)
+    w.document.close()
+  }
 }

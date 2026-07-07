@@ -9,7 +9,7 @@ import EditableSelect from './EditableSelect'
 import SignedQuotationControl from './SignedQuotationControl'
 import Pagination from './Pagination'
 
-export default function Quotations({ perm, reloadKey, settings, onAdd, onStatusChange, onDelete }) {
+export default function Quotations({ perm, reloadKey, settings, onAdd, onEdit, onStatusChange, onDelete }) {
   const { toast } = useUi()
   const { list } = usePicklists()
   const [status, setStatus] = useState('')
@@ -93,6 +93,7 @@ export default function Quotations({ perm, reloadKey, settings, onAdd, onStatusC
                       {canManageChild(qt.company, perm) && (
                         <EditableSelect listKey="quot_statuses" value={qt.status} onChange={v => onStatusChange(qt.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
                       )}
+                      {canManageChild(qt.company, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(qt)}>แก้ไข</button>}
                       <button className="btn btn-secondary btn-xs" onClick={() => doPrint(qt)}>PDF</button>
                       <SignedQuotationControl quotation={qt} manageable={canManageChild(qt.company, perm)} onChanged={() => setLocalBump(b => b + 1)} />
                       {canManageChild(qt.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(qt.id)}>ลบ</button>}

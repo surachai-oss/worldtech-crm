@@ -255,13 +255,43 @@ async function genQuotNo() {
   if (error) throw error
   return data
 }
-export async function addQuotation(d) {
-  const quot_no = await genQuotNo()
-  return supabase.from('quotations').insert({ ...d, quot_no }).select().single().then(handle)
-}
-export const updateQuotationStatus = (id, status) =>
-  supabase.from('quotations').update({ status }).eq('id', id).select().single().then(handle)
+export const updateQuotation = (id, d) => supabase.from('quotations').update(d).eq('id', id).select().single().then(handle)
+export const updateQuotationStatus = (id, status) => updateQuotation(id, { status })
 export const deleteQuotation = (id) => supabase.from('quotations').delete().eq('id', id).then(handle)
+
+// ===== QUOTATION ITEMS (รายการสินค้าในใบเสนอราคา — ใบเสนอราคาหนึ่งมีได้หลายรายการ เหมือนดีล) =====
+// ใช้ computeDealTotals ตัวเดียวกันกับดีล เพราะสูตรคิด VAT เหมือนกัน (unit_price รวม VAT แล้ว)
+export const listQuotationItems = (quotationId) =>
+  supabase.from('quotation_items').select('*, product:products(id,code,name,image_path)').eq('quotation_id', quotationId)
+    .order('sort_order', { ascending: true }).then(handle)
+
+// สร้างใบเสนอราคา + รายการสินค้าในทีเดียว — value คำนวณจาก items ให้อัตโนมัติ
+export async function addQuotationWithItems(fields, items) {
+  const totals = computeDealTotals(items)
+  const quot_no = await genQuotNo()
+  const quot = await supabase.from('quotations').insert({ ...fields, quot_no, value: totals.subtotalIncVat }).select().single().then(handle)
+  if (items?.length) {
+    const rows = items.map((it, i) => ({
+      quotation_id: quot.id, product_id: it.product_id, description: it.description, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
+    }))
+    await supabase.from('quotation_items').insert(rows).then(handle)
+  }
+  return quot
+}
+
+// แก้ไขใบเสนอราคา — ลบรายการเดิมทั้งหมดแล้วใส่ชุดใหม่ทั้งหมด (แบบเดียวกับดีล)
+export async function updateQuotationWithItems(id, fields, items) {
+  const totals = computeDealTotals(items)
+  const quot = await updateQuotation(id, { ...fields, value: totals.subtotalIncVat })
+  await supabase.from('quotation_items').delete().eq('quotation_id', id).then(handle)
+  if (items?.length) {
+    const rows = items.map((it, i) => ({
+      quotation_id: id, product_id: it.product_id, description: it.description, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
+    }))
+    await supabase.from('quotation_items').insert(rows).then(handle)
+  }
+  return quot
+}
 
 // ไฟล์ใบเสนอราคาที่ลูกค้าเซ็นแล้วส่งกลับมา — เก็บใน bucket "attachments" เดียวกับเอกสารแนบอื่น
 // ใช้ quotations.file_url เป็น path ในไฟล์แนบ (คอลัมน์เดิมที่มีอยู่แล้วแต่ไม่เคยใช้งาน) + signed_file_name เก็บชื่อไฟล์เดิมไว้แสดงผล

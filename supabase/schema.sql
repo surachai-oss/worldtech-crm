@@ -123,14 +123,39 @@ create table if not exists quotations (
   created_at    timestamptz default now()
 );
 
--- product_id/quantity/unit_price = รายการสินค้าของใบเสนอราคานี้ (ใบเสนอราคามีได้แค่ 1 รายการต่อใบ ต่างจากดีลที่มีได้หลายรายการ)
--- unit_price ถือว่ารวม VAT แล้วเหมือนกับดีล — value คำนวณจาก quantity*unit_price ที่ฝั่ง frontend
+-- product_id/quantity/unit_price บนตาราง quotations เอง (ใบเสนอราคามีได้แค่ 1 รายการ) — เก็บไว้เป็นข้อมูลเก่า
+-- ไม่ใช้แล้วตั้งแต่เปลี่ยนมาใช้ตาราง quotation_items ด้านล่างที่รองรับหลายรายการต่อใบ (ดู migration ท้ายบล็อกนี้)
 alter table quotations add column if not exists product_id uuid references products(id) on delete set null;
 alter table quotations add column if not exists quantity numeric default 1;
 alter table quotations add column if not exists unit_price numeric default 0;
 
 -- signed_file_name = ชื่อไฟล์เดิมที่อัปโหลด (ใช้แสดงผล) คู่กับ file_url ที่เป็น path จริงใน storage
 alter table quotations add column if not exists signed_file_name text;
+
+-- sale_phone = เบอร์ติดต่อเซลล์ที่ออกใบเสนอราคานี้ ใช้แสดงในกล่องข้อมูลติดต่อตอนพิมพ์
+alter table quotations add column if not exists sale_phone text;
+
+-- ===== QUOTATION ITEMS (รายการสินค้าในใบเสนอราคา — ใบเสนอราคาหนึ่งมีได้หลายรายการ เหมือนดีล) =====
+-- description = ชื่อรายการที่แสดงจริง (เติมจากชื่อสินค้าเวลาเลือก แต่แก้ไขเองได้ เผื่อรายการที่ไม่มีในรายการสินค้า)
+-- unit_price ถือว่ารวม VAT แล้วเหมือนกับดีล — quotations.value คำนวณจากผลรวมรายการเหล่านี้ที่ฝั่ง frontend
+create table if not exists quotation_items (
+  id            uuid primary key default uuid_generate_v4(),
+  quotation_id  uuid references quotations(id) on delete cascade,
+  product_id    uuid references products(id) on delete set null,
+  description   text,
+  quantity      numeric not null default 1,
+  unit_price    numeric not null default 0,
+  sort_order    int default 0,
+  created_at    timestamptz default now()
+);
+
+-- ย้ายข้อมูลรายการเดียวเดิม (จากคอลัมน์ product_id/quantity/unit_price บน quotations) เข้าตาราง quotation_items
+-- ทำครั้งเดียวต่อใบ (เช็คว่ายังไม่มีรายการอยู่ก่อน) รันซ้ำได้ปลอดภัยไม่ซ้ำข้อมูล
+insert into quotation_items (quotation_id, product_id, description, quantity, unit_price)
+select q.id, q.product_id, q.subject, coalesce(q.quantity, 1), coalesce(q.unit_price, q.value, 0)
+from quotations q
+where q.product_id is not null
+  and not exists (select 1 from quotation_items qi where qi.quotation_id = q.id);
 
 -- ===== SETTINGS =====
 create table if not exists settings (
@@ -367,6 +392,7 @@ alter table lead_sources enable row level security;
 alter table picklists   enable row level security;
 alter table products    enable row level security;
 alter table deal_items  enable row level security;
+alter table quotation_items enable row level security;
 
 -- ลบ policy แบบเก่า "authenticated ทำได้ทุกอย่าง" (ถ้ามีจากเวอร์ชันก่อนหน้า)
 drop policy if exists "allow all for authenticated" on companies;
@@ -467,6 +493,16 @@ create policy "quotations all" on quotations for all using (
 ) with check (
   exists (select 1 from companies c where c.id = quotations.company_id
     and (is_admin() or c.created_by = auth.uid() or c.created_by is null))
+);
+
+-- ----- quotation_items: สืบสิทธิ์จากใบเสนอราคาแม่ -> บริษัทแม่ (สองชั้นเหมือน quotations เอง) -----
+drop policy if exists "quotation_items all" on quotation_items;
+create policy "quotation_items all" on quotation_items for all using (
+  exists (select 1 from quotations q join companies c on c.id = q.company_id
+    where q.id = quotation_items.quotation_id and (is_admin() or c.created_by = auth.uid() or c.created_by is null))
+) with check (
+  exists (select 1 from quotations q join companies c on c.id = q.company_id
+    where q.id = quotation_items.quotation_id and (is_admin() or c.created_by = auth.uid() or c.created_by is null))
 );
 
 drop policy if exists "attachments all" on attachments;

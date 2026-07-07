@@ -121,6 +121,7 @@ function AppInner({ session }) {
       await run(() => api.deleteTask(id), 'ลบสำเร็จ')
     },
     addQuotation: (companyId) => setModal({ type: 'quotation', payload: { defaultCompanyId: companyId } }),
+    editQuotation: (q) => setModal({ type: 'quotation', payload: { initial: q } }),
     quotStatus: async (id, status) => { await run(() => api.updateQuotationStatus(id, status), 'อัปเดตสถานะสำเร็จ') },
     deleteQuotation: async (id) => {
       if (!(await confirm('ลบใบเสนอราคานี้?'))) return
@@ -172,15 +173,12 @@ function AppInner({ session }) {
     if (f.id) await run(() => api.updateTask(f.id, f), 'อัปเดตสำเร็จ')
     else await run(() => api.addTask({ ...f, created_by: session.user.id }), 'เพิ่มงานสำเร็จ')
   }
-  const saveQuotation = async (f) => {
+  const saveQuotation = async (f, items = []) => {
     closeModal()
     if (!f.subject?.trim()) { toast('กรุณากรอกหัวข้อ', 'error'); return }
     if (!f.company_id) { toast('กรุณาเลือกบริษัท', 'error'); return }
-    try {
-      const r = await api.addQuotation(f)
-      toast('สร้างใบเสนอราคา ' + r.quot_no + ' สำเร็จ', 'success')
-      await reload()
-    } catch (e) { toast('เกิดข้อผิดพลาด: ' + e.message, 'error') }
+    if (f.id) await run(() => api.updateQuotationWithItems(f.id, f, items), 'อัปเดตใบเสนอราคาสำเร็จ')
+    else await run(() => api.addQuotationWithItems(f, items), 'สร้างใบเสนอราคาสำเร็จ')
   }
 
   if (loading) {
@@ -267,7 +265,7 @@ function AppInner({ session }) {
             <Tasks perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addTask(null)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />
           )}
           {view === 'quotations' && (
-            <Quotations perm={perm} reloadKey={reloadKey} settings={settings} onAdd={() => actions.addQuotation(null)} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} />
+            <Quotations perm={perm} reloadKey={reloadKey} settings={settings} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} />
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && isAdmin && <Products />}
@@ -279,7 +277,7 @@ function AppInner({ session }) {
       {modal?.type === 'deal' && <DealModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} defaultStage={modal.payload?.defaultStage} isAdmin={isAdmin} onClose={closeModal} onSave={saveDeal} />}
       {modal?.type === 'activity' && <ActivityModal companies={data.companies} contacts={data.contacts} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveActivity} />}
       {modal?.type === 'task' && <TaskModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveTask} />}
-      {modal?.type === 'quotation' && <QuotationModal companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
+      {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
     </div>
   )
 }
