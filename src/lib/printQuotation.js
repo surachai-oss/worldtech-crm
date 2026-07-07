@@ -1,3 +1,5 @@
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
 import { fmtCurrency, fmtDate } from './format'
 import { listQuotationItems, getProductImageUrl } from './api'
 
@@ -11,7 +13,8 @@ function escapeHtml(s) {
 // แยก HTML generation ออกจาก window.open เพื่อให้ทดสอบได้ตรงๆ โดยไม่ต้องพึ่ง browser API
 // รูปแบบอ้างอิงจากตัวอย่างใบเสนอราคาจริงของบริษัท — unit_price ที่กรอกถือว่ารวม VAT แล้ว เหมือนราคาต่อหน่วยในดีล
 // items รับเป็น array ที่ resolve รูปมาแล้ว [{ description, quantity, unit_price, imageUrl }] (ไม่ import api.js ตรงๆ ในฟังก์ชันนี้ เพื่อให้เทสได้โดยไม่ต้องพึ่ง supabase client)
-export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/worldtech-logo.png', items = []) {
+// autoPrint: false ใช้ตอนสร้าง HTML สำหรับแปลงเป็น PDF ไฟล์ (renderQuotationPdfBlob) — ไม่ต้องมีปุ่ม/สคริปต์เปิด print dialog ของเบราว์เซอร์
+export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/worldtech-logo.png', items = [], { autoPrint = true } = {}) {
   const name = settings.COMPANY_NAME || 'Worldtech Co., Ltd.'
   const address = settings.COMPANY_ADDRESS || ''
   const phone = settings.COMPANY_PHONE || ''
@@ -173,30 +176,98 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
         </div>
       </div>
 
+      ${autoPrint ? `
       <div class="no-print" style="margin-top:24px;text-align:center">
         <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer">พิมพ์ / บันทึกเป็น PDF</button>
       </div>
       <script>window.onload = () => window.print();</script>
+      ` : ''}
     </body>
     </html>
   `
 }
 
+function waitForImages(el) {
+  return Promise.all(Array.from(el.querySelectorAll('img')).map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
+    img.addEventListener('load', resolve, { once: true })
+    img.addEventListener('error', resolve, { once: true })
+  })))
+}
+
+// สร้างไฟล์ PDF จริงจากเทมเพลตเดียวกับที่ใช้พิมพ์ — เรนเดอร์ในกล่องที่ซ่อนไว้ในหน้าเดิม (ไม่ใช้ iframe เพราะ html2canvas จับภาพข้าม document แล้วได้ผลลัพธ์ผิด/ดำล้วน) แล้วถ่ายภาพด้วย html2canvas ต่อด้วย jsPDF แบ่งหน้า A4
+// ใช้ตอนอัปโหลดขึ้น Google Drive อัตโนมัติทุกครั้งที่บันทึก/แก้ไขใบเสนอราคา ไม่ต้องพึ่งผู้ใช้กด "บันทึกเป็น PDF" เอง
+export async function renderQuotationPdfBlob(quot, company, settings = {}, items = []) {
+  const logoUrl = `${window.location.origin}/worldtech-logo.png`
+  const html = buildQuotationHtml(quot, company, settings, logoUrl, items, { autoPrint: false })
+  const parsed = new DOMParser().parseFromString(html, 'text/html')
+
+  // ต้องอยู่ในตำแหน่งปกติของหน้า (เลื่อนออกนอกจอไกลเกินไปทำให้ html2canvas จับภาพผิด/ได้ภาพดำล้วน) และห้ามใช้ opacity/visibility ซ่อน
+  // (opacity ต่ำๆ จะถูกจับภาพติดไปด้วยจนกลายเป็นภาพจางเกือบขาว แล้วไปพังตอนฝัง PDF เป็นภาพดำทั้งหน้า) — ซ่อนด้วย z-index ต่ำให้อยู่หลังเนื้อหาแอปแทน
+  const container = document.createElement('div')
+  container.style.position = 'fixed'
+  container.style.left = '0'
+  container.style.top = '0'
+  container.style.width = '210mm'
+  container.style.padding = '14mm'
+  container.style.boxSizing = 'border-box'
+  container.style.background = '#fff'
+  container.style.zIndex = '-9999'
+  container.style.pointerEvents = 'none'
+  const styleEl = document.createElement('style')
+  styleEl.textContent = parsed.querySelector('style')?.textContent || ''
+  container.appendChild(styleEl)
+  Array.from(parsed.body.childNodes).forEach(node => container.appendChild(node))
+  document.body.appendChild(container)
+
+  try {
+    await waitForImages(container)
+    await new Promise(r => requestAnimationFrame(r)) // รอ layout settle ก่อนถ่ายภาพ
+
+    const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+    // ใช้ JPEG ไม่ใช่ PNG — jsPDF บางเวอร์ชัน parse PNG ขนาดใหญ่จาก html2canvas พลาด แล้วได้ภาพดำล้วนแทนแบบเงียบๆ (ไม่ error ให้เห็น)
+    const imgData = canvas.toDataURL('image/jpeg', 0.92)
+
+    const pdf = new jsPDF('p', 'mm', 'a4')
+    const pageWidth = 210
+    const pageHeight = 297
+    const imgHeight = (canvas.height * pageWidth) / canvas.width
+
+    let heightLeft = imgHeight
+    let position = 0
+    pdf.addImage(imgData, 'JPEG', 0, position, pageWidth, imgHeight)
+    heightLeft -= pageHeight
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight
+      pdf.addPage()
+      pdf.addImage(imgData, 'JPEG', 0, position, pageWidth, imgHeight)
+      heightLeft -= pageHeight
+    }
+
+    return pdf.output('blob')
+  } finally {
+    document.body.removeChild(container)
+  }
+}
+
+// โหลดรายการสินค้าของใบเสนอราคาพร้อม resolve รูปสินค้าเป็น URL แล้ว — ใช้ร่วมกันทั้งตอนพิมพ์และตอนสร้าง PDF อัปโหลด Drive
+export async function loadQuotationPdfItems(quotId) {
+  const rawItems = await listQuotationItems(quotId)
+  return rawItems.map(it => ({
+    description: it.description || it.product?.name || '',
+    quantity: it.quantity,
+    unit_price: it.unit_price,
+    imageUrl: it.product?.image_path ? getProductImageUrl(it.product.image_path) : null
+  }))
+}
+
 // เปิดหน้าต่างใหม่ก่อน (sync ตอน click) กันโดน popup blocker แล้วค่อยโหลดรายการสินค้า/รูปแบบ async
-// (ใช้ browser print dialog แทนการสร้างไฟล์ฝั่ง server เพราะไม่มี Google Docs/Drive แล้ว)
 export async function printQuotation(quot, company, settings = {}) {
   const w = window.open('', '_blank', 'width=800,height=1000')
   if (!w) { alert('เบราว์เซอร์บล็อกป๊อปอัป กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้'); return }
   w.document.write('<html><body style="font-family:sans-serif;padding:40px;text-align:center;color:#718096">กำลังโหลดข้อมูล...</body></html>')
 
   try {
-    const rawItems = await listQuotationItems(quot.id)
-    const items = rawItems.map(it => ({
-      description: it.description || it.product?.name || '',
-      quantity: it.quantity,
-      unit_price: it.unit_price,
-      imageUrl: it.product?.image_path ? getProductImageUrl(it.product.image_path) : null
-    }))
+    const items = await loadQuotationPdfItems(quot.id)
     const logoUrl = `${window.location.origin}/worldtech-logo.png`
     const html = buildQuotationHtml(quot, company, settings, logoUrl, items)
     w.document.open()

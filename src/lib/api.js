@@ -504,3 +504,61 @@ export async function submitPublicLead({ subject, full_name, phone, email, inter
   if (!res.ok) throw new Error(json.error || 'ส่งข้อมูลไม่สำเร็จ')
   return json
 }
+
+// ===== มิเรอร์ไฟล์ใบเสนอราคาขึ้น Google Drive (โฟลเดอร์ปี > เดือน) — คู่กับ Supabase Storage ไม่ได้แทนที่ =====
+const THAI_MONTHS = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => resolve(String(reader.result).split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function callDriveUpload(payload) {
+  const { data: sessionData } = await supabase.auth.getSession()
+  const accessToken = sessionData?.session?.access_token
+  if (!accessToken) throw new Error('ไม่พบสิทธิ์เข้าใช้งาน')
+  const res = await fetch('/.netlify/functions/upload-drive-file', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(payload)
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(json.error || 'อัปโหลดขึ้น Google Drive ไม่สำเร็จ')
+  return json
+}
+
+// จัดกลุ่มโฟลเดอร์ตามเดือนที่ออกใบเสนอราคาจริง (quot_date) ไม่ใช่เวลาที่กดอัปโหลด กันย้ายโฟลเดอร์ผิดถ้าแก้ไขใบเสนอราคาข้ามเดือน
+function driveDateParts(quot) {
+  const d = new Date(quot.quot_date || quot.created_at)
+  const month = d.getMonth() + 1
+  return { year: d.getFullYear(), month, monthNameTh: THAI_MONTHS[month - 1] }
+}
+
+// อัปโหลด/เขียนทับ PDF ใบเสนอราคาขึ้น Google Drive — เก็บ drive_file_id ไว้เขียนทับไฟล์เดิมครั้งต่อไป ไม่สร้างไฟล์ซ้ำทุกครั้งที่บันทึก/แก้ไข
+export async function uploadQuotationPdfToDrive(quot, pdfBlob) {
+  const { year, month, monthNameTh } = driveDateParts(quot)
+  const fileBase64 = await blobToBase64(pdfBlob)
+  const { fileId } = await callDriveUpload({
+    fileBase64, mimeType: 'application/pdf', fileName: `${quot.quot_no}.pdf`,
+    year, month, monthNameTh, existingFileId: quot.drive_file_id || null
+  })
+  await updateQuotation(quot.id, { drive_file_id: fileId })
+  return fileId
+}
+
+// อัปโหลด/เขียนทับไฟล์ที่ลูกค้าเซ็นกลับขึ้น Google Drive (ต่อท้ายชื่อไฟล์ด้วย _Sign) — เก็บไฟล์เดิมไว้ที่ชื่อเดียวกันเสมอ
+export async function uploadSignedFileToDrive(quot, file) {
+  const { year, month, monthNameTh } = driveDateParts(quot)
+  const ext = (file.name.match(/\.[^.]+$/) || [''])[0]
+  const fileBase64 = await blobToBase64(file)
+  const { fileId } = await callDriveUpload({
+    fileBase64, mimeType: file.type || 'application/octet-stream', fileName: `${quot.quot_no}_Sign${ext}`,
+    year, month, monthNameTh, existingFileId: quot.drive_signed_file_id || null
+  })
+  await updateQuotation(quot.id, { drive_signed_file_id: fileId })
+  return fileId
+}

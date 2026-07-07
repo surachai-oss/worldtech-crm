@@ -16,6 +16,7 @@ import Products from './components/Products'
 import Leads from './components/Leads'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal } from './components/Modals'
+import { renderQuotationPdfBlob, loadQuotationPdfItems } from './lib/printQuotation'
 import './App.css'
 
 const TITLES = {
@@ -76,12 +77,14 @@ function AppInner({ session }) {
   // ===== Generic wrapped mutations =====
   async function run(fn, successMsg) {
     try {
-      await fn()
+      const result = await fn()
       toast(successMsg, 'success')
       await reload()
       setReloadKey(k => k + 1)
+      return result
     } catch (e) {
       toast('เกิดข้อผิดพลาด: ' + e.message, 'error')
+      return null
     }
   }
 
@@ -217,12 +220,26 @@ function AppInner({ session }) {
     if (f.id) await run(() => api.updateTask(f.id, f), 'อัปเดตสำเร็จ')
     else await run(() => api.addTask({ ...f, created_by: session.user.id }), 'เพิ่มงานสำเร็จ')
   }
+  // อัปโหลดสำเนา PDF ของใบเสนอราคาขึ้น Google Drive อัตโนมัติหลังบันทึก — ทำเป็น background ไม่บล็อกผู้ใช้ ถ้าพลาดแค่เตือน ไม่กระทบข้อมูลที่บันทึกไปแล้วใน Supabase
+  const mirrorQuotationToDrive = async (quot) => {
+    try {
+      const company = data.companies.find(c => c.id === quot.company_id)
+      const items = await loadQuotationPdfItems(quot.id)
+      const pdfBlob = await renderQuotationPdfBlob(quot, company, settings, items)
+      await api.uploadQuotationPdfToDrive(quot, pdfBlob)
+    } catch (e) {
+      toast('อัปโหลดสำเนาขึ้น Google Drive ไม่สำเร็จ: ' + e.message, 'error')
+    }
+  }
+
   const saveQuotation = async (f, items = []) => {
     closeModal()
     if (!f.subject?.trim()) { toast('กรุณากรอกหัวข้อ', 'error'); return }
     if (!f.company_id) { toast('กรุณาเลือกบริษัท', 'error'); return }
-    if (f.id) await run(() => api.updateQuotationWithItems(f.id, f, items), 'อัปเดตใบเสนอราคาสำเร็จ')
-    else await run(() => api.addQuotationWithItems(f, items), 'สร้างใบเสนอราคาสำเร็จ')
+    const quot = f.id
+      ? await run(() => api.updateQuotationWithItems(f.id, f, items), 'อัปเดตใบเสนอราคาสำเร็จ')
+      : await run(() => api.addQuotationWithItems(f, items), 'สร้างใบเสนอราคาสำเร็จ')
+    if (quot) mirrorQuotationToDrive(quot)
   }
 
   if (loading) {

@@ -142,6 +142,11 @@ alter table quotations add column if not exists sale_phone text;
 -- proposer_name = ชื่อผู้เสนอราคา พิมพ์ไว้เหนือเส้นเซ็นชื่อตอนพิมพ์ กันต้องพิมพ์ออกมาเซ็นสดก่อนส่งลูกค้า
 alter table quotations add column if not exists proposer_name text;
 
+-- drive_file_id/drive_signed_file_id = Google Drive file id ของ PDF ใบเสนอราคา และไฟล์ที่ลูกค้าเซ็นกลับ (มิเรอร์คู่กับ Supabase Storage)
+-- เก็บไว้เพื่ออัปโหลดซ้ำแล้วเขียนทับไฟล์เดิมได้ ไม่สร้างไฟล์ซ้ำซ้อนทุกครั้งที่บันทึก/แก้ไข
+alter table quotations add column if not exists drive_file_id text;
+alter table quotations add column if not exists drive_signed_file_id text;
+
 -- ===== QUOTATION ITEMS (รายการสินค้าในใบเสนอราคา — ใบเสนอราคาหนึ่งมีได้หลายรายการ เหมือนดีล) =====
 -- description = ชื่อรายการที่แสดงจริง (เติมจากชื่อสินค้าเวลาเลือก แต่แก้ไขเองได้ เผื่อรายการที่ไม่มีในรายการสินค้า)
 -- unit_price ถือว่ารวม VAT แล้วเหมือนกับดีล — quotations.value คำนวณจากผลรวมรายการเหล่านี้ที่ฝั่ง frontend

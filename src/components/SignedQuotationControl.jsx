@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { uploadSignedQuotation, deleteSignedQuotation, getAttachmentUrl } from '../lib/api'
+import { uploadSignedQuotation, deleteSignedQuotation, getAttachmentUrl, uploadSignedFileToDrive } from '../lib/api'
 import { useUi } from './UiContext'
 
 // ปุ่มแนบ/ดาวน์โหลด/ลบไฟล์ใบเสนอราคาที่ลูกค้าเซ็นแล้วส่งกลับมา — ใช้ร่วมกันทั้งหน้ารายการใบเสนอราคาและแท็บในหน้าบริษัท
@@ -16,6 +16,8 @@ export default function SignedQuotationControl({ quotation, manageable, onChange
       await uploadSignedQuotation(quotation.id, file)
       toast('แนบไฟล์เซ็นกลับสำเร็จ', 'success')
       onChanged()
+      // มิเรอร์ขึ้น Google Drive เป็น background — ไม่บล็อก ถ้าพลาดแค่เตือน ไม่กระทบไฟล์ที่แนบสำเร็จแล้วใน Supabase
+      uploadSignedFileToDrive(quotation, file).catch(err => toast('มิเรอร์ไฟล์ขึ้น Google Drive ไม่สำเร็จ: ' + err.message, 'error'))
     } catch (err) {
       toast('แนบไฟล์ไม่สำเร็จ: ' + err.message, 'error')
     } finally {
