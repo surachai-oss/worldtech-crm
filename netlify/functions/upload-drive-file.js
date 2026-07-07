@@ -120,6 +120,7 @@ export default async (req) => {
 
     return json({ fileId })
   } catch (e) {
+    console.error('upload-drive-file failed:', e.message, e.stack)
     return json({ error: e.message || 'อัปโหลดขึ้น Google Drive ไม่สำเร็จ' }, 500)
   }
 }
