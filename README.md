@@ -82,7 +82,11 @@ netlify deploy --prod
 4. เปิดไฟล์ JSON หาค่า `client_email` (เช่น `xxx@xxx.iam.gserviceaccount.com`) แล้วไปที่โฟลเดอร์ Google Drive ที่ต้องการเก็บไฟล์ → **แชร์ (Share)** → ใส่อีเมลนั้น ให้สิทธิ์ **Editor**
 5. คัดลอก Folder ID จาก URL ของโฟลเดอร์ (ส่วนหลัง `/folders/` ใน `https://drive.google.com/drive/folders/<FOLDER_ID>`)
 6. ตั้งค่า Netlify environment variables 2 ตัว:
-   - `GOOGLE_SERVICE_ACCOUNT_KEY` = เนื้อหาทั้งหมดของไฟล์ JSON (คัดลอกวางเป็น 1 บรรทัดยาวๆ ได้เลย ไม่ต้องจัดรูปแบบ)
+   - `GOOGLE_SERVICE_ACCOUNT_KEY` = **แนะนำให้แปลงเป็น Base64 ก่อนวาง** เพราะ JSON ตรงๆ มี `\n` ฝังอยู่ใน `private_key` ถ้าวางลงช่อง Value ของ Netlify ตรงๆ มักเพี้ยนจนอ่านไม่ออก (error "ไม่ใช่ JSON ที่ถูกต้อง") วิธีแปลง เปิด Terminal บนเครื่อง Mac แล้วรัน (แทนที่ path ด้วยตำแหน่งไฟล์ `.json` ที่ดาวน์โหลดมาจริง):
+     ```bash
+     base64 -i /path/to/your-key.json | pbcopy
+     ```
+     คำสั่งนี้จะคัดลอกค่า Base64 ใส่ clipboard ให้เลย จากนั้นวาง (Cmd+V) ลงช่อง Value ได้ทันที (ฟังก์ชันฝั่งเซิร์ฟเวอร์รองรับทั้ง JSON ตรงๆ และ Base64 ของ JSON อัตโนมัติ แต่ Base64 ปลอดภัยกว่าเพราะไม่มีอักขระพิเศษให้เพี้ยน)
    - `GOOGLE_DRIVE_ROOT_FOLDER_ID` = Folder ID จากขั้นตอนที่ 5
 7. Deploy ใหม่อีกครั้งให้ Netlify Function อ่านค่าตัวแปรใหม่
 

@@ -6,11 +6,19 @@ import { createClient } from '@supabase/supabase-js'
 const DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files'
 const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files'
 
+// รับได้ทั้ง JSON ตรงๆ หรือ Base64 ของ JSON (แนะนำให้ใช้ Base64 เพราะ private_key มี \n ฝังอยู่ วาง JSON ตรงๆ ผ่านช่อง env var มักเพี้ยน)
+function parseServiceAccountKey(raw) {
+  try { return JSON.parse(raw) } catch { /* ลอง base64 ต่อ */ }
+  try {
+    const decoded = Buffer.from(raw, 'base64').toString('utf8')
+    return JSON.parse(decoded)
+  } catch { throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY ไม่ใช่ JSON หรือ Base64 ของ JSON ที่ถูกต้อง') }
+}
+
 async function getAccessToken() {
   const keyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
   if (!keyJson) throw new Error('เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า GOOGLE_SERVICE_ACCOUNT_KEY (ดู README)')
-  let key
-  try { key = JSON.parse(keyJson) } catch { throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY ไม่ใช่ JSON ที่ถูกต้อง') }
+  const key = parseServiceAccountKey(keyJson)
   const client = new JWT({ email: key.client_email, key: key.private_key, scopes: ['https://www.googleapis.com/auth/drive'] })
   const { token } = await client.getAccessToken()
   return token
