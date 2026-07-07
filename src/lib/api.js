@@ -49,15 +49,6 @@ export async function fetchCompaniesPage({ page = 0, q = '', status = '', indust
   return { rows: data, count, pageSize: PAGE_SIZE }
 }
 
-export async function fetchContactsPage({ page = 0, q = '' } = {}) {
-  let query = supabase.from('contacts').select('*, company:companies(id,name,created_by)', { count: 'exact' }).order('created_at', { ascending: false })
-  const sq = safeLike(q)
-  if (sq) query = query.or(`full_name.ilike.%${sq}%,phone.ilike.%${sq}%,email.ilike.%${sq}%`)
-  const { data, error, count } = await query.range(...range(page))
-  if (error) throw error
-  return { rows: data, count, pageSize: PAGE_SIZE }
-}
-
 export async function fetchActivitiesPage({ page = 0, type = '' } = {}) {
   let query = supabase.from('activities').select('*, company:companies(id,name,created_by)', { count: 'exact' }).order('activity_date', { ascending: false })
   if (type) query = query.eq('type', type)
@@ -152,13 +143,6 @@ export const deletePicklistValue = (id) => supabase.from('picklists').delete().e
 export const addContact = (d) => supabase.from('contacts').insert(d).select().single().then(handle)
 export const updateContact = (id, d) => supabase.from('contacts').update(d).eq('id', id).select().single().then(handle)
 export const deleteContact = (id) => supabase.from('contacts').delete().eq('id', id).then(handle)
-export const bulkImportContacts = (rows) => supabase.from('contacts').insert(rows).select().then(handle)
-
-// รายชื่อบริษัทแบบย่อ (id, name) — ใช้จับคู่ชื่อบริษัทตอนนำเข้าผู้ติดต่อจากไฟล์
-export async function listCompanyNames() {
-  return supabase.from('companies').select('id, name').order('name', { ascending: true }).then(handle)
-}
-
 // ===== ACTIVITIES =====
 export const addActivity = (d) => supabase.from('activities').insert(d).select().single().then(handle)
 export const deleteActivity = (id) => supabase.from('activities').delete().eq('id', id).then(handle)
@@ -457,21 +441,30 @@ export async function fetchLeadsPage({ page = 0, status = '', q = '' } = {}) {
   let query = supabase.from('leads').select('*, company:companies(id,name)', { count: 'exact' }).order('created_at', { ascending: false })
   if (status) query = query.eq('status', status)
   const sq = safeLike(q)
-  if (sq) query = query.or(`full_name.ilike.%${sq}%,phone.ilike.%${sq}%,email.ilike.%${sq}%`)
+  if (sq) query = query.or(`subject.ilike.%${sq}%,full_name.ilike.%${sq}%,phone.ilike.%${sq}%,email.ilike.%${sq}%`)
   const { data, error, count } = await query.range(...range(page))
   if (error) throw error
   return { rows: data, count, pageSize: PAGE_SIZE }
+}
+
+// ดึงลีดทั้งหมดที่ตรงกับตัวกรองปัจจุบัน (ไม่จำกัดหน้า) — ใช้สำหรับ export เป็น Excel เท่านั้น
+export async function fetchAllLeads({ status = '', q = '' } = {}) {
+  let query = supabase.from('leads').select('*').order('created_at', { ascending: false })
+  if (status) query = query.eq('status', status)
+  const sq = safeLike(q)
+  if (sq) query = query.or(`subject.ilike.%${sq}%,full_name.ilike.%${sq}%,phone.ilike.%${sq}%,email.ilike.%${sq}%`)
+  return query.then(handle)
 }
 
 export const updateLead = (id, d) => supabase.from('leads').update(d).eq('id', id).select().single().then(handle)
 export const deleteLead = (id) => supabase.from('leads').delete().eq('id', id).then(handle)
 
 // ฟอร์มลีดสาธารณะไม่ต้อง login — ส่งผ่าน Netlify Function ที่ใช้ Service Role Key เขียนแทน ไม่เรียก supabase client ตรงๆ
-export async function submitPublicLead({ full_name, phone, email, interested_product, message, source }) {
+export async function submitPublicLead({ subject, full_name, phone, email, interested_product, message, source }) {
   const res = await fetch('/.netlify/functions/submit-lead', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ full_name, phone, email, interested_product, message, source })
+    body: JSON.stringify({ subject, full_name, phone, email, interested_product, message, source })
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.error || 'ส่งข้อมูลไม่สำเร็จ')

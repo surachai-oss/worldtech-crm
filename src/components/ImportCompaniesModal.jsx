@@ -54,7 +54,7 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
                 1) ดาวน์โหลด Template  2) กรอกข้อมูลใน Excel  3) อัปโหลดไฟล์ .xlsx กลับมาที่นี่
               </div>
               <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }}
-                onClick={() => downloadCompanyTemplate({ industries: list('industries'), statuses: list('company_statuses'), leadSources: list('lead_sources') })}>
+                onClick={() => downloadCompanyTemplate({ industries: list('industries'), statuses: list('company_statuses'), leadSources: list('lead_sources'), customerTypes: list('customer_types') })}>
                 ดาวน์โหลด Template (.xlsx)
               </button>
               <div className="form-group">
@@ -62,7 +62,7 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
                 <input className="form-control" type="file" accept=".xlsx" onChange={onFileChange} />
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-light)' }}>
-                คอลัมน์ที่รองรับ: {COMPANY_IMPORT_COLUMNS.map(c => c.label).join(', ')} (มีแค่ "ชื่อบริษัท" ที่จำเป็น — คอลัมน์อุตสาหกรรม/สถานะ/ที่มา มี dropdown ตัวเลือกให้ในไฟล์แล้ว)
+                คอลัมน์ที่รองรับ: {COMPANY_IMPORT_COLUMNS.map(c => c.label).join(', ')} (มีแค่ "ชื่อบริษัท" ที่จำเป็น — คอลัมน์ประเภทลูกค้า/อุตสาหกรรม/สถานะ/ที่มา มี dropdown ตัวเลือกให้ในไฟล์แล้ว)
               </div>
             </>
           ) : (

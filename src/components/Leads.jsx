@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { PAGE_SIZE, fetchLeadsPage } from '../lib/api'
+import { PAGE_SIZE, fetchLeadsPage, fetchAllLeads } from '../lib/api'
+import { exportLeadsToExcel } from '../lib/importExport'
 import { fmtDate } from '../lib/format'
 import { useUi } from './UiContext'
 import { usePicklists } from './PicklistsContext'
@@ -15,6 +16,19 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
   const [rows, setRows] = useState([])
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
+
+  const doExport = async () => {
+    setExporting(true)
+    try {
+      const all = await fetchAllLeads({ status, q })
+      await exportLeadsToExcel(all)
+    } catch (e) {
+      toast('ส่งออกไม่สำเร็จ: ' + e.message, 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   useEffect(() => { setPage(0) }, [status, q])
 
@@ -34,7 +48,8 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">ลีดที่เข้ามา <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
+        <div className="section-title">ผู้ติดต่อ <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
+        <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting}>{exporting ? 'กำลังส่งออก...' : 'ส่งออกเป็น Excel'}</button>
       </div>
 
       <div className="filter-bar">
@@ -49,11 +64,12 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>ชื่อ</th><th>ติดต่อ</th><th>สนใจสินค้า</th><th>ที่มา</th><th>สถานะ</th><th>วันที่</th><th>การจัดการ</th></tr></thead>
+              <thead><tr><th>หัวข้อ</th><th>ชื่อ</th><th>ติดต่อ</th><th>สนใจสินค้า</th><th>ที่มา</th><th>สถานะ</th><th>วันที่</th><th>การจัดการ</th></tr></thead>
               <tbody>
                 {rows.map(l => (
                   <tr key={l.id}>
-                    <td style={{ fontWeight: 500 }}>{l.full_name}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{l.subject}</td>
+                    <td style={{ fontSize: 12 }}>{l.full_name}</td>
                     <td style={{ fontSize: 12 }}>{l.phone}{l.email ? <div style={{ color: 'var(--text-light)' }}>{l.email}</div> : null}</td>
                     <td style={{ fontSize: 12 }}>{l.interested_product || '-'}</td>
                     <td style={{ fontSize: 12 }}>{l.source || '-'}</td>

@@ -6,7 +6,7 @@ import '../App.css'
 // ที่มา (source) อ่านจาก query param ให้อัตโนมัติ ไม่ต้องให้ลูกค้ากรอกเอง
 export default function PublicLeadPage() {
   const source = new URLSearchParams(window.location.search).get('src') || ''
-  const [f, setF] = useState({ full_name: '', phone: '', email: '', interested_product: '', message: '' })
+  const [f, setF] = useState({ subject: '', full_name: '', phone: '', email: '', interested_product: '', message: '' })
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
@@ -14,7 +14,7 @@ export default function PublicLeadPage() {
 
   const submit = async (e) => {
     e.preventDefault()
-    if (!f.full_name.trim() || !f.phone.trim()) { setError('กรุณากรอกชื่อและเบอร์โทรศัพท์'); return }
+    if (!f.subject.trim() || !f.full_name.trim() || !f.phone.trim()) { setError('กรุณากรอกหัวข้อ ชื่อ และเบอร์โทรศัพท์'); return }
     setSubmitting(true)
     setError('')
     try {
@@ -43,6 +43,10 @@ export default function PublicLeadPage() {
             </div>
           ) : (
             <form onSubmit={submit}>
+              <div className="form-group">
+                <label className="form-label required">หัวข้อที่ต้องการติดต่อ</label>
+                <input className="form-control" value={f.subject} onChange={set('subject')} placeholder="เช่น สอบถามราคาเครื่องฟอกอากาศ" />
+              </div>
               <div className="form-group">
                 <label className="form-label required">ชื่อ-นามสกุล</label>
                 <input className="form-control" value={f.full_name} onChange={set('full_name')} placeholder="เช่น สมชาย ใจดี" />

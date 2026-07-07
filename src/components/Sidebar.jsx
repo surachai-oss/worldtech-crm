@@ -1,7 +1,8 @@
 const NAV = [
   { section: 'หลัก', items: [{ id: 'dashboard', label: 'แดชบอร์ด' }] },
-  { section: 'ข้อมูลลูกค้า', items: [{ id: 'companies', label: 'บริษัทลูกค้า' }, { id: 'contacts', label: 'ผู้ติดต่อ' }, { id: 'leads', label: 'ลีดที่เข้ามา' }] },
-  { section: 'การขาย', items: [{ id: 'deals', label: 'ดีลการขาย' }, { id: 'quotations', label: 'ใบเสนอราคา' }, { id: 'products', label: 'สินค้า' }] },
+  { section: 'ข้อมูลลูกค้า', items: [{ id: 'companies', label: 'บริษัทลูกค้า' }, { id: 'leads', label: 'ผู้ติดต่อ' }] },
+  { section: 'การขาย', items: [{ id: 'deals', label: 'ดีลการขาย' }, { id: 'quotations', label: 'ใบเสนอราคา' }] },
+  { section: 'ข้อมูลสินค้า', items: [{ id: 'products', label: 'สินค้า' }] },
   { section: 'ติดตาม', items: [{ id: 'activities', label: 'ประวัติการติดต่อ' }, { id: 'tasks', label: 'งาน Follow-up' }] },
 ]
 const ADMIN_SECTION = { section: 'ผู้ดูแลระบบ', items: [

@@ -178,6 +178,9 @@ create table if not exists leads (
   created_at          timestamptz default now()
 );
 
+-- subject = หัวข้อสั้นๆ ว่าลูกค้ากรอกเข้ามาเรื่องอะไร (บังคับกรอกในฟอร์มสาธารณะ) เหมือนกับ subject ของดีล/ใบเสนอราคา
+alter table leads add column if not exists subject text;
+
 -- ===== SETTINGS =====
 create table if not exists settings (
   key    text primary key,

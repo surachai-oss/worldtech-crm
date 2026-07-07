@@ -91,9 +91,29 @@ export async function downloadExcelTemplate(columns, exampleRow, filename, dropd
   URL.revokeObjectURL(url)
 }
 
+// สร้างไฟล์ Excel จากข้อมูลที่มีอยู่แล้วในระบบแล้วดาวน์โหลดให้ผู้ใช้ (ตรงข้ามกับ downloadExcelTemplate ที่สร้างไฟล์เปล่าให้กรอก)
+// columns: [{ key, label }] ใช้ key ดึงค่าจาก rows แต่ละแถว, label เป็นหัวคอลัมน์
+export async function exportRowsToExcel(columns, rows, filename) {
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet('Data')
+  sheet.columns = columns.map(c => ({ header: c.label, key: c.key, width: 24 }))
+  sheet.getRow(1).font = { bold: true }
+  rows.forEach(row => sheet.addRow(columns.reduce((o, c) => ({ ...o, [c.key]: row[c.key] ?? '' }), {})))
+
+  const buffer = await workbook.xlsx.writeBuffer()
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 // ===== นำเข้าบริษัทลูกค้าจากไฟล์ Excel =====
 export const COMPANY_IMPORT_COLUMNS = [
   { key: 'name', label: 'ชื่อบริษัท', required: true },
+  { key: 'customer_type', label: 'ประเภทลูกค้า' },
   { key: 'industry', label: 'อุตสาหกรรม' },
   { key: 'phone', label: 'โทรศัพท์' },
   { key: 'email', label: 'อีเมล' },
@@ -106,15 +126,15 @@ export const COMPANY_IMPORT_COLUMNS = [
 ]
 
 const COMPANY_EXAMPLE_ROW = {
-  name: 'บริษัท ตัวอย่าง จำกัด', industry: 'เทคโนโลยี', phone: '02-xxx-xxxx',
+  name: 'บริษัท ตัวอย่าง จำกัด', customer_type: 'นิติบุคคล/บริษัท', industry: 'เทคโนโลยี', phone: '02-xxx-xxxx',
   email: 'contact@example.com', website: 'https://www.example.com', address: 'ที่อยู่ตัวอย่าง',
   status: 'Active', owner: 'ชื่อผู้รับผิดชอบ', lead_source: '', note: ''
 }
 
-// picklists: { industries, statuses, leadSources } — รายการตัวเลือกปัจจุบันจากระบบ (ดึงมาจาก usePicklists ตอนเรียก)
+// picklists: { industries, statuses, leadSources, customerTypes } — รายการตัวเลือกปัจจุบันจากระบบ (ดึงมาจาก usePicklists ตอนเรียก)
 export const downloadCompanyTemplate = (picklists = {}) =>
   downloadExcelTemplate(COMPANY_IMPORT_COLUMNS, COMPANY_EXAMPLE_ROW, 'template_นำเข้าบริษัทลูกค้า.xlsx', {
-    industry: picklists.industries, status: picklists.statuses, lead_source: picklists.leadSources
+    customer_type: picklists.customerTypes, industry: picklists.industries, status: picklists.statuses, lead_source: picklists.leadSources
   })
 
 // คืนค่า { validRows, invalidRows } — invalidRows มี { row, errors, data } สำหรับแสดงผลพรีวิว
@@ -135,58 +155,6 @@ export async function parseCompanyImportFile(file) {
     if (!row.name) errors.push('กรุณากรอกชื่อบริษัท')
     if (errors.length) invalidRows.push({ row: i + 2, errors, data: row })
     else validRows.push(row)
-  })
-  return { validRows, invalidRows }
-}
-
-// ===== นำเข้าผู้ติดต่อจากไฟล์ Excel (เช่น ลูกค้าที่กรอกฟอร์มเข้ามาจากเฟซบุ๊ก/เว็บไซต์) =====
-// ต้องระบุ "ชื่อบริษัท" ให้ตรงกับบริษัทที่มีอยู่ในระบบเป๊ะ เพราะต้องแม็ปเป็น company_id (FK)
-export const CONTACT_IMPORT_COLUMNS = [
-  { key: 'company_name', label: 'ชื่อบริษัท', required: true },
-  { key: 'full_name', label: 'ชื่อ-นามสกุล', required: true },
-  { key: 'position', label: 'ตำแหน่ง' },
-  { key: 'department', label: 'แผนก' },
-  { key: 'phone', label: 'โทรศัพท์' },
-  { key: 'email', label: 'อีเมล' },
-  { key: 'line_id', label: 'Line ID' },
-  { key: 'note', label: 'หมายเหตุ' },
-]
-
-const CONTACT_EXAMPLE_ROW = {
-  company_name: 'บริษัท ตัวอย่าง จำกัด', full_name: 'สมชาย ใจดี', position: 'ผู้จัดการฝ่ายจัดซื้อ',
-  department: 'จัดซื้อ', phone: '08x-xxx-xxxx', email: 'contact@example.com', line_id: '', note: ''
-}
-
-// companyNames: รายชื่อบริษัทปัจจุบันในระบบ — ใส่เป็น dropdown ในคอลัมน์ "ชื่อบริษัท" กันพิมพ์ชื่อไม่ตรง
-export const downloadContactTemplate = (companyNames = []) =>
-  downloadExcelTemplate(CONTACT_IMPORT_COLUMNS, CONTACT_EXAMPLE_ROW, 'template_นำเข้าผู้ติดต่อ.xlsx', {
-    company_name: companyNames
-  })
-
-// companiesByName: Map ของ "ชื่อบริษัท normalize แล้ว (trim + lowercase)" -> company id
-// ใช้จับคู่คอลัมน์ "ชื่อบริษัท" ในไฟล์กับบริษัทที่มีอยู่จริงในระบบ
-export async function parseContactImportFile(file, companiesByName) {
-  const rawRows = await readExcelRows(file)
-  const labelToKey = {}
-  CONTACT_IMPORT_COLUMNS.forEach(c => { labelToKey[c.label] = c.key })
-
-  const validRows = []
-  const invalidRows = []
-  rawRows.forEach((raw, i) => {
-    const row = {}
-    Object.entries(raw).forEach(([label, value]) => {
-      const key = labelToKey[label.trim()]
-      if (key) row[key] = (value || '').trim()
-    })
-    const errors = []
-    if (!row.full_name) errors.push('กรุณากรอกชื่อ-นามสกุล')
-    if (!row.company_name) errors.push('กรุณากรอกชื่อบริษัท')
-    const companyId = companiesByName.get((row.company_name || '').toLowerCase())
-    if (row.company_name && !companyId) errors.push('ไม่พบบริษัทนี้ในระบบ (ชื่อต้องตรงกับที่มีอยู่)')
-    if (errors.length) { invalidRows.push({ row: i + 2, errors, data: row }); return }
-    const rest = { ...row }
-    delete rest.company_name
-    validRows.push({ ...rest, company_id: companyId })
   })
   return { validRows, invalidRows }
 }
@@ -229,3 +197,19 @@ export async function parseProductImportFile(file, existingCodes) {
   })
   return { validRows, invalidRows }
 }
+
+// ===== ส่งออกลีด/ผู้ติดต่อเป็นไฟล์ Excel =====
+const LEAD_EXPORT_COLUMNS = [
+  { key: 'subject', label: 'หัวข้อ' },
+  { key: 'full_name', label: 'ชื่อ-นามสกุล' },
+  { key: 'phone', label: 'โทรศัพท์' },
+  { key: 'email', label: 'อีเมล' },
+  { key: 'interested_product', label: 'สนใจสินค้า' },
+  { key: 'message', label: 'ข้อความเพิ่มเติม' },
+  { key: 'source', label: 'ที่มา' },
+  { key: 'status', label: 'สถานะ' },
+  { key: 'created_at', label: 'วันที่' },
+]
+
+export const exportLeadsToExcel = (rows) =>
+  exportRowsToExcel(LEAD_EXPORT_COLUMNS, rows.map(r => ({ ...r, created_at: (r.created_at || '').slice(0, 10) })), 'ผู้ติดต่อ.xlsx')
