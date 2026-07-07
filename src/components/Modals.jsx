@@ -136,6 +136,10 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
   // initial.items = รายการที่ก็อปมาจากใบเสนอราคา (ตอนยังไม่มี initial.id) — ถ้ามีให้ใช้เป็นค่าเริ่มต้นแทนแถวเปล่า
   const [items, setItems] = useState(() => initial?.items?.length ? initial.items.map(it => ({ product_id: it.product_id || '', description: it.description || '', quantity: it.quantity, unit_price: it.unit_price })) : [{ ...EMPTY_ITEM }])
 
+  // ตัวกรองประเภทลูกค้า (บุคคลธรรมดา/นิติบุคคล) ก่อนค้นหาบริษัท — แค่ช่วยแคบรายการให้หาง่ายขึ้น ไม่ใช่ฟิลด์ของดีล ไม่ถูกบันทึก
+  const [customerTypeFilter, setCustomerTypeFilter] = useState('')
+  const filteredCompanies = customerTypeFilter ? companies.filter(c => c.customer_type === customerTypeFilter) : companies
+
   useEffect(() => {
     listProducts().then(setProducts).catch(e => { toast('โหลดรายการสินค้าไม่สำเร็จ: ' + e.message, 'error'); setProducts([]) })
   }, [])
@@ -164,7 +168,10 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
 
   return (
     <ModalShell title={initial?.id ? 'แก้ไขดีล' : 'เพิ่มดีล'} onClose={onClose} onSave={submit} wide>
-      <Field label="บริษัท"><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
+      <Field label="ประเภทลูกค้า">
+        <EditableSelect listKey="customer_types" value={customerTypeFilter} onChange={setCustomerTypeFilter} placeholder="-- ทุกประเภท (เลือกเพื่อกรองรายชื่อบริษัทด้านล่าง) --" isAdmin={isAdmin} />
+      </Field>
+      <Field label="บริษัท"><CompanySelect companies={filteredCompanies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
       <Field label="ชื่อดีล" required><input className="form-control" value={f.name} onChange={set('name')} placeholder="โปรเจกต์ / สินค้าที่ขาย" /></Field>
       <div className="form-row">
         <Field label="Stage">
@@ -309,6 +316,10 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
   // initial.items = รายการที่ก็อปมาจากดีล (ตอนยังไม่มี initial.id) — ถ้ามีให้ใช้เป็นค่าเริ่มต้นแทนแถวเปล่า
   const [items, setItems] = useState(() => initial?.items?.length ? initial.items.map(it => ({ product_id: it.product_id || '', description: it.description || '', quantity: it.quantity, unit_price: it.unit_price })) : [{ ...EMPTY_QUOT_ITEM }])
 
+  // ตัวกรองประเภทลูกค้า (บุคคลธรรมดา/นิติบุคคล) ก่อนค้นหาบริษัท — แค่ช่วยแคบรายการให้หาง่ายขึ้น ไม่ใช่ฟิลด์ของใบเสนอราคา ไม่ถูกบันทึก
+  const [customerTypeFilter, setCustomerTypeFilter] = useState('')
+  const filteredCompanies = customerTypeFilter ? companies.filter(c => c.customer_type === customerTypeFilter) : companies
+
   useEffect(() => {
     listProducts().then(setProducts).catch(e => { toast('โหลดรายการสินค้าไม่สำเร็จ: ' + e.message, 'error'); setProducts([]) })
   }, [])
@@ -342,7 +353,10 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
 
   return (
     <ModalShell title={initial?.id ? 'แก้ไขใบเสนอราคา' : 'สร้างใบเสนอราคา'} onClose={onClose} onSave={submit} wide>
-      <Field label="บริษัท"><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
+      <Field label="ประเภทลูกค้า">
+        <EditableSelect listKey="customer_types" value={customerTypeFilter} onChange={setCustomerTypeFilter} placeholder="-- ทุกประเภท (เลือกเพื่อกรองรายชื่อบริษัทด้านล่าง) --" isAdmin={isAdmin} />
+      </Field>
+      <Field label="บริษัท"><CompanySelect companies={filteredCompanies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
       <Field label="หัวข้อใบเสนอราคา" required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder="ใบเสนอราคาสำหรับ..." /></Field>
 
       <Field label="รายการสินค้า (ราคาต่อหน่วยกรอกแบบรวม VAT แล้ว)">
