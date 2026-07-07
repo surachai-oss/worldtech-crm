@@ -337,17 +337,16 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
                   <tr key={i}>
                     <td>{thumbUrl && <img src={thumbUrl} alt="" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4 }} />}</td>
                     <td>
-                      <div style={{ marginBottom: 4 }}>
-                        <SearchableSelect
-                          options={products || []}
-                          value={it.product_id}
-                          onChange={v => onProductChange(i, v)}
-                          placeholder={products ? '-- เลือกสินค้า (ไม่บังคับ, พิมพ์เพื่อค้นหา) --' : 'กำลังโหลด...'}
-                          getOptionLabel={p => `${p.code} - ${p.name}`}
-                          disabled={!products}
-                        />
-                      </div>
-                      <input className="form-control" value={it.description} onChange={e => updateItem(i, { description: e.target.value })} placeholder="ชื่อรายการที่แสดงในใบเสนอราคา" />
+                      <SearchableSelect
+                        options={products || []}
+                        value={it.product_id}
+                        onChange={v => onProductChange(i, v)}
+                        freeText={it.description}
+                        onFreeTextChange={v => updateItem(i, { description: v })}
+                        placeholder={products ? '-- พิมพ์ชื่อสินค้าเพื่อค้นหา หรือพิมพ์ชื่อรายการเอง --' : 'กำลังโหลด...'}
+                        getOptionLabel={p => `${p.code} - ${p.name}`}
+                        disabled={!products}
+                      />
                     </td>
                     <td><input className="form-control" type="number" min="0" value={it.quantity} onChange={e => updateItem(i, { quantity: e.target.value })} /></td>
                     <td><input className="form-control" type="number" min="0" value={it.unit_price} onChange={e => updateItem(i, { unit_price: e.target.value })} /></td>
