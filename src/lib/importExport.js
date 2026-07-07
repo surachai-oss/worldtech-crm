@@ -43,13 +43,44 @@ export async function readExcelRows(file) {
   return rows
 }
 
+const TEMPLATE_DROPDOWN_ROWS = 500 // จำนวนแถวที่ใส่ dropdown ให้ล่วงหน้าในคอลัมน์ที่มีตัวเลือก
+
+// เขียนตัวเลือกไว้ในชีตซ่อนอีกชีตหนึ่ง ใช้เป็นแหล่งข้อมูลของ dropdown ในชีตหลัก
+// (ใส่ตัวเลือกตรงๆ ในสูตร data validation จะพังถ้ารายการยาว/เยอะเกิน 255 ตัวอักษรรวมกัน เช่นรายชื่อบริษัท)
+function addDropdownListsSheet(workbook, dropdowns) {
+  const keys = Object.keys(dropdowns).filter(k => dropdowns[k]?.length)
+  if (!keys.length) return {}
+  const listSheet = workbook.addWorksheet('Lists')
+  listSheet.state = 'veryHidden'
+  const refs = {}
+  keys.forEach((key, i) => {
+    const values = dropdowns[key]
+    const col = listSheet.getColumn(i + 1)
+    values.forEach((v, r) => { listSheet.getCell(r + 1, i + 1).value = v })
+    refs[key] = `Lists!$${col.letter}$1:$${col.letter}$${values.length}`
+  })
+  return refs
+}
+
 // สร้างไฟล์ Excel template (แถวหัวคอลัมน์ตัวหนา + ตัวอย่าง 1 แถว) แล้วดาวน์โหลดให้ผู้ใช้
-export async function downloadExcelTemplate(columns, exampleRow, filename) {
+// dropdowns (ไม่บังคับ): { columnKey: [ตัวเลือก, ...] } — คอลัมน์ที่ระบุจะมี dropdown ให้เลือกในไฟล์ Excel เลย ไม่ต้องพิมพ์เอง
+export async function downloadExcelTemplate(columns, exampleRow, filename, dropdowns = {}) {
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet('Template')
   sheet.columns = columns.map(c => ({ header: c.label, key: c.key, width: 24 }))
   sheet.getRow(1).font = { bold: true }
   sheet.addRow(exampleRow)
+
+  const refs = addDropdownListsSheet(workbook, dropdowns)
+  columns.forEach((c, idx) => {
+    const ref = refs[c.key]
+    if (!ref) return
+    const colNumber = idx + 1
+    for (let row = 2; row <= TEMPLATE_DROPDOWN_ROWS; row++) {
+      sheet.getCell(row, colNumber).dataValidation = { type: 'list', allowBlank: true, formulae: [ref] }
+    }
+  })
+
   const buffer = await workbook.xlsx.writeBuffer()
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
@@ -80,8 +111,11 @@ const COMPANY_EXAMPLE_ROW = {
   status: 'Active', owner: 'ชื่อผู้รับผิดชอบ', lead_source: '', note: ''
 }
 
-export const downloadCompanyTemplate = () =>
-  downloadExcelTemplate(COMPANY_IMPORT_COLUMNS, COMPANY_EXAMPLE_ROW, 'template_นำเข้าบริษัทลูกค้า.xlsx')
+// picklists: { industries, statuses, leadSources } — รายการตัวเลือกปัจจุบันจากระบบ (ดึงมาจาก usePicklists ตอนเรียก)
+export const downloadCompanyTemplate = (picklists = {}) =>
+  downloadExcelTemplate(COMPANY_IMPORT_COLUMNS, COMPANY_EXAMPLE_ROW, 'template_นำเข้าบริษัทลูกค้า.xlsx', {
+    industry: picklists.industries, status: picklists.statuses, lead_source: picklists.leadSources
+  })
 
 // คืนค่า { validRows, invalidRows } — invalidRows มี { row, errors, data } สำหรับแสดงผลพรีวิว
 export async function parseCompanyImportFile(file) {
@@ -123,8 +157,11 @@ const CONTACT_EXAMPLE_ROW = {
   department: 'จัดซื้อ', phone: '08x-xxx-xxxx', email: 'contact@example.com', line_id: '', note: ''
 }
 
-export const downloadContactTemplate = () =>
-  downloadExcelTemplate(CONTACT_IMPORT_COLUMNS, CONTACT_EXAMPLE_ROW, 'template_นำเข้าผู้ติดต่อ.xlsx')
+// companyNames: รายชื่อบริษัทปัจจุบันในระบบ — ใส่เป็น dropdown ในคอลัมน์ "ชื่อบริษัท" กันพิมพ์ชื่อไม่ตรง
+export const downloadContactTemplate = (companyNames = []) =>
+  downloadExcelTemplate(CONTACT_IMPORT_COLUMNS, CONTACT_EXAMPLE_ROW, 'template_นำเข้าผู้ติดต่อ.xlsx', {
+    company_name: companyNames
+  })
 
 // companiesByName: Map ของ "ชื่อบริษัท normalize แล้ว (trim + lowercase)" -> company id
 // ใช้จับคู่คอลัมน์ "ชื่อบริษัท" ในไฟล์กับบริษัทที่มีอยู่จริงในระบบ

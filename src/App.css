@@ -100,6 +100,9 @@ tbody tr:hover{background:#f8f9ff}
 .form-control:focus{border-color:var(--yellow);box-shadow:0 0 0 3px rgba(254,191,16,.15)}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
+.searchable-option{padding:8px 10px;font-size:13px;cursor:pointer}
+.searchable-option:hover{background:#f4f6f9}
+
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px}
 .modal{background:var(--white);border-radius:14px;width:100%;max-width:540px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.2)}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border)}

@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { bulkImportCompanies } from '../lib/api'
 import { downloadCompanyTemplate, parseCompanyImportFile, COMPANY_IMPORT_COLUMNS } from '../lib/importExport'
 import { useUi } from './UiContext'
+import { usePicklists } from './PicklistsContext'
 
 export default function ImportCompaniesModal({ perm, onClose, onImported }) {
   const { toast } = useUi()
+  const { list } = usePicklists()
   const [parsed, setParsed] = useState(null) // { validRows, invalidRows }
   const [fileName, setFileName] = useState('')
   const [importing, setImporting] = useState(false)
@@ -51,7 +53,8 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
               <div style={{ fontSize: 13, marginBottom: 12 }}>
                 1) ดาวน์โหลด Template  2) กรอกข้อมูลใน Excel  3) อัปโหลดไฟล์ .xlsx กลับมาที่นี่
               </div>
-              <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} onClick={downloadCompanyTemplate}>
+              <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }}
+                onClick={() => downloadCompanyTemplate({ industries: list('industries'), statuses: list('company_statuses'), leadSources: list('lead_sources') })}>
                 ดาวน์โหลด Template (.xlsx)
               </button>
               <div className="form-group">
@@ -59,7 +62,7 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
                 <input className="form-control" type="file" accept=".xlsx" onChange={onFileChange} />
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-light)' }}>
-                คอลัมน์ที่รองรับ: {COMPANY_IMPORT_COLUMNS.map(c => c.label).join(', ')} (มีแค่ "ชื่อบริษัท" ที่จำเป็น)
+                คอลัมน์ที่รองรับ: {COMPANY_IMPORT_COLUMNS.map(c => c.label).join(', ')} (มีแค่ "ชื่อบริษัท" ที่จำเป็น — คอลัมน์อุตสาหกรรม/สถานะ/ที่มา มี dropdown ตัวเลือกให้ในไฟล์แล้ว)
               </div>
             </>
           ) : (

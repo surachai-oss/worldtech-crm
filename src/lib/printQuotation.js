@@ -95,7 +95,9 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
         .remark-body { font-size:12px; color:#4a5568; line-height:1.6; margin-bottom:16px; }
         .contact-box { background:#f4f6f9; padding:10px 14px; border-radius:4px; font-size:12px; line-height:1.6; }
         .sign { display:flex; justify-content:space-between; margin-top:50px; font-size:12px; }
-        .sign div { width:45%; text-align:center; border-top:1px solid #999; padding-top:6px; }
+        .sign-col { width:45%; text-align:center; }
+        .sign-name { min-height:16px; font-weight:600; margin-bottom:4px; }
+        .sign-label { border-top:1px solid #999; padding-top:6px; }
         @media print { .no-print { display:none; } }
       </style>
     </head>
@@ -161,8 +163,14 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
       </div>
 
       <div class="sign">
-        <div>ผู้เสนอราคา</div>
-        <div>ผู้อนุมัติ</div>
+        <div class="sign-col">
+          <div class="sign-name">${quot.proposer_name ? escapeHtml(quot.proposer_name) : '&nbsp;'}</div>
+          <div class="sign-label">ผู้เสนอราคา</div>
+        </div>
+        <div class="sign-col">
+          <div class="sign-name">&nbsp;</div>
+          <div class="sign-label">ผู้อนุมัติ</div>
+        </div>
       </div>
 
       <div class="no-print" style="margin-top:24px;text-align:center">

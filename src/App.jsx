@@ -268,7 +268,7 @@ function AppInner({ session }) {
             <Quotations perm={perm} reloadKey={reloadKey} settings={settings} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} />
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
-          {view === 'products' && isAdmin && <Products />}
+          {view === 'products' && <Products />}
         </div>
       </div>
 
@@ -277,7 +277,7 @@ function AppInner({ session }) {
       {modal?.type === 'deal' && <DealModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} defaultStage={modal.payload?.defaultStage} isAdmin={isAdmin} onClose={closeModal} onSave={saveDeal} />}
       {modal?.type === 'activity' && <ActivityModal companies={data.companies} contacts={data.contacts} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveActivity} />}
       {modal?.type === 'task' && <TaskModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveTask} />}
-      {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
+      {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
     </div>
   )
 }

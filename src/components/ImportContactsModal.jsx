@@ -55,7 +55,8 @@ export default function ImportContactsModal({ onClose, onImported }) {
               <div style={{ fontSize: 13, marginBottom: 12 }}>
                 1) ดาวน์โหลด Template  2) กรอกข้อมูลใน Excel (ชื่อบริษัทต้องตรงกับที่มีอยู่ในระบบเป๊ะ)  3) อัปโหลดไฟล์ .xlsx กลับมาที่นี่
               </div>
-              <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} onClick={downloadContactTemplate}>
+              <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} disabled={!companies}
+                onClick={() => downloadContactTemplate((companies || []).map(c => c.name))}>
                 ดาวน์โหลด Template (.xlsx)
               </button>
               <div className="form-group">

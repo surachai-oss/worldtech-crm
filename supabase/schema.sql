@@ -135,6 +135,9 @@ alter table quotations add column if not exists signed_file_name text;
 -- sale_phone = เบอร์ติดต่อเซลล์ที่ออกใบเสนอราคานี้ ใช้แสดงในกล่องข้อมูลติดต่อตอนพิมพ์
 alter table quotations add column if not exists sale_phone text;
 
+-- proposer_name = ชื่อผู้เสนอราคา พิมพ์ไว้เหนือเส้นเซ็นชื่อตอนพิมพ์ กันต้องพิมพ์ออกมาเซ็นสดก่อนส่งลูกค้า
+alter table quotations add column if not exists proposer_name text;
+
 -- ===== QUOTATION ITEMS (รายการสินค้าในใบเสนอราคา — ใบเสนอราคาหนึ่งมีได้หลายรายการ เหมือนดีล) =====
 -- description = ชื่อรายการที่แสดงจริง (เติมจากชื่อสินค้าเวลาเลือก แต่แก้ไขเองได้ เผื่อรายการที่ไม่มีในรายการสินค้า)
 -- unit_price ถือว่ารวม VAT แล้วเหมือนกับดีล — quotations.value คำนวณจากผลรวมรายการเหล่านี้ที่ฝั่ง frontend
@@ -370,13 +373,16 @@ drop policy if exists "product-images: public read" on storage.objects;
 create policy "product-images: public read" on storage.objects
   for select using (bucket_id = 'product-images');
 
+-- ทุกคนที่ login แล้วอัปโหลด/ลบรูปสินค้าได้ (เหมือน bucket "attachments") — ไม่ได้จำกัดแค่ admin
 drop policy if exists "product-images: admin upload" on storage.objects;
-create policy "product-images: admin upload" on storage.objects
-  for insert with check (bucket_id = 'product-images' and is_admin());
+drop policy if exists "product-images: authenticated upload" on storage.objects;
+create policy "product-images: authenticated upload" on storage.objects
+  for insert with check (bucket_id = 'product-images' and auth.role() = 'authenticated');
 
 drop policy if exists "product-images: admin delete" on storage.objects;
-create policy "product-images: admin delete" on storage.objects
-  for delete using (bucket_id = 'product-images' and is_admin());
+drop policy if exists "product-images: authenticated delete" on storage.objects;
+create policy "product-images: authenticated delete" on storage.objects
+  for delete using (bucket_id = 'product-images' and auth.role() = 'authenticated');
 
 -- ===== Row Level Security =====
 alter table companies   enable row level security;
@@ -534,11 +540,11 @@ create policy "picklists select" on picklists for select using (auth.role() = 'a
 drop policy if exists "picklists write" on picklists;
 create policy "picklists write" on picklists for all using (is_admin()) with check (is_admin());
 
--- ----- products: ทุกคนที่ login อ่านได้ (ใช้เลือกในรายการดีล), เพิ่ม/แก้ไข/ลบได้เฉพาะ admin -----
+-- ----- products: ทุกคนที่ login แล้วอ่าน/เพิ่ม/แก้ไข/ลบได้หมด (ไม่ได้จำกัดแค่ admin เหมือน picklists) -----
 drop policy if exists "products select" on products;
 create policy "products select" on products for select using (auth.role() = 'authenticated');
 drop policy if exists "products write" on products;
-create policy "products write" on products for all using (is_admin()) with check (is_admin());
+create policy "products write" on products for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 -- ----- profiles: เห็นของตัวเอง หรือ admin เห็นทั้งหมด, แก้ไข role ได้เฉพาะ admin -----
 drop policy if exists "profiles select" on profiles;
