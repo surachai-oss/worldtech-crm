@@ -307,7 +307,8 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
       quot_date: new Date().toISOString().split('T')[0], expire_date: '', note: DEFAULT_QUOTATION_NOTE, deal_id: null
     }
     if (!initial) return base
-    const { items: _seedItems, ...rest } = initial // items เป็นแค่ค่าตั้งต้นสำหรับ seed ไม่ใช่คอลัมน์ในตาราง quotations ตัดออกก่อนเก็บใน f
+    // items เป็นแค่ค่าตั้งต้นสำหรับ seed ไม่ใช่คอลัมน์ในตาราง quotations, company/product เป็น relation ที่ join มาตอน select (ไม่ใช่คอลัมน์จริง) — ต้องตัดออกก่อนเก็บใน f ไม่งั้น update จะพังเพราะ Supabase หาคอลัมน์ชื่อนี้ไม่เจอ
+    const { items: _seedItems, company: _company, product: _product, ...rest } = initial
     return { ...base, ...rest }
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
