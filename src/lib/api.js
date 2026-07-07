@@ -16,6 +16,15 @@ function safeLike(q) {
   return (q || '').replace(/[%,()]/g, '').trim()
 }
 
+// แปลงวันที่จาก <input type="date"> (สตริงตามเวลาเครื่อง) เป็นขอบเขต ISO ที่ครอบทั้งวันนั้นตามเวลาเครื่อง
+// ใช้กรองคอลัมน์ timestamptz (มีเวลาด้วย) ให้ตรงกับ "วันที่" ตามเวลาเครื่องจริงๆ ไม่ใช่ตามเที่ยงคืน UTC (ต่างจาก column แบบ date เฉยๆ ที่เทียบสตริงตรงๆได้)
+function dateRangeToIso(dateFrom, dateTo) {
+  return {
+    fromIso: dateFrom ? new Date(dateFrom + 'T00:00:00').toISOString() : null,
+    toIso: dateTo ? new Date(dateTo + 'T23:59:59.999').toISOString() : null,
+  }
+}
+
 // ===== BULK LOAD (ใช้กับ Dashboard, ค้นหาส่วนกลาง, และหน้ารายละเอียดบริษัท) =====
 export async function getAllData() {
   const [companies, contacts, deals, activities, tasks, quotations] = await Promise.all([
@@ -437,23 +446,48 @@ export function searchAll(data, query) {
 }
 
 // ===== LEADS (ลีดจากฟอร์มสาธารณะ) =====
-export async function fetchLeadsPage({ page = 0, status = '', q = '' } = {}) {
+export async function fetchLeadsPage({ page = 0, status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
   let query = supabase.from('leads').select('*, company:companies(id,name)', { count: 'exact' }).order('created_at', { ascending: false })
   if (status) query = query.eq('status', status)
   const sq = safeLike(q)
   if (sq) query = query.or(`subject.ilike.%${sq}%,full_name.ilike.%${sq}%,phone.ilike.%${sq}%,email.ilike.%${sq}%`)
+  const { fromIso, toIso } = dateRangeToIso(dateFrom, dateTo)
+  if (fromIso) query = query.gte('created_at', fromIso)
+  if (toIso) query = query.lte('created_at', toIso)
   const { data, error, count } = await query.range(...range(page))
   if (error) throw error
   return { rows: data, count, pageSize: PAGE_SIZE }
 }
 
 // ดึงลีดทั้งหมดที่ตรงกับตัวกรองปัจจุบัน (ไม่จำกัดหน้า) — ใช้สำหรับ export เป็น Excel เท่านั้น
-export async function fetchAllLeads({ status = '', q = '' } = {}) {
+export async function fetchAllLeads({ status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
   let query = supabase.from('leads').select('*').order('created_at', { ascending: false })
   if (status) query = query.eq('status', status)
   const sq = safeLike(q)
   if (sq) query = query.or(`subject.ilike.%${sq}%,full_name.ilike.%${sq}%,phone.ilike.%${sq}%,email.ilike.%${sq}%`)
+  const { fromIso, toIso } = dateRangeToIso(dateFrom, dateTo)
+  if (fromIso) query = query.gte('created_at', fromIso)
+  if (toIso) query = query.lte('created_at', toIso)
   return query.then(handle)
+}
+
+// สรุปจำนวนลีดแยกตามช่องทางที่มา (source) ตามตัวกรองปัจจุบัน — ใช้ดูว่าเดือนนี้ลีดมาจากช่องทางไหนเท่าไหร่
+export async function fetchLeadsSourceSummary({ status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
+  let query = supabase.from('leads').select('source')
+  if (status) query = query.eq('status', status)
+  const sq = safeLike(q)
+  if (sq) query = query.or(`subject.ilike.%${sq}%,full_name.ilike.%${sq}%,phone.ilike.%${sq}%,email.ilike.%${sq}%`)
+  const { fromIso, toIso } = dateRangeToIso(dateFrom, dateTo)
+  if (fromIso) query = query.gte('created_at', fromIso)
+  if (toIso) query = query.lte('created_at', toIso)
+  const { data, error } = await query
+  if (error) throw error
+  const bySource = {}
+  data.forEach(r => {
+    const key = r.source || 'ไม่ระบุที่มา'
+    bySource[key] = (bySource[key] || 0) + 1
+  })
+  return bySource
 }
 
 export const updateLead = (id, d) => supabase.from('leads').update(d).eq('id', id).select().single().then(handle)

@@ -183,14 +183,6 @@ function AppInner({ session }) {
       toast('เกิดข้อผิดพลาด: ' + e.message, 'error')
     }
   }
-  // เพิ่มลูกค้าใหม่แบบไม่ปิดฟอร์มดีล/ใบเสนอราคาที่กำลังกรอกอยู่ (กดปุ่ม "+ ลูกค้าใหม่" ข้าง dropdown เลือกบริษัท)
-  // ต่างจาก saveCompany ตรงที่ไม่ closeModal ของฟอร์มหลัก และคืนค่าลูกค้าที่สร้างใหม่กลับไปให้เลือกอัตโนมัติทันที
-  const createCompanyInline = async (f) => {
-    const company = await api.addCompany({ ...f, created_by: session.user.id })
-    setData(d => ({ ...d, companies: [...d.companies, company] }))
-    toast('เพิ่มลูกค้าใหม่สำเร็จ', 'success')
-    return company
-  }
   const saveContact = async (f) => {
     closeModal()
     if (!f.full_name?.trim()) { toast('กรุณากรอกชื่อ', 'error'); return }
@@ -325,10 +317,10 @@ function AppInner({ session }) {
 
       {modal?.type === 'company' && <CompanyModal initial={modal.payload?.initial} isAdmin={isAdmin} onClose={closeModal} onSave={saveCompany} />}
       {modal?.type === 'contact' && <ContactModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} onClose={closeModal} onSave={saveContact} />}
-      {modal?.type === 'deal' && <DealModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} defaultStage={modal.payload?.defaultStage} isAdmin={isAdmin} onCreateCompany={createCompanyInline} onClose={closeModal} onSave={saveDeal} />}
+      {modal?.type === 'deal' && <DealModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} defaultStage={modal.payload?.defaultStage} isAdmin={isAdmin} onClose={closeModal} onSave={saveDeal} />}
       {modal?.type === 'activity' && <ActivityModal companies={data.companies} contacts={data.contacts} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveActivity} />}
       {modal?.type === 'task' && <TaskModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveTask} />}
-      {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onCreateCompany={createCompanyInline} onClose={closeModal} onSave={saveQuotation} />}
+      {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
     </div>
   )
 }

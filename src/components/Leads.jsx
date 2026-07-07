@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { PAGE_SIZE, fetchLeadsPage, fetchAllLeads } from '../lib/api'
+import { PAGE_SIZE, fetchLeadsPage, fetchAllLeads, fetchLeadsSourceSummary } from '../lib/api'
 import { exportLeadsToExcel } from '../lib/importExport'
 import { fmtDate } from '../lib/format'
 import { useUi } from './UiContext'
@@ -12,16 +12,19 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
   const { list } = usePicklists()
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
   const [page, setPage] = useState(0)
   const [rows, setRows] = useState([])
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
+  const [sourceSummary, setSourceSummary] = useState({})
 
   const doExport = async () => {
     setExporting(true)
     try {
-      const all = await fetchAllLeads({ status, q })
+      const all = await fetchAllLeads({ status, q, dateFrom: fromDate, dateTo: toDate })
       await exportLeadsToExcel(all)
     } catch (e) {
       toast('ส่งออกไม่สำเร็จ: ' + e.message, 'error')
@@ -30,20 +33,24 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
     }
   }
 
-  useEffect(() => { setPage(0) }, [status, q])
+  useEffect(() => { setPage(0) }, [status, q, fromDate, toDate])
 
   useEffect(() => {
     let alive = true
     setLoading(true)
     const t = setTimeout(() => {
-      fetchLeadsPage({ page, status, q }).then(r => {
+      fetchLeadsPage({ page, status, q, dateFrom: fromDate, dateTo: toDate }).then(r => {
         if (!alive) return
         setRows(r.rows); setCount(r.count)
       }).catch(e => { if (alive) toast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error') })
         .finally(() => { if (alive) setLoading(false) })
+      // สรุปช่องทางที่มาไม่ขึ้นกับตัวกรองสถานะเอง (เห็นทุกสถานะพร้อมกันเสมอ) แต่ยังตามช่วงวันที่/คำค้นหาที่ตั้งไว้
+      fetchLeadsSourceSummary({ q, dateFrom: fromDate, dateTo: toDate }).then(s => { if (alive) setSourceSummary(s) }).catch(() => {})
     }, 250)
     return () => { alive = false; clearTimeout(t) }
-  }, [page, status, q, reloadKey])
+  }, [page, status, q, fromDate, toDate, reloadKey])
+
+  const sourceKeys = Object.keys(sourceSummary)
 
   return (
     <div>
@@ -52,12 +59,27 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
         <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting}>{exporting ? 'กำลังส่งออก...' : 'ส่งออกเป็น Excel'}</button>
       </div>
 
+      {sourceKeys.length > 0 && (
+        <div className="kpi-grid" style={{ gridTemplateColumns: `repeat(${Math.min(sourceKeys.length, 6)}, 1fr)`, marginBottom: 14 }}>
+          {sourceKeys.map(src => (
+            <div className="kpi-card" key={src}>
+              <div className="kpi-label">{src}</div>
+              <div className="kpi-value">{sourceSummary[src]}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="filter-bar">
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
           <option value="">ทุกสถานะ</option>
           {list('lead_statuses').map(s => <option key={s}>{s}</option>)}
         </select>
         <input className="filter-input" placeholder="ค้นหาชื่อ/เบอร์/อีเมล..." value={q} onChange={e => setQ(e.target.value)} />
+        <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่กรอกเข้ามา ตั้งแต่" />
+        <span style={{ fontSize: 12, color: 'var(--text-light)', alignSelf: 'center' }}>ถึง</span>
+        <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่กรอกเข้ามา ถึง" />
+        {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
       </div>
 
       <div className="card">
