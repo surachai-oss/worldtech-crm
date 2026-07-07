@@ -79,8 +79,9 @@ netlify deploy --prod
 1. เปิด [Google Cloud Console](https://console.cloud.google.com/) สร้างโปรเจกต์ใหม่ (หรือใช้โปรเจกต์เดิม) แล้วเปิดใช้งาน **Google Drive API** (เมนู APIs & Services > Library > ค้นหา "Google Drive API" > Enable)
 2. ไปที่ **APIs & Services > Credentials > Create Credentials > Service Account** ตั้งชื่อตามสะดวก ไม่ต้องกำหนดสิทธิ์ระดับโปรเจกต์เพิ่ม
 3. เข้าไปที่ Service Account ที่สร้าง → แท็บ **Keys > Add Key > Create new key > JSON** จะได้ไฟล์ `.json` ดาวน์โหลดลงเครื่อง — เก็บไฟล์นี้ให้ปลอดภัย (มีสิทธิ์เท่ากับรหัสผ่าน)
-4. เปิดไฟล์ JSON หาค่า `client_email` (เช่น `xxx@xxx.iam.gserviceaccount.com`) แล้วไปที่โฟลเดอร์ Google Drive ที่ต้องการเก็บไฟล์ → **แชร์ (Share)** → ใส่อีเมลนั้น ให้สิทธิ์ **Editor**
-5. คัดลอก Folder ID จาก URL ของโฟลเดอร์ (ส่วนหลัง `/folders/` ใน `https://drive.google.com/drive/folders/<FOLDER_ID>`)
+4. **ต้องใช้ Shared Drive เท่านั้น ห้ามใช้โฟลเดอร์ธรรมดาใน My Drive** — Service Account ไม่มีโควต้าพื้นที่จัดเก็บของตัวเอง ต่อให้แชร์สิทธิ์ Editor ให้กับโฟลเดอร์ปกติก็จะสร้างไฟล์ไม่ได้ (error "Service Accounts do not have storage quota") วิธีสร้าง: เปิด [Google Drive](https://drive.google.com) → แถบซ้าย **Shared drives** → **+ New** → ตั้งชื่อ → Create
+   จากนั้นเข้าไปใน Shared Drive นั้น → **Manage members** → เปิดไฟล์ JSON หาค่า `client_email` (เช่น `xxx@xxx.iam.gserviceaccount.com`) → เพิ่มอีเมลนั้นเป็นสมาชิก สิทธิ์ **Content Manager**
+5. คัดลอก Folder ID ของ Shared Drive นั้นจาก URL (ส่วนหลัง `/folders/` ใน `https://drive.google.com/drive/folders/<FOLDER_ID>`)
 6. ตั้งค่า Netlify environment variables 2 ตัว:
    - `GOOGLE_SERVICE_ACCOUNT_KEY` = **แนะนำให้แปลงเป็น Base64 ก่อนวาง** เพราะ JSON ตรงๆ มี `\n` ฝังอยู่ใน `private_key` ถ้าวางลงช่อง Value ของ Netlify ตรงๆ มักเพี้ยนจนอ่านไม่ออก (error "ไม่ใช่ JSON ที่ถูกต้อง") วิธีแปลง เปิด Terminal บนเครื่อง Mac แล้วรัน (แทนที่ path ด้วยตำแหน่งไฟล์ `.json` ที่ดาวน์โหลดมาจริง):
      ```bash

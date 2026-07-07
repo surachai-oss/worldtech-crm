@@ -38,14 +38,16 @@ async function driveFetch(url, token, init) {
   return json
 }
 
+// ต้องเติม supportsAllDrives/includeItemsFromAllDrives ทุกคำขอ ไม่งั้น Drive API จะมองไม่เห็น/สร้างไฟล์ใน Shared Drive ไม่ได้
+// (Service Account ไม่มีโควต้าพื้นที่ของตัวเอง ต้องใช้ Shared Drive เท่านั้น ดู README)
 async function findFolder(name, parentId, token) {
   const q = `name='${escapeQ(name)}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
-  const json = await driveFetch(`${DRIVE_FILES_URL}?q=${encodeURIComponent(q)}&fields=files(id,name)`, token)
+  const json = await driveFetch(`${DRIVE_FILES_URL}?q=${encodeURIComponent(q)}&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true`, token)
   return json.files?.[0]?.id || null
 }
 
 async function createFolder(name, parentId, token) {
-  const json = await driveFetch(DRIVE_FILES_URL, token, {
+  const json = await driveFetch(`${DRIVE_FILES_URL}?supportsAllDrives=true`, token, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
@@ -59,12 +61,12 @@ async function findOrCreateFolder(name, parentId, token) {
 
 async function findFile(name, parentId, token) {
   const q = `name='${escapeQ(name)}' and '${parentId}' in parents and trashed=false`
-  const json = await driveFetch(`${DRIVE_FILES_URL}?q=${encodeURIComponent(q)}&fields=files(id,name)`, token)
+  const json = await driveFetch(`${DRIVE_FILES_URL}?q=${encodeURIComponent(q)}&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true`, token)
   return json.files?.[0]?.id || null
 }
 
 async function updateFileContent(fileId, buffer, mimeType, token) {
-  const json = await driveFetch(`${DRIVE_UPLOAD_URL}/${fileId}?uploadType=media`, token, {
+  const json = await driveFetch(`${DRIVE_UPLOAD_URL}/${fileId}?uploadType=media&supportsAllDrives=true`, token, {
     method: 'PATCH',
     headers: { 'Content-Type': mimeType },
     body: buffer
@@ -80,7 +82,7 @@ async function createFile(name, parentId, buffer, mimeType, token) {
     buffer,
     Buffer.from(`\r\n--${boundary}--`)
   ])
-  const json = await driveFetch(`${DRIVE_UPLOAD_URL}?uploadType=multipart`, token, {
+  const json = await driveFetch(`${DRIVE_UPLOAD_URL}?uploadType=multipart&supportsAllDrives=true`, token, {
     method: 'POST',
     headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
     body
