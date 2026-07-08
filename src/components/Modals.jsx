@@ -303,7 +303,7 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
   const { toast } = useUi()
   const [f, setF] = useState(() => {
     const base = {
-      company_id: defaultCompanyId || '', subject: '', status: 'Draft', sale_phone: '', proposer_name: currentUserName || '',
+      company_id: defaultCompanyId || '', subject: '', status: 'Draft', sale_phone: '0918086924', proposer_name: currentUserName || '',
       quot_date: new Date().toISOString().split('T')[0], expire_date: '', note: DEFAULT_QUOTATION_NOTE, deal_id: null
     }
     if (!initial) return base

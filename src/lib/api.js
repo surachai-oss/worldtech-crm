@@ -135,6 +135,13 @@ export const addCompany = (d) => supabase.from('companies').insert(d).select().s
 export const updateCompany = (id, d) => supabase.from('companies').update(d).eq('id', id).select().single().then(handle)
 export const deleteCompany = (id) => supabase.from('companies').delete().eq('id', id).then(handle)
 export const bulkImportCompanies = (rows) => supabase.from('companies').insert(rows).select().then(handle)
+// ใช้ตรวจชื่อบริษัทซ้ำตอนนำเข้าไฟล์ Excel — คืน Map ของชื่อ (normalize) -> id
+export async function listCompanyNamesMap() {
+  const rows = await supabase.from('companies').select('id, name').then(handle)
+  const map = new Map()
+  rows.forEach(r => map.set((r.name || '').trim().toLowerCase(), r.id))
+  return map
+}
 
 // ===== PICKLISTS (dropdown ที่แก้ไข/เพิ่ม/ลบตัวเลือกได้เองในแอป — แบบเดียวกับ dropdown list ใน Google Sheets) =====
 export async function getAllPicklists() {

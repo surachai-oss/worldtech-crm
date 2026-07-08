@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import { bulkImportCompanies } from '../lib/api'
-import { downloadCompanyTemplate, parseCompanyImportFile, COMPANY_IMPORT_COLUMNS } from '../lib/importExport'
+import { bulkImportCompanies, updateCompany, listCompanyNamesMap } from '../lib/api'
+import { downloadCompanyTemplate, parseCompanyImportFile, exportCompanyImportIssues, COMPANY_IMPORT_COLUMNS } from '../lib/importExport'
 import { useUi } from './UiContext'
 import { usePicklists } from './PicklistsContext'
 
 export default function ImportCompaniesModal({ perm, onClose, onImported }) {
   const { toast } = useUi()
   const { list } = usePicklists()
-  const [parsed, setParsed] = useState(null) // { validRows, invalidRows }
+  const [parsed, setParsed] = useState(null) // { validRows, invalidRows, duplicateRows }
   const [fileName, setFileName] = useState('')
   const [importing, setImporting] = useState(false)
 
@@ -17,20 +17,32 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
     if (!file) return
     setFileName(file.name)
     try {
-      const result = await parseCompanyImportFile(file)
+      const existingNames = await listCompanyNamesMap()
+      const result = await parseCompanyImportFile(file, existingNames)
       setParsed(result)
     } catch (err) {
       toast('อ่านไฟล์ไม่สำเร็จ: ' + err.message, 'error')
     }
   }
 
+  const setDuplicateAction = (idx, action) => {
+    setParsed(p => ({ ...p, duplicateRows: p.duplicateRows.map((r, i) => i === idx ? { ...r, action } : r) }))
+  }
+
+  const unresolvedDuplicates = parsed?.duplicateRows.filter(r => !r.action).length || 0
+
   const confirmImport = async () => {
-    if (!parsed?.validRows.length) return
+    if (!parsed || unresolvedDuplicates) return
     setImporting(true)
     try {
-      const rows = parsed.validRows.map(r => ({ ...r, created_by: perm.userId }))
-      await bulkImportCompanies(rows)
-      toast(`นำเข้าสำเร็จ ${rows.length} รายการ`, 'success')
+      const toInsert = [
+        ...parsed.validRows,
+        ...parsed.duplicateRows.filter(r => r.action === 'new').map(r => r.data)
+      ].map(r => ({ ...r, created_by: perm.userId }))
+      const toUpdate = parsed.duplicateRows.filter(r => r.action === 'overwrite')
+      if (toInsert.length) await bulkImportCompanies(toInsert)
+      await Promise.all(toUpdate.map(r => updateCompany(r.existingId, r.data)))
+      toast(`นำเข้าสำเร็จ ${toInsert.length + toUpdate.length} รายการ`, 'success')
       onImported()
       onClose()
     } catch (err) {
@@ -68,9 +80,15 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
           ) : (
             <>
               <div style={{ fontSize: 13, marginBottom: 8 }}>ไฟล์: <b>{fileName}</b></div>
-              <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
+              <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ color: 'var(--success)', fontWeight: 600 }}>ถูกต้อง {parsed.validRows.length} รายการ</span>
+                {parsed.duplicateRows.length > 0 && <span style={{ color: 'var(--warning, #b8860b)', fontWeight: 600 }}>ชื่อซ้ำกับข้อมูลเดิม {parsed.duplicateRows.length} รายการ</span>}
                 {parsed.invalidRows.length > 0 && <span style={{ color: 'var(--danger)', fontWeight: 600 }}>ผิดพลาด {parsed.invalidRows.length} รายการ</span>}
+                {(parsed.invalidRows.length > 0 || parsed.duplicateRows.length > 0) && (
+                  <button className="btn btn-outline btn-xs" onClick={() => exportCompanyImportIssues(parsed.invalidRows, parsed.duplicateRows)}>
+                    ส่งออกเฉพาะแถวที่มีปัญหา
+                  </button>
+                )}
               </div>
               {parsed.invalidRows.length > 0 && (
                 <div className="card" style={{ marginBottom: 12, maxHeight: 140, overflow: 'auto' }}>
@@ -80,6 +98,34 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
                       <tbody>
                         {parsed.invalidRows.map((r, i) => (
                           <tr key={i}><td>{r.row}</td><td style={{ color: 'var(--danger)', fontSize: 12 }}>{r.errors.join(', ')}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {parsed.duplicateRows.length > 0 && (
+                <div className="card" style={{ marginBottom: 12, maxHeight: 220, overflow: 'auto' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-light)', padding: '8px 8px 0' }}>
+                    ชื่อบริษัทเหล่านี้มีอยู่แล้วในระบบ — เลือกว่าจะสร้างเป็นรายการใหม่ (ซ้ำชื่อ) หรืออัปเดตทับข้อมูลเดิม ก่อนกดนำเข้า
+                  </div>
+                  <div className="table-wrap">
+                    <table>
+                      <thead><tr><th>แถวที่</th><th>ชื่อบริษัท</th><th>เลือกการทำงาน</th></tr></thead>
+                      <tbody>
+                        {parsed.duplicateRows.map((r, i) => (
+                          <tr key={i}>
+                            <td>{r.row}</td>
+                            <td>{r.data.name}</td>
+                            <td>
+                              <label style={{ fontSize: 12, marginRight: 12 }}>
+                                <input type="radio" name={`dup-${i}`} checked={r.action === 'new'} onChange={() => setDuplicateAction(i, 'new')} /> สร้างใหม่ (ซ้ำชื่อ)
+                              </label>
+                              <label style={{ fontSize: 12 }}>
+                                <input type="radio" name={`dup-${i}`} checked={r.action === 'overwrite'} onChange={() => setDuplicateAction(i, 'overwrite')} /> อัปเดตทับข้อมูลเดิม
+                              </label>
+                            </td>
+                          </tr>
                         ))}
                       </tbody>
                     </table>
@@ -108,8 +154,13 @@ export default function ImportCompaniesModal({ perm, onClose, onImported }) {
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onClose}>ยกเลิก</button>
           {parsed && (
-            <button className="btn btn-primary" onClick={confirmImport} disabled={importing || !parsed.validRows.length}>
-              {importing ? 'กำลังนำเข้า...' : `นำเข้า ${parsed.validRows.length} รายการ`}
+            <button className="btn btn-primary" onClick={confirmImport}
+              disabled={importing || unresolvedDuplicates > 0 || (!parsed.validRows.length && !parsed.duplicateRows.length)}>
+              {importing
+                ? 'กำลังนำเข้า...'
+                : unresolvedDuplicates > 0
+                  ? `เลือกการทำงานให้ครบ (เหลือ ${unresolvedDuplicates} รายการ)`
+                  : `นำเข้า ${parsed.validRows.length + parsed.duplicateRows.length} รายการ`}
             </button>
           )}
         </div>

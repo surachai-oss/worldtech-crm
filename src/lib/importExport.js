@@ -119,6 +119,7 @@ export const COMPANY_IMPORT_COLUMNS = [
   { key: 'email', label: 'อีเมล' },
   { key: 'website', label: 'เว็บไซต์' },
   { key: 'address', label: 'ที่อยู่' },
+  { key: 'tax_id', label: 'เลขประจำตัวผู้เสียภาษี' },
   { key: 'status', label: 'สถานะ' },
   { key: 'owner', label: 'ผู้รับผิดชอบ' },
   { key: 'lead_source', label: 'ที่มา' },
@@ -127,7 +128,7 @@ export const COMPANY_IMPORT_COLUMNS = [
 
 const COMPANY_EXAMPLE_ROW = {
   name: 'บริษัท ตัวอย่าง จำกัด', customer_type: 'นิติบุคคล/บริษัท', industry: 'เทคโนโลยี', phone: '02-xxx-xxxx',
-  email: 'contact@example.com', website: 'https://www.example.com', address: 'ที่อยู่ตัวอย่าง',
+  email: 'contact@example.com', website: 'https://www.example.com', address: 'ที่อยู่ตัวอย่าง', tax_id: '0-0000-00000-00-0',
   status: 'Active', owner: 'ชื่อผู้รับผิดชอบ', lead_source: '', note: ''
 }
 
@@ -137,14 +138,18 @@ export const downloadCompanyTemplate = (picklists = {}) =>
     customer_type: picklists.customerTypes, industry: picklists.industries, status: picklists.statuses, lead_source: picklists.leadSources
   })
 
-// คืนค่า { validRows, invalidRows } — invalidRows มี { row, errors, data } สำหรับแสดงผลพรีวิว
-export async function parseCompanyImportFile(file) {
+// existingNames: Map ของชื่อบริษัท (normalize เป็นตัวพิมพ์เล็ก+ตัดช่องว่าง) -> id บริษัทที่มีอยู่แล้วในระบบ ใช้ตรวจชื่อซ้ำ
+// คืนค่า { validRows, invalidRows, duplicateRows } — invalidRows มี { row, errors, data } สำหรับแสดงผลพรีวิว
+// duplicateRows คือแถวที่ชื่อซ้ำกับบริษัทที่มีอยู่แล้ว (ไม่ใช่ error แต่ต้องให้ผู้อัปโหลดเลือกว่าจะสร้างใหม่หรืออัปเดตทับของเดิม)
+export async function parseCompanyImportFile(file, existingNames = new Map()) {
   const rawRows = await readExcelRows(file)
   const labelToKey = {}
   COMPANY_IMPORT_COLUMNS.forEach(c => { labelToKey[c.label] = c.key })
 
+  const seenInFile = new Set()
   const validRows = []
   const invalidRows = []
+  const duplicateRows = []
   rawRows.forEach((raw, i) => {
     const row = {}
     Object.entries(raw).forEach(([label, value]) => {
@@ -153,10 +158,25 @@ export async function parseCompanyImportFile(file) {
     })
     const errors = []
     if (!row.name) errors.push('กรุณากรอกชื่อบริษัท')
-    if (errors.length) invalidRows.push({ row: i + 2, errors, data: row })
+    const normName = (row.name || '').toLowerCase()
+    if (row.name && seenInFile.has(normName)) errors.push('ชื่อบริษัทซ้ำกันในไฟล์นี้')
+    if (row.name) seenInFile.add(normName)
+    if (errors.length) { invalidRows.push({ row: i + 2, errors, data: row }); return }
+    const existingId = existingNames.get(normName)
+    if (existingId) duplicateRows.push({ row: i + 2, data: row, existingId, action: null })
     else validRows.push(row)
   })
-  return { validRows, invalidRows }
+  return { validRows, invalidRows, duplicateRows }
+}
+
+// ส่งออกเฉพาะแถวที่มีปัญหา (ชื่อขาด/ซ้ำในไฟล์/ซ้ำกับข้อมูลเดิม) เป็นไฟล์ Excel ให้ผู้อัปโหลดตรวจสอบ
+export const exportCompanyImportIssues = (invalidRows, duplicateRows) => {
+  const columns = [...COMPANY_IMPORT_COLUMNS, { key: '_issue', label: 'ปัญหา' }]
+  const rows = [
+    ...invalidRows.map(r => ({ ...r.data, _issue: r.errors.join(', ') })),
+    ...duplicateRows.map(r => ({ ...r.data, _issue: 'ชื่อบริษัทนี้มีอยู่แล้วในระบบ' }))
+  ]
+  return exportRowsToExcel(columns, rows, 'รายการที่มีปัญหา_นำเข้าบริษัทลูกค้า.xlsx')
 }
 
 // ===== นำเข้าสินค้าจากไฟล์ Excel =====
