@@ -78,9 +78,6 @@ export default function PublicLeadPage() {
           <img src="/worldtech-logo.png" alt="Worldtech" style={{ height: 40, marginBottom: 10 }} />
           <div style={{ fontSize: 13, fontWeight: 600, opacity: .95 }}>บริษัท เวิลด์เทค อีเล็คโทรนิค จำกัด</div>
           <div style={{ fontSize: 11, opacity: .7, marginTop: 2 }}>ผู้จัดจำหน่ายเครื่องใช้ไฟฟ้าสำหรับธุรกิจและองค์กร</div>
-          <div style={{ height: 1, background: 'rgba(255,255,255,.15)', margin: '14px 0' }} />
-          <div style={{ fontSize: 14, fontWeight: 600 }}>สนใจสินค้า? ฝากข้อมูลไว้</div>
-          <div style={{ fontSize: 12, opacity: .85, marginTop: 2 }}>ทีมงานขายจะติดต่อกลับโดยเร็วที่สุด</div>
         </div>
         <div style={{ padding: 24 }}>
           {done ? (
