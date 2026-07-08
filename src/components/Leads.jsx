@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { PAGE_SIZE, fetchLeadsPage, fetchAllLeads, fetchLeadsSourceSummary } from '../lib/api'
+import { PAGE_SIZE, fetchLeadsPage, fetchAllLeads, fetchLeadsSourceSummary, fetchLeadsStatusSummary } from '../lib/api'
 import { exportLeadsToExcel } from '../lib/importExport'
 import { fmtDate } from '../lib/format'
 import { useUi } from './UiContext'
@@ -20,6 +20,7 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [sourceSummary, setSourceSummary] = useState({})
+  const [statusSummary, setStatusSummary] = useState({})
 
   const doExport = async () => {
     setExporting(true)
@@ -44,13 +45,17 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
         setRows(r.rows); setCount(r.count)
       }).catch(e => { if (alive) toast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error') })
         .finally(() => { if (alive) setLoading(false) })
-      // สรุปช่องทางที่มาไม่ขึ้นกับตัวกรองสถานะเอง (เห็นทุกสถานะพร้อมกันเสมอ) แต่ยังตามช่วงวันที่/คำค้นหาที่ตั้งไว้
+      // สรุปช่องทางที่มา/สถานะ ไม่ขึ้นกับตัวกรองสถานะเอง (เห็นทุกช่องทาง/สถานะพร้อมกันเสมอ) แต่ยังตามช่วงวันที่/คำค้นหาที่ตั้งไว้
       fetchLeadsSourceSummary({ q, dateFrom: fromDate, dateTo: toDate }).then(s => { if (alive) setSourceSummary(s) }).catch(() => {})
+      fetchLeadsStatusSummary({ q, dateFrom: fromDate, dateTo: toDate }).then(s => { if (alive) setStatusSummary(s) }).catch(() => {})
     }, 250)
     return () => { alive = false; clearTimeout(t) }
   }, [page, status, q, fromDate, toDate, reloadKey])
 
   const sourceKeys = Object.keys(sourceSummary)
+  // เรียงตามลำดับ picklist ก่อน แล้วต่อท้ายด้วยสถานะเก่าที่ไม่อยู่ใน picklist ปัจจุบัน (ถ้ามี) กันข้อมูลตกหล่น
+  const statusOrder = list('lead_statuses')
+  const statusKeys = [...statusOrder.filter(s => statusSummary[s] != null), ...Object.keys(statusSummary).filter(s => !statusOrder.includes(s))]
 
   return (
     <div>
@@ -59,15 +64,32 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
         <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting}>{exporting ? 'กำลังส่งออก...' : 'ส่งออกเป็น Excel'}</button>
       </div>
 
+      {statusKeys.length > 0 && (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>สรุปตามสถานะ</div>
+          <div className="kpi-grid" style={{ gridTemplateColumns: `repeat(${Math.min(statusKeys.length, 6)}, 1fr)`, marginBottom: 14 }}>
+            {statusKeys.map(st => (
+              <div className="kpi-card" key={st}>
+                <div className="kpi-label">{st}</div>
+                <div className="kpi-value">{statusSummary[st]}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {sourceKeys.length > 0 && (
-        <div className="kpi-grid" style={{ gridTemplateColumns: `repeat(${Math.min(sourceKeys.length, 6)}, 1fr)`, marginBottom: 14 }}>
-          {sourceKeys.map(src => (
-            <div className="kpi-card" key={src}>
-              <div className="kpi-label">{src}</div>
-              <div className="kpi-value">{sourceSummary[src]}</div>
-            </div>
-          ))}
-        </div>
+        <>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>สรุปตามช่องทางที่มา</div>
+          <div className="kpi-grid" style={{ gridTemplateColumns: `repeat(${Math.min(sourceKeys.length, 6)}, 1fr)`, marginBottom: 14 }}>
+            {sourceKeys.map(src => (
+              <div className="kpi-card" key={src}>
+                <div className="kpi-label">{src}</div>
+                <div className="kpi-value">{sourceSummary[src]}</div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       <div className="filter-bar">

@@ -499,6 +499,24 @@ export async function fetchLeadsSourceSummary({ status = '', q = '', dateFrom = 
   return bySource
 }
 
+// สรุปจำนวนลีดแยกตามสถานะ ตามช่วงวันที่/คำค้นหาที่ตั้งไว้ (ไม่ขึ้นกับตัวกรองสถานะเอง เพื่อให้เห็นทุกสถานะพร้อมกันเสมอ)
+export async function fetchLeadsStatusSummary({ q = '', dateFrom = '', dateTo = '' } = {}) {
+  let query = supabase.from('leads').select('status')
+  const sq = safeLike(q)
+  if (sq) query = query.or(`subject.ilike.%${sq}%,full_name.ilike.%${sq}%,phone.ilike.%${sq}%,email.ilike.%${sq}%`)
+  const { fromIso, toIso } = dateRangeToIso(dateFrom, dateTo)
+  if (fromIso) query = query.gte('created_at', fromIso)
+  if (toIso) query = query.lte('created_at', toIso)
+  const { data, error } = await query
+  if (error) throw error
+  const byStatus = {}
+  data.forEach(r => {
+    const key = r.status || 'ไม่ระบุสถานะ'
+    byStatus[key] = (byStatus[key] || 0) + 1
+  })
+  return byStatus
+}
+
 export const updateLead = (id, d) => supabase.from('leads').update(d).eq('id', id).select().single().then(handle)
 export const deleteLead = (id) => supabase.from('leads').delete().eq('id', id).then(handle)
 
