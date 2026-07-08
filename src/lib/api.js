@@ -503,11 +503,11 @@ export const updateLead = (id, d) => supabase.from('leads').update(d).eq('id', i
 export const deleteLead = (id) => supabase.from('leads').delete().eq('id', id).then(handle)
 
 // ฟอร์มลีดสาธารณะไม่ต้อง login — ส่งผ่าน Netlify Function ที่ใช้ Service Role Key เขียนแทน ไม่เรียก supabase client ตรงๆ
-export async function submitPublicLead({ subject, full_name, phone, email, interested_product, message, source }) {
+export async function submitPublicLead({ subject, full_name, phone, email, interested_product, message, source, position, business_type, appliance_interest, purchase_reason }) {
   const res = await fetch('/.netlify/functions/submit-lead', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ subject, full_name, phone, email, interested_product, message, source })
+    body: JSON.stringify({ subject, full_name, phone, email, interested_product, message, source, position, business_type, appliance_interest, purchase_reason })
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.error || 'ส่งข้อมูลไม่สำเร็จ')

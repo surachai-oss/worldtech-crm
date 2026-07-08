@@ -224,7 +224,10 @@ const LEAD_EXPORT_COLUMNS = [
   { key: 'full_name', label: 'ชื่อ-นามสกุล' },
   { key: 'phone', label: 'โทรศัพท์' },
   { key: 'email', label: 'อีเมล' },
-  { key: 'interested_product', label: 'สนใจสินค้า' },
+  { key: 'position', label: 'ตำแหน่ง' },
+  { key: 'business_type', label: 'ประเภทธุรกิจ' },
+  { key: 'appliance_interest', label: 'สนใจเครื่องใช้ไฟฟ้า' },
+  { key: 'purchase_reason', label: 'เหตุผลในการซื้อ' },
   { key: 'message', label: 'ข้อความเพิ่มเติม' },
   { key: 'source', label: 'ที่มา' },
   { key: 'status', label: 'สถานะ' },
@@ -232,4 +235,8 @@ const LEAD_EXPORT_COLUMNS = [
 ]
 
 export const exportLeadsToExcel = (rows) =>
-  exportRowsToExcel(LEAD_EXPORT_COLUMNS, rows.map(r => ({ ...r, created_at: (r.created_at || '').slice(0, 10) })), 'ผู้ติดต่อ.xlsx')
+  exportRowsToExcel(LEAD_EXPORT_COLUMNS, rows.map(r => ({
+    ...r,
+    created_at: (r.created_at || '').slice(0, 10),
+    appliance_interest: r.appliance_interest?.length ? r.appliance_interest.join(', ') : (r.interested_product || '')
+  })), 'ผู้ติดต่อ.xlsx')

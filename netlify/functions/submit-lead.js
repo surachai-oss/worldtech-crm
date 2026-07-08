@@ -2,7 +2,18 @@ import { createClient } from '@supabase/supabase-js'
 
 // รับข้อมูลจากฟอร์มลีดสาธารณะ (ไม่ต้อง login) — ใช้ Service Role Key เขียนเข้า Supabase แทน
 // เพื่อไม่ต้องเปิด RLS ให้ anon insert เข้าตาราง leads ตรงๆ (กันสแปม/ข้อมูลมั่วเขียนเข้าระบบได้ง่ายเกินไป)
-const MAX_LEN = { full_name: 100, phone: 30, email: 150, subject: 150, interested_product: 200, message: 1000, source: 50 }
+const MAX_LEN = {
+  full_name: 100, phone: 30, email: 150, subject: 150, interested_product: 200, message: 1000, source: 50,
+  position: 50, business_type: 200, purchase_reason: 50, appliance_item: 50
+}
+const MAX_APPLIANCE_ITEMS = 20 // กันฟอร์มถูกยิงตรงส่ง array ยาวผิดปกติ
+
+// รับได้เฉพาะ array ของ string เท่านั้น ตัดความยาว/จำนวนตามเพดานกันสแปม
+function sanitizeApplianceInterest(value) {
+  if (!Array.isArray(value)) return null
+  const items = value.map(v => String(v || '').trim().slice(0, MAX_LEN.appliance_item)).filter(Boolean).slice(0, MAX_APPLIANCE_ITEMS)
+  return items.length ? items : null
+}
 
 export default async (req) => {
   if (req.method !== 'POST') {
@@ -29,6 +40,10 @@ export default async (req) => {
     interested_product: (body?.interested_product || '').trim().slice(0, MAX_LEN.interested_product) || null,
     message: (body?.message || '').trim().slice(0, MAX_LEN.message) || null,
     source: (body?.source || '').trim().slice(0, MAX_LEN.source) || null,
+    position: (body?.position || '').trim().slice(0, MAX_LEN.position) || null,
+    business_type: (body?.business_type || '').trim().slice(0, MAX_LEN.business_type) || null,
+    appliance_interest: sanitizeApplianceInterest(body?.appliance_interest),
+    purchase_reason: (body?.purchase_reason || '').trim().slice(0, MAX_LEN.purchase_reason) || null,
   }
 
   const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })

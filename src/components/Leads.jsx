@@ -86,14 +86,16 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>หัวข้อ</th><th>ชื่อ</th><th>ติดต่อ</th><th>สนใจสินค้า</th><th>ที่มา</th><th>สถานะ</th><th>วันที่</th><th>การจัดการ</th></tr></thead>
+              <thead><tr><th>หัวข้อ</th><th>ชื่อ</th><th>ติดต่อ</th><th>ตำแหน่ง/ธุรกิจ</th><th>สนใจ</th><th>เหตุผล</th><th>ที่มา</th><th>สถานะ</th><th>วันที่</th><th>การจัดการ</th></tr></thead>
               <tbody>
                 {rows.map(l => (
                   <tr key={l.id}>
                     <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{l.subject}</td>
                     <td style={{ fontSize: 12 }}>{l.full_name}</td>
                     <td style={{ fontSize: 12 }}>{l.phone}{l.email ? <div style={{ color: 'var(--text-light)' }}>{l.email}</div> : null}</td>
-                    <td style={{ fontSize: 12 }}>{l.interested_product || '-'}</td>
+                    <td style={{ fontSize: 12 }}>{l.position || '-'}{l.business_type ? <div style={{ color: 'var(--text-light)' }}>{l.business_type}</div> : null}</td>
+                    <td style={{ fontSize: 12 }}>{(l.appliance_interest?.length ? l.appliance_interest.join(', ') : l.interested_product) || '-'}</td>
+                    <td style={{ fontSize: 12 }}>{l.purchase_reason || '-'}</td>
                     <td style={{ fontSize: 12 }}>{l.source || '-'}</td>
                     <td><EditableSelect listKey="lead_statuses" value={l.status} onChange={v => onStatusChange(l.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 150 }} /></td>
                     <td style={{ fontSize: 12 }}>{fmtDate(l.created_at)}</td>

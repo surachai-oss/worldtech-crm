@@ -186,6 +186,12 @@ create table if not exists leads (
 -- subject = หัวข้อสั้นๆ ว่าลูกค้ากรอกเข้ามาเรื่องอะไร (บังคับกรอกในฟอร์มสาธารณะ) เหมือนกับ subject ของดีล/ใบเสนอราคา
 alter table leads add column if not exists subject text;
 
+-- ฟิลด์คัดกรองลูกค้าเพิ่มเติมจากฟอร์มสาธารณะ (แทนที่ interested_product เดิมที่เป็นข้อความอิสระ — ยังเก็บคอลัมน์เดิมไว้เผื่อข้อมูลเก่า)
+alter table leads add column if not exists position text;              -- ตำแหน่งผู้กรอก เช่น เจ้าของกิจการ/ฝ่ายจัดซื้อ
+alter table leads add column if not exists business_type text;         -- ประเภทธุรกิจ เลือก "อื่นๆ โปรดระบุ" แล้วจะเก็บข้อความที่ลูกค้าพิมพ์เองแทน
+alter table leads add column if not exists appliance_interest text[];  -- ประเภทเครื่องใช้ไฟฟ้าที่สนใจ เลือกได้หลายข้อ
+alter table leads add column if not exists purchase_reason text;       -- เหตุผลในการซื้อ: สำหรับใช้เอง/สำหรับธุรกิจ
+
 -- ===== SETTINGS =====
 create table if not exists settings (
   key    text primary key,
