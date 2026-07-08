@@ -316,7 +316,9 @@ export async function listAttachments(companyId) {
 
 export async function uploadAttachment(companyId, file, uploadedBy) {
   if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('ไฟล์ใหญ่เกิน 20MB')
-  const safeName = file.name.replace(/[^\w.\-ก-๙ ]/g, '_')
+  // Supabase Storage ปฏิเสธ key ที่มีอักขระไทย/เว้นวรรค ("Invalid key") ต้องใช้แค่ ASCII สำหรับ path จริง
+  // ชื่อไฟล์เดิม (รวมภาษาไทย) เก็บแยกไว้ที่คอลัมน์ file_name เพื่อโชว์ในหน้าเว็บ ไม่กระทบ
+  const safeName = file.name.replace(/[^\w.-]/g, '_')
   const path = `${companyId}/${Date.now()}_${safeName}`
   const { error: upErr } = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file)
   if (upErr) throw upErr
