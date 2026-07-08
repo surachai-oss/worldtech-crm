@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PAGE_SIZE, fetchQuotationsPage, fetchQuotationsTotal, fetchQuotationsSummary } from '../lib/api'
-import { fmtCurrency, fmtDate, quotBadgeClass, isOverdue, isDueToday } from '../lib/format'
+import { fmtCurrency, fmtDate, quotBadgeClass } from '../lib/format'
 import { printQuotation } from '../lib/printQuotation'
 import { canManageChild } from '../lib/permissions'
 import { useUi } from './UiContext'
@@ -9,10 +9,11 @@ import EditableSelect from './EditableSelect'
 import SignedQuotationControl from './SignedQuotationControl'
 import Pagination from './Pagination'
 
-export default function Quotations({ perm, reloadKey, settings, deals, onAdd, onEdit, onStatusChange, onPaymentStatusChange, onDelete, onCreateDeal }) {
+export default function Quotations({ perm, reloadKey, settings, deals, onAdd, onEdit, onStatusChange, onDelete, onCreateDeal }) {
   const { toast } = useUi()
   const { list } = usePicklists()
   const [status, setStatus] = useState('')
+  const [creditType, setCreditType] = useState('') // '' ทั้งหมด | 'normal' ธรรมดา | 'credit' เครดิต
   const [q, setQ] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
@@ -24,23 +25,23 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
   const [summary, setSummary] = useState({})
   const [localBump, setLocalBump] = useState(0)
 
-  useEffect(() => { setPage(0) }, [status, q, fromDate, toDate])
+  useEffect(() => { setPage(0) }, [status, creditType, q, fromDate, toDate])
 
   useEffect(() => {
     let alive = true
     setLoading(true)
     const t = setTimeout(() => {
-      fetchQuotationsPage({ page, status, q, dateFrom: fromDate, dateTo: toDate }).then(r => {
+      fetchQuotationsPage({ page, status, q, dateFrom: fromDate, dateTo: toDate, creditType }).then(r => {
         if (!alive) return
         setRows(r.rows); setCount(r.count)
       }).catch(e => { if (alive) toast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error') })
         .finally(() => { if (alive) setLoading(false) })
-      fetchQuotationsTotal({ status, q, dateFrom: fromDate, dateTo: toDate }).then(sum => { if (alive) setTotal(sum) }).catch(() => {})
+      fetchQuotationsTotal({ status, q, dateFrom: fromDate, dateTo: toDate, creditType }).then(sum => { if (alive) setTotal(sum) }).catch(() => {})
       // สรุปยอดแยกตามสถานะ ไม่กรองด้วย status เอง เพราะต้องการเห็นทุกสถานะพร้อมกันเสมอ
       fetchQuotationsSummary({ q, dateFrom: fromDate, dateTo: toDate }).then(s => { if (alive) setSummary(s) }).catch(() => {})
     }, 250)
     return () => { alive = false; clearTimeout(t) }
-  }, [page, status, q, fromDate, toDate, reloadKey, localBump])
+  }, [page, status, creditType, q, fromDate, toDate, reloadKey, localBump])
 
   const doPrint = (quot) => printQuotation(quot, quot.company, settings)
 
@@ -69,6 +70,11 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
           <option value="">ทุกสถานะ</option>
           {list('quot_statuses').map(s => <option key={s}>{s}</option>)}
         </select>
+        <select className="filter-select" value={creditType} onChange={e => setCreditType(e.target.value)}>
+          <option value="">ทุกประเภทลูกค้า</option>
+          <option value="normal">ลูกค้าธรรมดา</option>
+          <option value="credit">ลูกค้าเครดิต</option>
+        </select>
         <input className="filter-input" placeholder="ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
           <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่ใบเสนอราคา ตั้งแต่" />
@@ -81,25 +87,21 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>เลขที่</th><th>หัวข้อ</th><th>บริษัท</th><th>มูลค่า</th><th>สถานะ</th><th>วันที่</th><th>ครบกำหนดชำระ</th><th>การชำระ</th><th>การจัดการ</th></tr></thead>
+              <thead><tr><th>เลขที่</th><th>หัวข้อ</th><th>บริษัท</th><th>มูลค่า</th><th>สถานะ</th><th>วันที่</th><th>ประเภท</th><th>การจัดการ</th></tr></thead>
               <tbody>
                 {rows.map(qt => {
                   const fromDeal = qt.deal_id ? deals.find(d => d.id === qt.deal_id) : null
-                  const ov = qt.payment_status !== 'ชำระแล้ว' && isOverdue(qt.payment_due_date)
                   return (
-                    <tr key={qt.id} style={{ background: ov ? '#fff5f5' : undefined }}>
+                    <tr key={qt.id}>
                       <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{qt.quot_no}</td>
                       <td style={{ fontWeight: 500 }}>{qt.subject}{fromDeal && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>จากดีล: {fromDeal.name}</div>}</td>
-                      <td>{qt.company ? qt.company.name : '-'}{qt.credit_term && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{qt.credit_term}</div>}</td>
+                      <td>{qt.company ? qt.company.name : '-'}</td>
                       <td style={{ fontWeight: 600 }}>{fmtCurrency(qt.value)}</td>
                       <td><span className={`badge ${quotBadgeClass(qt.status)}`}>{qt.status}</span></td>
                       <td style={{ fontSize: 12 }}>{fmtDate(qt.quot_date)}</td>
-                      <td className={ov ? 'overdue' : isDueToday(qt.payment_due_date) ? 'due-today' : ''} style={{ fontSize: 12 }}>{fmtDate(qt.payment_due_date) || '-'}</td>
-                      <td onClick={e => e.stopPropagation()}>
-                        {canManageChild(qt.company, perm) ? (
-                          <EditableSelect listKey="payment_statuses" value={qt.payment_status} onChange={v => onPaymentStatusChange(qt.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 130 }} />
-                        ) : (qt.payment_status || '-')}
-                      </td>
+                      <td>{qt.credit_term
+                        ? <span className="badge badge-orange">{qt.credit_term}</span>
+                        : <span className="badge badge-gray">ธรรมดา</span>}</td>
                       <td className="td-actions" onClick={e => e.stopPropagation()}>
                         {canManageChild(qt.company, perm) && (
                           <EditableSelect listKey="quot_statuses" value={qt.status} onChange={v => onStatusChange(qt.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />

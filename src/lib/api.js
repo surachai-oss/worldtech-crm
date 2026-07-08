@@ -87,9 +87,12 @@ export async function fetchTasksPage({ page = 0, status = '', priority = '', q =
   return { rows: data, count, pageSize: PAGE_SIZE }
 }
 
-export async function fetchQuotationsTotal({ status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
+// creditType: '' = ทั้งหมด, 'credit' = เฉพาะที่มี credit_term (ลูกค้าเครดิต), 'normal' = ที่ credit_term ว่าง (ลูกค้าธรรมดา/เงินสด)
+export async function fetchQuotationsTotal({ status = '', q = '', dateFrom = '', dateTo = '', creditType = '' } = {}) {
   let query = supabase.from('quotations').select('value')
   if (status) query = query.eq('status', status)
+  if (creditType === 'credit') query = query.not('credit_term', 'is', null)
+  else if (creditType === 'normal') query = query.is('credit_term', null)
   const sq = safeLike(q)
   if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
   if (dateFrom) query = query.gte('quot_date', dateFrom)
@@ -99,9 +102,11 @@ export async function fetchQuotationsTotal({ status = '', q = '', dateFrom = '',
   return data.reduce((s, x) => s + (Number(x.value) || 0), 0)
 }
 
-export async function fetchQuotationsPage({ page = 0, status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
+export async function fetchQuotationsPage({ page = 0, status = '', q = '', dateFrom = '', dateTo = '', creditType = '' } = {}) {
   let query = supabase.from('quotations').select('*, company:companies(id,name,address,tax_id,phone,created_by,credit_term), product:products(id,code,name,image_path)', { count: 'exact' }).order('created_at', { ascending: false })
   if (status) query = query.eq('status', status)
+  if (creditType === 'credit') query = query.not('credit_term', 'is', null)
+  else if (creditType === 'normal') query = query.is('credit_term', null)
   const sq = safeLike(q)
   if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
   if (dateFrom) query = query.gte('quot_date', dateFrom)
