@@ -75,9 +75,9 @@ input,select,textarea{font-family:'Mitr',sans-serif}
 .kpi-value{font-size:19px;font-weight:600;color:var(--navy)}
 .kpi-sub{font-size:11px;color:var(--text-light);margin-top:2px}
 
-.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)}
+.table-wrap{overflow:visible;border-radius:var(--radius);border:1px solid var(--border)}
 table{width:100%;border-collapse:collapse}
-th{background:var(--navy);color:var(--white);padding:8px 12px;text-align:left;font-size:12px;font-weight:500;white-space:nowrap}
+th{position:sticky;top:0;z-index:3;background:var(--navy);color:var(--white);padding:8px 12px;text-align:left;font-size:12px;font-weight:500;white-space:nowrap}
 td{padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tbody tr{transition:.15s;cursor:pointer}

@@ -21,7 +21,7 @@ function DailySalesSummary({ deals }) {
   if (groups['ไม่ระบุวันที่ปิด']) dateKeys.push('ไม่ระบุวันที่ปิด')
 
   return (
-    <div className="card" style={{ marginBottom: 10 }}>
+    <div className="card">
       <div className="card-header"><div className="card-title">ยอดขายแต่ละวัน (ปิดดีลสำเร็จ)</div></div>
       <div className="table-wrap" style={{ border: 'none', maxHeight: 220, overflowY: 'auto' }}>
         <table>
@@ -127,14 +127,19 @@ export default function Deals({ perm, deals, companies, quotations, onAdd, onAdd
         <div className="section-title">ดีลการขาย <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({filtered.length} ดีล · {fmtCurrency(totalVal)})</span></div>
         <button className="btn btn-primary" onClick={onAdd}>+ เพิ่มดีล</button>
       </div>
-      <DailySalesSummary deals={deals} />
-      <FollowUpSummary deals={deals} companies={companies} onEdit={onEdit} />
-      <div className="filter-bar" style={{ justifyContent: 'flex-end' }}>
-        <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่สร้างดีล ตั้งแต่" />
-        <span style={{ fontSize: 12, color: 'var(--text-light)', alignSelf: 'center' }}>ถึง</span>
-        <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่สร้างดีล ถึง" />
-        {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
+      {/* ยอดขายรายวันชิดซ้ายครึ่งเดียว + ตัวกรองวันที่ชิดขวาบรรทัดเดียวกัน */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 10 }}>
+        <div style={{ flex: '0 1 520px', minWidth: 0 }}>
+          <DailySalesSummary deals={deals} />
+        </div>
+        <div className="filter-bar" style={{ margin: 0, flexShrink: 0 }}>
+          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่สร้างดีล ตั้งแต่" />
+          <span style={{ fontSize: 12, color: 'var(--text-light)', alignSelf: 'center' }}>ถึง</span>
+          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่สร้างดีล ถึง" />
+          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
+        </div>
       </div>
+      <FollowUpSummary deals={deals} companies={companies} onEdit={onEdit} />
       <div className="kanban-board">
         {list('deal_stages').map(stage => {
           const sd = filtered.filter(d => d.stage === stage)

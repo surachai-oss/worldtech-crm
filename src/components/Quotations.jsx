@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { PAGE_SIZE, fetchQuotationsPage, fetchQuotationsTotal, fetchQuotationsSummary, fetchPendingPayments } from '../lib/api'
+import { PAGE_SIZE, fetchQuotationsPage, fetchQuotationsTotal, fetchQuotationsSummary } from '../lib/api'
 import { fmtCurrency, fmtDate, quotBadgeClass, isOverdue, isDueToday } from '../lib/format'
 import { printQuotation } from '../lib/printQuotation'
 import { canManageChild } from '../lib/permissions'
@@ -8,34 +8,6 @@ import { usePicklists } from './PicklistsContext'
 import EditableSelect from './EditableSelect'
 import SignedQuotationControl from './SignedQuotationControl'
 import Pagination from './Pagination'
-
-// สรุปใบเสนอราคาที่ยังไม่ชำระและถึงกำหนดชำระแล้ว/ใกล้ถึงกำหนด เรียงวันครบกำหนดใกล้สุดก่อน — เตือนเซลล์กันลืมตามเก็บเงินหลังปิดดีลส่งของแล้ว
-function PaymentFollowUpSummary({ rows, onEdit }) {
-  if (!rows.length) return null
-  return (
-    <div className="card" style={{ marginBottom: 10 }}>
-      <div className="card-header"><div className="card-title">ต้องตามเก็บเงิน (ลูกค้าเครดิต)</div></div>
-      <div className="table-wrap" style={{ border: 'none' }}>
-        <table>
-          <tbody>
-            {rows.map(q => {
-              const ov = isOverdue(q.payment_due_date)
-              return (
-                <tr key={q.id}>
-                  <td className={ov ? 'overdue' : isDueToday(q.payment_due_date) ? 'due-today' : ''} style={{ fontWeight: 500, width: 130 }}>{fmtDate(q.payment_due_date)}</td>
-                  <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{q.quot_no}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{q.company ? q.company.name : '-'}{q.credit_term ? ` · ${q.credit_term}` : ''}</td>
-                  <td style={{ fontWeight: 600 }}>{fmtCurrency(q.value)}</td>
-                  <td className="td-actions"><button className="btn btn-outline btn-xs" onClick={() => onEdit(q)}>แก้ไข</button></td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
 
 export default function Quotations({ perm, reloadKey, settings, deals, onAdd, onEdit, onStatusChange, onPaymentStatusChange, onDelete, onCreateDeal }) {
   const { toast } = useUi()
@@ -50,7 +22,6 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
   const [summary, setSummary] = useState({})
-  const [pendingPayments, setPendingPayments] = useState([])
   const [localBump, setLocalBump] = useState(0)
 
   useEffect(() => { setPage(0) }, [status, q, fromDate, toDate])
@@ -71,13 +42,6 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
     return () => { alive = false; clearTimeout(t) }
   }, [page, status, q, fromDate, toDate, reloadKey, localBump])
 
-  // ไม่กรองตามตัวกรองบนหน้าจอ เพื่อให้เห็นทุกใบที่ต้องตามเก็บเงินเสมอไม่ว่าจะกำลังค้นหา/กรองอะไรอยู่
-  useEffect(() => {
-    let alive = true
-    fetchPendingPayments().then(r => { if (alive) setPendingPayments(r) }).catch(() => {})
-    return () => { alive = false }
-  }, [reloadKey, localBump])
-
   const doPrint = (quot) => printQuotation(quot, quot.company, settings)
 
   return (
@@ -86,8 +50,6 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
         <div className="section-title">ใบเสนอราคา <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ · {fmtCurrency(total)})</span></div>
         <button className="btn btn-primary" onClick={onAdd}>+ สร้างใบเสนอราคา</button>
       </div>
-
-      <PaymentFollowUpSummary rows={pendingPayments} onEdit={onEdit} />
 
       <div className="kpi-grid" style={{ gridTemplateColumns: `repeat(${list('quot_statuses').length}, 1fr)`, marginBottom: 14 }}>
         {list('quot_statuses').map(s => {

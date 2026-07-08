@@ -67,32 +67,32 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
         <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting}>{exporting ? 'กำลังส่งออก...' : 'ส่งออกเป็น Excel'}</button>
       </div>
 
-      {statusKeys.length > 0 && (
-        <>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>สรุปตามสถานะ</div>
-          <div className="kpi-grid" style={{ gridTemplateColumns: `repeat(${Math.min(statusKeys.length, 6)}, 1fr)`, marginBottom: 14 }}>
-            {statusKeys.map((st, i) => (
-              <div className={`kpi-card ${kpiColor(i)}`} key={st}>
-                <div className="kpi-label">{st}</div>
-                <div className="kpi-value">{statusSummary[st]}</div>
-              </div>
-            ))}
+      {(statusKeys.length > 0 || sourceKeys.length > 0) && (
+        // สองสรุปวางข้างกันคนละครึ่ง กันหน้ายาวเกินไป — การ์ดในแต่ละฝั่งไหลต่อกันเองตามความกว้างที่เหลือ
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>สรุปตามสถานะ</div>
+            <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', margin: 0 }}>
+              {statusKeys.map((st, i) => (
+                <div className={`kpi-card ${kpiColor(i)}`} key={st}>
+                  <div className="kpi-label">{st}</div>
+                  <div className="kpi-value">{statusSummary[st]}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        </>
-      )}
-
-      {sourceKeys.length > 0 && (
-        <>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>สรุปตามช่องทางที่มา</div>
-          <div className="kpi-grid" style={{ gridTemplateColumns: `repeat(${Math.min(sourceKeys.length, 6)}, 1fr)`, marginBottom: 14 }}>
-            {sourceKeys.map((src, i) => (
-              <div className={`kpi-card ${kpiColor(i)}`} key={src}>
-                <div className="kpi-label">{src}</div>
-                <div className="kpi-value">{sourceSummary[src]}</div>
-              </div>
-            ))}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>สรุปตามช่องทางที่มา</div>
+            <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', margin: 0 }}>
+              {sourceKeys.map((src, i) => (
+                <div className={`kpi-card ${kpiColor(i)}`} key={src}>
+                  <div className="kpi-label">{src}</div>
+                  <div className="kpi-value">{sourceSummary[src]}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        </>
+        </div>
       )}
 
       <div className="filter-bar">
