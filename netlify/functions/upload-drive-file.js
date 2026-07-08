@@ -1,8 +1,9 @@
 import { JWT } from 'google-auth-library'
 import { createClient } from '@supabase/supabase-js'
 
-// อัปโหลด/เขียนทับไฟล์ใน Google Drive (โฟลเดอร์ปี > เดือน ใต้โฟลเดอร์หลักที่ตั้งไว้) — ต้อง login ก่อนถึงจะเรียกได้
-// ใช้ Google Service Account key ที่แชร์สิทธิ์ Editor ไว้กับโฟลเดอร์เป้าหมายแล้วเท่านั้น (ดูขั้นตอนตั้งค่าใน README)
+// อัปโหลด/เขียนทับไฟล์ใน Google Drive (สร้าง/หาโฟลเดอร์ตาม folderPath ที่ส่งมาไล่ทีละชั้นใต้โฟลเดอร์หลัก) — ต้อง login ก่อนถึงจะเรียกได้
+// โฟลเดอร์หลักเลือกจาก purpose: 'company-doc' ใช้ GOOGLE_DRIVE_COMPANY_DOCS_FOLDER_ID, อย่างอื่น (ใบเสนอราคา) ใช้ GOOGLE_DRIVE_ROOT_FOLDER_ID
+// ต้องเป็น Google Shared Drive เท่านั้น (Service Account ไม่มีโควต้าพื้นที่ของตัวเอง) แชร์สิทธิ์ Content Manager ให้ Service Account ไว้ (ดูขั้นตอนตั้งค่าใน README)
 const DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files'
 const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files'
 
@@ -95,9 +96,7 @@ export default async (req) => {
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID
   if (!supabaseUrl || !serviceKey) return json({ error: 'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า SUPABASE_SERVICE_ROLE_KEY (ดู README)' }, 500)
-  if (!rootFolderId) return json({ error: 'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า GOOGLE_DRIVE_ROOT_FOLDER_ID (ดู README)' }, 500)
 
   const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
   if (!token) return json({ error: 'ไม่พบสิทธิ์เข้าใช้งาน' }, 401)
@@ -109,14 +108,22 @@ export default async (req) => {
   let body
   try { body = await req.json() } catch { return json({ error: 'รูปแบบข้อมูลไม่ถูกต้อง' }, 400) }
 
-  const { fileBase64, mimeType, fileName, year, month, monthNameTh, existingFileId } = body || {}
-  if (!fileBase64 || !fileName || !year || !month) return json({ error: 'ข้อมูลไม่ครบ (fileBase64/fileName/year/month)' }, 400)
+  const { fileBase64, mimeType, fileName, folderPath, existingFileId, purpose } = body || {}
+  if (!fileBase64 || !fileName || !Array.isArray(folderPath) || !folderPath.length) {
+    return json({ error: 'ข้อมูลไม่ครบ (fileBase64/fileName/folderPath)' }, 400)
+  }
+
+  // แยกโฟลเดอร์หลักตามประเภทงาน — ใบเสนอราคากับเอกสารแนบบริษัทเก็บคนละโฟลเดอร์บน Drive
+  const rootEnvName = purpose === 'company-doc' ? 'GOOGLE_DRIVE_COMPANY_DOCS_FOLDER_ID' : 'GOOGLE_DRIVE_ROOT_FOLDER_ID'
+  const rootFolderId = process.env[rootEnvName]
+  if (!rootFolderId) return json({ error: `เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า ${rootEnvName} (ดู README)` }, 500)
 
   try {
     const accessToken = await getAccessToken()
-    const yearFolderId = await findOrCreateFolder(String(year), rootFolderId, accessToken)
-    const monthFolderName = `${String(month).padStart(2, '0')} - ${monthNameTh || month}`
-    const monthFolderId = await findOrCreateFolder(monthFolderName, yearFolderId, accessToken)
+    let parentId = rootFolderId
+    for (const segment of folderPath) {
+      parentId = await findOrCreateFolder(String(segment), parentId, accessToken)
+    }
 
     const buffer = Buffer.from(fileBase64, 'base64')
     const safeName = String(fileName).replace(/[\\/:*?"<>|]/g, '_')
@@ -126,9 +133,9 @@ export default async (req) => {
     if (fileId) {
       await updateFileContent(fileId, buffer, type, accessToken)
     } else {
-      fileId = await findFile(safeName, monthFolderId, accessToken)
+      fileId = await findFile(safeName, parentId, accessToken)
       if (fileId) await updateFileContent(fileId, buffer, type, accessToken)
-      else fileId = await createFile(safeName, monthFolderId, buffer, type, accessToken)
+      else fileId = await createFile(safeName, parentId, buffer, type, accessToken)
     }
 
     return json({ fileId })

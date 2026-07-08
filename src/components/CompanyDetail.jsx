@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fmtCurrency, fmtDate, fmtFileSize, isOverdue, isDueToday, stageBadgeClass, statusBadgeClass, quotBadgeClass, activityColor } from '../lib/format'
-import { listAttachments, uploadAttachment, deleteAttachment, getAttachmentUrl } from '../lib/api'
+import { listAttachments, uploadAttachment, deleteAttachment, getAttachmentUrl, uploadAttachmentToDrive } from '../lib/api'
 import { printQuotation } from '../lib/printQuotation'
 import { canEdit, canDelete, canManageChild } from '../lib/permissions'
 import { useUi } from './UiContext'
@@ -278,9 +278,10 @@ function AttachmentsTab({ company, perm, currentUserName }) {
     if (!file) return
     setUploading(true)
     try {
-      await uploadAttachment(company.id, file, currentUserName)
+      const attachment = await uploadAttachment(company.id, file, currentUserName)
       toast('แนบไฟล์สำเร็จ', 'success')
       await load()
+      uploadAttachmentToDrive(company, attachment, file).catch(err => toast('มิเรอร์ไฟล์ขึ้น Google Drive ไม่สำเร็จ: ' + err.message, 'error'))
     } catch (err) { toast('แนบไฟล์ไม่สำเร็จ: ' + err.message, 'error') }
     finally { setUploading(false) }
   }

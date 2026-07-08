@@ -531,20 +531,24 @@ async function callDriveUpload(payload) {
   return json
 }
 
-// จัดกลุ่มโฟลเดอร์ตามเดือนที่ออกใบเสนอราคาจริง (quot_date) ไม่ใช่เวลาที่กดอัปโหลด กันย้ายโฟลเดอร์ผิดถ้าแก้ไขใบเสนอราคาข้ามเดือน
-function driveDateParts(quot) {
+// จัดกลุ่มโฟลเดอร์ตามวันที่ออกใบเสนอราคาจริง (quot_date) ไม่ใช่เวลาที่กดอัปโหลด กันย้ายโฟลเดอร์ผิดถ้าแก้ไขใบเสนอราคาข้ามวัน/เดือน
+function driveDateFolderPath(quot) {
   const d = new Date(quot.quot_date || quot.created_at)
   const month = d.getMonth() + 1
-  return { year: d.getFullYear(), month, monthNameTh: THAI_MONTHS[month - 1] }
+  return [
+    String(d.getFullYear()),
+    `${String(month).padStart(2, '0')} - ${THAI_MONTHS[month - 1]}`,
+    String(d.getDate()).padStart(2, '0')
+  ]
 }
 
-// อัปโหลด/เขียนทับ PDF ใบเสนอราคาขึ้น Google Drive — เก็บ drive_file_id ไว้เขียนทับไฟล์เดิมครั้งต่อไป ไม่สร้างไฟล์ซ้ำทุกครั้งที่บันทึก/แก้ไข
+// อัปโหลด/เขียนทับ PDF ใบเสนอราคาขึ้น Google Drive (โฟลเดอร์ Quatation > ปี > เดือน > วัน) — เก็บ drive_file_id ไว้เขียนทับไฟล์เดิมครั้งต่อไป ไม่สร้างไฟล์ซ้ำทุกครั้งที่บันทึก/แก้ไข
 export async function uploadQuotationPdfToDrive(quot, pdfBlob) {
-  const { year, month, monthNameTh } = driveDateParts(quot)
+  const folderPath = driveDateFolderPath(quot)
   const fileBase64 = await blobToBase64(pdfBlob)
   const { fileId } = await callDriveUpload({
     fileBase64, mimeType: 'application/pdf', fileName: `${quot.quot_no}.pdf`,
-    year, month, monthNameTh, existingFileId: quot.drive_file_id || null
+    folderPath, existingFileId: quot.drive_file_id || null
   })
   await updateQuotation(quot.id, { drive_file_id: fileId })
   return fileId
@@ -552,13 +556,24 @@ export async function uploadQuotationPdfToDrive(quot, pdfBlob) {
 
 // อัปโหลด/เขียนทับไฟล์ที่ลูกค้าเซ็นกลับขึ้น Google Drive (ต่อท้ายชื่อไฟล์ด้วย _Sign) — เก็บไฟล์เดิมไว้ที่ชื่อเดียวกันเสมอ
 export async function uploadSignedFileToDrive(quot, file) {
-  const { year, month, monthNameTh } = driveDateParts(quot)
+  const folderPath = driveDateFolderPath(quot)
   const ext = (file.name.match(/\.[^.]+$/) || [''])[0]
   const fileBase64 = await blobToBase64(file)
   const { fileId } = await callDriveUpload({
     fileBase64, mimeType: file.type || 'application/octet-stream', fileName: `${quot.quot_no}_Sign${ext}`,
-    year, month, monthNameTh, existingFileId: quot.drive_signed_file_id || null
+    folderPath, existingFileId: quot.drive_signed_file_id || null
   })
   await updateQuotation(quot.id, { drive_signed_file_id: fileId })
+  return fileId
+}
+
+// มิเรอร์เอกสารแนบบริษัท (ภพ20/หนังสือรับรอง ฯลฯ) ขึ้น Google Drive แยกโฟลเดอร์ตามชื่อบริษัท — คนละโฟลเดอร์หลักกับใบเสนอราคา
+export async function uploadAttachmentToDrive(company, attachment, file) {
+  const fileBase64 = await blobToBase64(file)
+  const { fileId } = await callDriveUpload({
+    fileBase64, mimeType: file.type || 'application/octet-stream', fileName: attachment.file_name,
+    folderPath: [company.name], purpose: 'company-doc', existingFileId: attachment.drive_file_id || null
+  })
+  await supabase.from('attachments').update({ drive_file_id: fileId }).eq('id', attachment.id)
   return fileId
 }

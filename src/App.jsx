@@ -174,7 +174,10 @@ function AppInner({ session }) {
         ? await api.updateCompany(f.id, f)
         : await api.addCompany({ ...f, created_by: session.user.id })
       if (files.length) {
-        await Promise.all(files.map(file => api.uploadAttachment(company.id, file, currentUser.name)))
+        const attachments = await Promise.all(files.map(file => api.uploadAttachment(company.id, file, currentUser.name)))
+        attachments.forEach((attachment, i) => {
+          api.uploadAttachmentToDrive(company, attachment, files[i]).catch(err => toast('มิเรอร์ไฟล์ขึ้น Google Drive ไม่สำเร็จ: ' + err.message, 'error'))
+        })
       }
       if (!f.id && linkLeadId) {
         await api.updateLead(linkLeadId, { converted_company_id: company.id, status: 'ปิดเป็นลูกค้าแล้ว' })

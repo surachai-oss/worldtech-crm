@@ -282,6 +282,9 @@ create table if not exists attachments (
   created_at   timestamptz default now()
 );
 
+-- drive_file_id = Google Drive file id ของเอกสารแนบนี้ (มิเรอร์คู่กับ Supabase Storage) เก็บไว้เพื่ออัปโหลดซ้ำแล้วเขียนทับไฟล์เดิมได้
+alter table attachments add column if not exists drive_file_id text;
+
 -- ===== PROFILES (ข้อมูลผู้ใช้งาน + สิทธิ์ Admin/Sale) =====
 create table if not exists profiles (
   id          uuid primary key references auth.users(id) on delete cascade,
