@@ -6,33 +6,66 @@ import EditableSelect from './EditableSelect'
 
 const OPEN_STAGES_EXCLUDED = ['Closed Won', 'Closed Lost']
 
-// สรุปยอดขายที่ปิดสำเร็จ (Closed Won) แยกเป็นรายวันตามวันที่ปิดดีล (close_date) เรียงล่าสุดก่อน
-// ใช้ deals ทั้งหมดไม่กรองตามช่วงวันที่ที่เลือกบนหน้าจอ เพื่อให้เห็นภาพรวมยอดขายเสมอ
-function DailySalesSummary({ deals }) {
-  const won = deals.filter(d => d.stage === 'Closed Won')
-  if (!won.length) return null
+const SALES_MODES = [
+  { key: 'day', label: 'รายวัน' },
+  { key: 'week', label: 'รายสัปดาห์' },
+  { key: 'month', label: 'รายเดือน' },
+]
 
+// จัดกลุ่มดีลที่ปิดสำเร็จ (Closed Won) ตามวันที่ปิด (close_date) แบบราย วัน/สัปดาห์/เดือน
+// week = อิงวันจันทร์ต้นสัปดาห์, ไม่กรองตามช่วงวันที่บนหน้าจอ เพื่อให้เห็นภาพรวมยอดขายเสมอ
+function groupWonSales(won, mode) {
   const groups = {}
   won.forEach(d => {
-    const key = d.close_date || 'ไม่ระบุวันที่ปิด'
-    ;(groups[key] ||= []).push(d)
+    const raw = d.close_date
+    let key, label
+    if (!raw) { key = 'zzz-ไม่ระบุ'; label = 'ไม่ระบุวันที่ปิด' }
+    else {
+      const [y, m, dd] = raw.split('-').map(Number)
+      if (mode === 'month') {
+        key = `${y}-${String(m).padStart(2, '0')}`
+        label = new Date(y, m - 1, 1).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
+      } else if (mode === 'week') {
+        const dt = new Date(y, m - 1, dd)
+        const off = (dt.getDay() + 6) % 7 // 0 = จันทร์
+        const mon = new Date(y, m - 1, dd - off)
+        key = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}-${String(mon.getDate()).padStart(2, '0')}`
+        label = 'สัปดาห์ ' + fmtDate(key)
+      } else {
+        key = raw
+        label = fmtDate(raw)
+      }
+    }
+    ;(groups[key] ||= { label, rows: [] }).rows.push(d)
   })
-  const dateKeys = Object.keys(groups).filter(k => k !== 'ไม่ระบุวันที่ปิด').sort().reverse()
-  if (groups['ไม่ระบุวันที่ปิด']) dateKeys.push('ไม่ระบุวันที่ปิด')
+  return Object.keys(groups).sort().reverse().map(k => ({ key: k, ...groups[k] }))
+}
+
+function SalesSummary({ deals }) {
+  const [mode, setMode] = useState('day')
+  const won = deals.filter(d => d.stage === 'Closed Won')
+  if (!won.length) return null
+  const rows = groupWonSales(won, mode)
 
   return (
     <div className="card">
-      <div className="card-header"><div className="card-title">ยอดขายแต่ละวัน (ปิดดีลสำเร็จ)</div></div>
+      <div className="card-header" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <div className="card-title">ยอดขาย (ปิดดีลสำเร็จ)</div>
+        <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+          {SALES_MODES.map(m => (
+            <button key={m.key} type="button" className={`btn btn-xs ${mode === m.key ? 'btn-primary' : 'btn-outline'}`} onClick={() => setMode(m.key)}>{m.label}</button>
+          ))}
+        </div>
+      </div>
       <div className="table-wrap" style={{ border: 'none', maxHeight: 220, overflowY: 'auto' }}>
         <table>
           <tbody>
-            {dateKeys.map(key => {
-              const rows = groups[key]
-              const total = rows.reduce((s, d) => s + (Number(d.value) || 0), 0)
+            {rows.map(g => {
+              const total = g.rows.reduce((s, d) => s + (Number(d.value) || 0), 0)
               return (
-                <tr key={key}>
-                  <td style={{ fontWeight: 500, width: 140 }}>{key === 'ไม่ระบุวันที่ปิด' ? key : fmtDate(key)}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{rows.length} ดีล</td>
+                <tr key={g.key}>
+                  <td style={{ fontWeight: 500, width: 160 }}>{g.label}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{g.rows.length} ดีล</td>
                   <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(total)}</td>
                 </tr>
               )
@@ -130,7 +163,7 @@ export default function Deals({ perm, deals, companies, quotations, onAdd, onAdd
       {/* ยอดขายรายวันชิดซ้ายครึ่งเดียว + ตัวกรองวันที่ชิดขวาบรรทัดเดียวกัน */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 10 }}>
         <div style={{ flex: '0 1 520px', minWidth: 0 }}>
-          <DailySalesSummary deals={deals} />
+          <SalesSummary deals={deals} />
         </div>
         <div className="filter-bar" style={{ margin: 0, flexShrink: 0 }}>
           <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่สร้างดีล ตั้งแต่" />

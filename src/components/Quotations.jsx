@@ -45,7 +45,7 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
   const doPrint = (quot) => printQuotation(quot, quot.company, settings)
 
   return (
-    <div>
+    <div className="list-view">
       <div className="section-header">
         <div className="section-title">ใบเสนอราคา <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ · {fmtCurrency(total)})</span></div>
         <button className="btn btn-primary" onClick={onAdd}>+ สร้างใบเสนอราคา</button>
@@ -77,7 +77,7 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
           {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
         </div>
       </div>
-      <div className="card">
+      <div className="card list-card">
         <div className="table-wrap">
           {rows.length ? (
             <table>

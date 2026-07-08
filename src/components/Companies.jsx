@@ -41,7 +41,7 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
   }, [page, q, status, industry, customerType, reloadKey, localBump])
 
   return (
-    <div>
+    <div className="list-view">
       <div className="section-header">
         <div className="section-title">บริษัทลูกค้า <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -65,7 +65,7 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
           {list('customer_types').map(t => <option key={t}>{t}</option>)}
         </select>
       </div>
-      <div className="card">
+      <div className="card list-card">
         <div className="table-wrap">
           {rows.length ? (
             <table>

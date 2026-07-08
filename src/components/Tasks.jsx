@@ -40,7 +40,7 @@ export default function Tasks({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
   }, [reloadKey])
 
   return (
-    <div>
+    <div className="list-view">
       <div className="section-header">
         <div className="section-title">งาน Follow-up <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
         <button className="btn btn-primary" onClick={onAdd}>+ เพิ่มงาน</button>
@@ -61,7 +61,7 @@ export default function Tasks({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
         </select>
         <input className="filter-input" placeholder="ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
       </div>
-      <div className="card">
+      <div className="card list-card">
         <div className="table-wrap">
           {rows.length ? (
             <table>

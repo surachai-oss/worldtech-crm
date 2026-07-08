@@ -61,7 +61,7 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
   const kpiColor = (i) => KPI_COLORS[i % KPI_COLORS.length]
 
   return (
-    <div>
+    <div className="list-view">
       <div className="section-header">
         <div className="section-title">ผู้ติดต่อ <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
         <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting}>{exporting ? 'กำลังส่งออก...' : 'ส่งออกเป็น Excel'}</button>
@@ -109,7 +109,7 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
         </div>
       </div>
 
-      <div className="card">
+      <div className="card list-card">
         <div className="table-wrap">
           {rows.length ? (
             <table>

@@ -78,6 +78,12 @@ input,select,textarea{font-family:'Mitr',sans-serif}
 .table-wrap{overflow:visible;border-radius:var(--radius);border:1px solid var(--border)}
 table{width:100%;border-collapse:collapse}
 th{position:sticky;top:0;z-index:3;background:var(--navy);color:var(--white);padding:8px 12px;text-align:left;font-size:12px;font-weight:500;white-space:nowrap}
+
+/* หน้ารายการที่ต้อง "freeze" ส่วนบน: หัวข้อ/ตัวกรอง/สรุป อยู่กับที่ ตารางเลื่อนเองอยู่ด้านล่าง หัวตารางสีน้ำเงินค้างบนสุดของตาราง */
+.content-area:has(> .list-view){overflow:hidden;display:flex;flex-direction:column}
+.list-view{flex:1;min-height:0;display:flex;flex-direction:column}
+.list-view .list-card{flex:1;min-height:0;display:flex;flex-direction:column}
+.list-view .list-card .table-wrap{flex:1;min-height:0;overflow:auto}
 td{padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tbody tr{transition:.15s;cursor:pointer}

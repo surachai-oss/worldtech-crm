@@ -85,7 +85,7 @@ export default function Products() {
   }
 
   return (
-    <div>
+    <div className="list-view">
       <div className="section-header">
         <div className="section-title">สินค้า <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} รายการ)</span></div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -95,7 +95,7 @@ export default function Products() {
       </div>
       {modal && <ProductModal initial={modal.initial} onClose={() => setModal(null)} onSave={onSave} />}
       {showImport && <ImportProductsModal existingProducts={rows} onClose={() => setShowImport(false)} onImported={load} />}
-      <div className="card">
+      <div className="card list-card">
         <div className="table-wrap">
           {rows.length ? (
             <table>
