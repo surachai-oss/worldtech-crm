@@ -6,6 +6,44 @@ import EditableSelect from './EditableSelect'
 
 const OPEN_STAGES_EXCLUDED = ['Closed Won', 'Closed Lost']
 
+// สรุปยอดขายที่ปิดสำเร็จ (Closed Won) แยกเป็นรายวันตามวันที่ปิดดีล (close_date) เรียงล่าสุดก่อน
+// ใช้ deals ทั้งหมดไม่กรองตามช่วงวันที่ที่เลือกบนหน้าจอ เพื่อให้เห็นภาพรวมยอดขายเสมอ
+function DailySalesSummary({ deals }) {
+  const won = deals.filter(d => d.stage === 'Closed Won')
+  if (!won.length) return null
+
+  const groups = {}
+  won.forEach(d => {
+    const key = d.close_date || 'ไม่ระบุวันที่ปิด'
+    ;(groups[key] ||= []).push(d)
+  })
+  const dateKeys = Object.keys(groups).filter(k => k !== 'ไม่ระบุวันที่ปิด').sort().reverse()
+  if (groups['ไม่ระบุวันที่ปิด']) dateKeys.push('ไม่ระบุวันที่ปิด')
+
+  return (
+    <div className="card" style={{ marginBottom: 10 }}>
+      <div className="card-header"><div className="card-title">ยอดขายแต่ละวัน (ปิดดีลสำเร็จ)</div></div>
+      <div className="table-wrap" style={{ border: 'none', maxHeight: 220, overflowY: 'auto' }}>
+        <table>
+          <tbody>
+            {dateKeys.map(key => {
+              const rows = groups[key]
+              const total = rows.reduce((s, d) => s + (Number(d.value) || 0), 0)
+              return (
+                <tr key={key}>
+                  <td style={{ fontWeight: 500, width: 140 }}>{key === 'ไม่ระบุวันที่ปิด' ? key : fmtDate(key)}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{rows.length} ดีล</td>
+                  <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(total)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // สรุปดีลที่ยังไม่ปิด (เปิดอยู่) ที่มีวันที่ต้อง Follow up ไว้ แยกเป็นกลุ่มตามเดือน
 // ให้เซลล์เห็นภาพรวมว่าเดือนไหนมีดีลต้องตามบ้าง กันดีลตกหล่น — เดือนที่เลยกำหนดมาแล้วไฮไลต์สีแดง
 function FollowUpSummary({ deals, companies, onEdit }) {
@@ -87,15 +125,16 @@ export default function Deals({ perm, deals, companies, quotations, onAdd, onAdd
     <div>
       <div className="section-header">
         <div className="section-title">ดีลการขาย <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({filtered.length} ดีล · {fmtCurrency(totalVal)})</span></div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่สร้างดีล ตั้งแต่" />
-          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>ถึง</span>
-          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่สร้างดีล ถึง" />
-          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
-          <button className="btn btn-primary" onClick={onAdd}>+ เพิ่มดีล</button>
-        </div>
+        <button className="btn btn-primary" onClick={onAdd}>+ เพิ่มดีล</button>
       </div>
+      <DailySalesSummary deals={deals} />
       <FollowUpSummary deals={deals} companies={companies} onEdit={onEdit} />
+      <div className="filter-bar">
+        <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่สร้างดีล ตั้งแต่" />
+        <span style={{ fontSize: 12, color: 'var(--text-light)', alignSelf: 'center' }}>ถึง</span>
+        <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่สร้างดีล ถึง" />
+        {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
+      </div>
       <div className="kanban-board">
         {list('deal_stages').map(stage => {
           const sd = filtered.filter(d => d.stage === stage)
