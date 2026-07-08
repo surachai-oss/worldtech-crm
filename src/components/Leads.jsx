@@ -56,6 +56,9 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
   // เรียงตามลำดับ picklist ก่อน แล้วต่อท้ายด้วยสถานะเก่าที่ไม่อยู่ใน picklist ปัจจุบัน (ถ้ามี) กันข้อมูลตกหล่น
   const statusOrder = list('lead_statuses')
   const statusKeys = [...statusOrder.filter(s => statusSummary[s] != null), ...Object.keys(statusSummary).filter(s => !statusOrder.includes(s))]
+  // สีแถบข้างการ์ด ไล่วนตามลำดับเหมือนการ์ดสรุปในหน้า Dashboard (ว่าง = เหลือง)
+  const KPI_COLORS = ['', 'navy', 'green', 'red', 'blue']
+  const kpiColor = (i) => KPI_COLORS[i % KPI_COLORS.length]
 
   return (
     <div>
@@ -68,8 +71,8 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
         <>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>สรุปตามสถานะ</div>
           <div className="kpi-grid" style={{ gridTemplateColumns: `repeat(${Math.min(statusKeys.length, 6)}, 1fr)`, marginBottom: 14 }}>
-            {statusKeys.map(st => (
-              <div className="kpi-card" key={st}>
+            {statusKeys.map((st, i) => (
+              <div className={`kpi-card ${kpiColor(i)}`} key={st}>
                 <div className="kpi-label">{st}</div>
                 <div className="kpi-value">{statusSummary[st]}</div>
               </div>
@@ -82,8 +85,8 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
         <>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>สรุปตามช่องทางที่มา</div>
           <div className="kpi-grid" style={{ gridTemplateColumns: `repeat(${Math.min(sourceKeys.length, 6)}, 1fr)`, marginBottom: 14 }}>
-            {sourceKeys.map(src => (
-              <div className="kpi-card" key={src}>
+            {sourceKeys.map((src, i) => (
+              <div className={`kpi-card ${kpiColor(i)}`} key={src}>
                 <div className="kpi-label">{src}</div>
                 <div className="kpi-value">{sourceSummary[src]}</div>
               </div>
