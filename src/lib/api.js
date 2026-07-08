@@ -100,7 +100,7 @@ export async function fetchQuotationsTotal({ status = '', q = '', dateFrom = '',
 }
 
 export async function fetchQuotationsPage({ page = 0, status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
-  let query = supabase.from('quotations').select('*, company:companies(id,name,address,tax_id,phone,created_by), product:products(id,code,name,image_path)', { count: 'exact' }).order('created_at', { ascending: false })
+  let query = supabase.from('quotations').select('*, company:companies(id,name,address,tax_id,phone,created_by,credit_term), product:products(id,code,name,image_path)', { count: 'exact' }).order('created_at', { ascending: false })
   if (status) query = query.eq('status', status)
   const sq = safeLike(q)
   if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
@@ -258,7 +258,20 @@ async function genQuotNo() {
 }
 export const updateQuotation = (id, d) => supabase.from('quotations').update(d).eq('id', id).select().single().then(handle)
 export const updateQuotationStatus = (id, status) => updateQuotation(id, { status })
+export const updateQuotationPaymentStatus = (id, payment_status) => updateQuotation(id, { payment_status })
 export const deleteQuotation = (id) => supabase.from('quotations').delete().eq('id', id).then(handle)
+
+// ใบเสนอราคาที่ยังไม่ชำระและมีวันครบกำหนดชำระแล้ว — ใช้ทำสรุปเตือนตามเก็บเงินในหน้าใบเสนอราคา (ดู payment_due_date/payment_status)
+// select ทุกคอลัมน์ (ไม่ใช่แค่ที่โชว์ในสรุป) เพราะแถวนี้ถูกส่งตรงให้ onEdit เปิด QuotationModal ได้ — ถ้า select บางคอลัมน์ ฟิลด์ที่ขาดจะโดนรีเซ็ตเป็นค่า default ตอนบันทึกทับ
+export async function fetchPendingPayments() {
+  const { data, error } = await supabase.from('quotations')
+    .select('*, company:companies(id,name)')
+    .eq('payment_status', 'ยังไม่ชำระ')
+    .not('payment_due_date', 'is', null)
+    .order('payment_due_date', { ascending: true })
+  if (error) throw error
+  return data
+}
 
 // ===== QUOTATION ITEMS (รายการสินค้าในใบเสนอราคา — ใบเสนอราคาหนึ่งมีได้หลายรายการ เหมือนดีล) =====
 // ใช้ computeDealTotals ตัวเดียวกันกับดีล เพราะสูตรคิด VAT เหมือนกัน (unit_price รวม VAT แล้ว)

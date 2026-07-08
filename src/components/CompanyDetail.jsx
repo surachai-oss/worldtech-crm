@@ -32,6 +32,7 @@ export default function CompanyDetail({ company, contacts, deals, activities, ta
               <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--navy)', marginBottom: 6 }}>{company.name}</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span className={`badge ${statusBadgeClass(company.status)}`}>{company.status}</span>
+                {company.credit_term && <span className="badge badge-orange">ลูกค้าเครดิต: {company.credit_term}</span>}
                 <span style={{ fontSize: 12, color: 'var(--text-light)' }}>{company.industry}</span>
                 {company.phone && <span style={{ fontSize: 12 }}>{company.phone}</span>}
                 {company.email && <span style={{ fontSize: 12 }}>{company.email}</span>}
@@ -66,7 +67,7 @@ export default function CompanyDetail({ company, contacts, deals, activities, ta
       {tab === 'deals' && <DealsTab deals={deals} quotations={quotations} perm={perm} onAdd={() => actions.addDeal(company.id)} onEdit={actions.editDeal} onDelete={actions.deleteDeal} onCreateQuotation={actions.createQuotationFromDeal} />}
       {tab === 'activities' && <ActivitiesTab activities={activities} perm={perm} company={company} onAdd={() => actions.addActivity(company.id)} onDelete={actions.deleteActivity} />}
       {tab === 'tasks' && <TasksTab tasks={tasks} perm={perm} onAdd={() => actions.addTask(company.id)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />}
-      {tab === 'quotations' && <QuotationsTab quotations={quotations} deals={deals} company={company} perm={perm} settings={settings} onAdd={() => actions.addQuotation(company.id)} onEdit={actions.editQuotation} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} onRefresh={actions.refreshData} onCreateDeal={actions.createDealFromQuotation} />}
+      {tab === 'quotations' && <QuotationsTab quotations={quotations} deals={deals} company={company} perm={perm} settings={settings} onAdd={() => actions.addQuotation(company.id)} onEdit={actions.editQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onRefresh={actions.refreshData} onCreateDeal={actions.createDealFromQuotation} />}
       {tab === 'attachments' && <AttachmentsTab company={company} perm={perm} currentUserName={currentUserName} />}
     </div>
   )
@@ -83,7 +84,7 @@ function Stat({ n, label }) {
 
 function InfoTab({ company }) {
   const rows = [
-    ['ประเภทลูกค้า', company.customer_type], ['ที่อยู่', company.address], ['ผู้รับผิดชอบ', company.owner],
+    ['ประเภทลูกค้า', company.customer_type], ['เงื่อนไขเครดิต', company.credit_term], ['ที่อยู่', company.address], ['ผู้รับผิดชอบ', company.owner],
     ['วันที่สร้าง', fmtDate(company.created_at)], ['อัปเดตล่าสุด', fmtDate(company.updated_at)],
     ['หมายเหตุ', company.note]
   ].filter(r => r[1])
@@ -218,7 +219,7 @@ function TasksTab({ tasks, perm, onAdd, onEdit, onComplete, onDelete }) {
   )
 }
 
-function QuotationsTab({ quotations, deals, company, perm, settings, onAdd, onEdit, onStatusChange, onDelete, onRefresh, onCreateDeal }) {
+function QuotationsTab({ quotations, deals, company, perm, settings, onAdd, onEdit, onStatusChange, onPaymentStatusChange, onDelete, onRefresh, onCreateDeal }) {
   const manageable = canManageChild(company, perm)
   return (
     <>
@@ -226,16 +227,23 @@ function QuotationsTab({ quotations, deals, company, perm, settings, onAdd, onEd
       <div className="card"><div className="table-wrap">
         {quotations.length ? (
           <table>
-            <thead><tr><th>เลขที่</th><th>หัวข้อ</th><th>มูลค่า</th><th>สถานะ</th><th>วันที่</th><th>การจัดการ</th></tr></thead>
+            <thead><tr><th>เลขที่</th><th>หัวข้อ</th><th>มูลค่า</th><th>สถานะ</th><th>วันที่</th><th>ครบกำหนดชำระ</th><th>การชำระ</th><th>การจัดการ</th></tr></thead>
             <tbody>{quotations.map(q => {
               const fromDeal = q.deal_id ? deals.find(d => d.id === q.deal_id) : null
+              const ov = q.payment_status !== 'ชำระแล้ว' && isOverdue(q.payment_due_date)
               return (
-                <tr key={q.id}>
+                <tr key={q.id} style={{ background: ov ? '#fff5f5' : undefined }}>
                   <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{q.quot_no}</td>
                   <td>{q.subject}{fromDeal && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>จากดีล: {fromDeal.name}</div>}</td>
                   <td style={{ fontWeight: 600 }}>{fmtCurrency(q.value)}</td>
                   <td><span className={`badge ${quotBadgeClass(q.status)}`}>{q.status}</span></td>
                   <td style={{ fontSize: 12 }}>{fmtDate(q.quot_date)}</td>
+                  <td className={ov ? 'overdue' : isDueToday(q.payment_due_date) ? 'due-today' : ''} style={{ fontSize: 12 }}>{fmtDate(q.payment_due_date) || '-'}</td>
+                  <td>
+                    {manageable ? (
+                      <EditableSelect listKey="payment_statuses" value={q.payment_status} onChange={v => onPaymentStatusChange(q.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 130 }} />
+                    ) : (q.payment_status || '-')}
+                  </td>
                   <td className="td-actions">
                     {manageable && (
                       <EditableSelect listKey="quot_statuses" value={q.status} onChange={v => onStatusChange(q.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />

@@ -154,7 +154,7 @@ export default function Deals({ perm, deals, companies, quotations, onAdd, onAdd
                   return (
                     <div className="kanban-card" key={d.id}>
                       <div className="deal-name">{d.name}</div>
-                      <div className="deal-co">{co ? co.name : '-'}</div>
+                      <div className="deal-co">{co ? co.name : '-'}{co?.credit_term && <span className="badge badge-orange" style={{ marginLeft: 6, fontSize: 9, fontWeight: 400 }}>{co.credit_term}</span>}</div>
                       <div className="deal-val">{fmtCurrency(d.value)}</div>
                       {d.close_date && <div className="deal-date">{fmtDate(d.close_date)}</div>}
                       <div className="deal-owner">{d.owner || ''}</div>

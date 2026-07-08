@@ -77,6 +77,7 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
                       <div style={{ fontWeight: 600, color: 'var(--navy)' }}>
                         {c.name}
                         {c.customer_type === 'บุคคลธรรมดา' && <span className="badge badge-blue" style={{ marginLeft: 6, fontSize: 10, fontWeight: 400 }}>บุคคล</span>}
+                        {c.credit_term && <span className="badge badge-orange" style={{ marginLeft: 6, fontSize: 10, fontWeight: 400 }}>{c.credit_term}</span>}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{c.email}</div>
                     </td>

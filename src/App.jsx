@@ -126,6 +126,7 @@ function AppInner({ session }) {
     addQuotation: (companyId) => setModal({ type: 'quotation', payload: { defaultCompanyId: companyId } }),
     editQuotation: (q) => setModal({ type: 'quotation', payload: { initial: q } }),
     quotStatus: async (id, status) => { await run(() => api.updateQuotationStatus(id, status), 'อัปเดตสถานะสำเร็จ') },
+    quotPaymentStatus: async (id, payment_status) => { await run(() => api.updateQuotationPaymentStatus(id, payment_status), 'อัปเดตสถานะการชำระสำเร็จ') },
     deleteQuotation: async (id) => {
       if (!(await confirm('ลบใบเสนอราคานี้?'))) return
       await run(() => api.deleteQuotation(id), 'ลบสำเร็จ')
@@ -328,7 +329,7 @@ function AppInner({ session }) {
             <Tasks perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addTask(null)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />
           )}
           {view === 'quotations' && (
-            <Quotations perm={perm} reloadKey={reloadKey} settings={settings} deals={data.deals} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onStatusChange={actions.quotStatus} onDelete={actions.deleteQuotation} onCreateDeal={actions.createDealFromQuotation} />
+            <Quotations perm={perm} reloadKey={reloadKey} settings={settings} deals={data.deals} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onCreateDeal={actions.createDealFromQuotation} />
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products />}
