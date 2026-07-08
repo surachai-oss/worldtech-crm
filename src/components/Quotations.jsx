@@ -24,7 +24,7 @@ function PaymentFollowUpSummary({ rows, onEdit }) {
                 <tr key={q.id}>
                   <td className={ov ? 'overdue' : isDueToday(q.payment_due_date) ? 'due-today' : ''} style={{ fontWeight: 500, width: 130 }}>{fmtDate(q.payment_due_date)}</td>
                   <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{q.quot_no}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{q.company ? q.company.name : '-'}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{q.company ? q.company.name : '-'}{q.credit_term ? ` · ${q.credit_term}` : ''}</td>
                   <td style={{ fontWeight: 600 }}>{fmtCurrency(q.value)}</td>
                   <td className="td-actions"><button className="btn btn-outline btn-xs" onClick={() => onEdit(q)}>แก้ไข</button></td>
                 </tr>
@@ -108,10 +108,12 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
           {list('quot_statuses').map(s => <option key={s}>{s}</option>)}
         </select>
         <input className="filter-input" placeholder="ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
-        <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่ใบเสนอราคา ตั้งแต่" />
-        <span style={{ fontSize: 12, color: 'var(--text-light)', alignSelf: 'center' }}>ถึง</span>
-        <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่ใบเสนอราคา ถึง" />
-        {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
+          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่ใบเสนอราคา ตั้งแต่" />
+          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>ถึง</span>
+          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่ใบเสนอราคา ถึง" />
+          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
+        </div>
       </div>
       <div className="card">
         <div className="table-wrap">
@@ -126,7 +128,7 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
                     <tr key={qt.id} style={{ background: ov ? '#fff5f5' : undefined }}>
                       <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{qt.quot_no}</td>
                       <td style={{ fontWeight: 500 }}>{qt.subject}{fromDeal && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>จากดีล: {fromDeal.name}</div>}</td>
-                      <td>{qt.company ? qt.company.name : '-'}{qt.company?.credit_term && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{qt.company.credit_term}</div>}</td>
+                      <td>{qt.company ? qt.company.name : '-'}{qt.credit_term && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{qt.credit_term}</div>}</td>
                       <td style={{ fontWeight: 600 }}>{fmtCurrency(qt.value)}</td>
                       <td><span className={`badge ${quotBadgeClass(qt.status)}`}>{qt.status}</span></td>
                       <td style={{ fontSize: 12 }}>{fmtDate(qt.quot_date)}</td>

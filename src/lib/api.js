@@ -426,15 +426,23 @@ export function computeDashboard(data, stages = []) {
     .slice(0, 5)
     .map(d => ({ ...d, companyName: companies.find(c => c.id === d.company_id)?.name || '' }))
 
+  // ใบเสนอราคาเครดิตที่ยังไม่ชำระและมีวันครบกำหนดแล้ว — เตือนเซลล์กันลืมตามเก็บเงิน (ดูสรุปเดียวกันแบบเต็มในหน้าใบเสนอราคา)
+  const pendingPaymentsAll = quotations
+    .filter(q => q.payment_status && q.payment_status !== 'ชำระแล้ว' && q.payment_due_date)
+    .sort((a, b) => new Date(a.payment_due_date) - new Date(b.payment_due_date))
+    .map(q => ({ ...q, companyName: companies.find(c => c.id === q.company_id)?.name || '' }))
+  const overduePayments = pendingPaymentsAll.filter(q => new Date(q.payment_due_date) < today).length
+
   return {
     summary: {
       activeCompanies, totalCompanies: companies.length,
       openDeals: openDeals.length, openValue,
       wonDeals: wonDeals.length, wonValue,
       pendingTasks, overdueTasks,
-      totalQuotations: quotations.length
+      totalQuotations: quotations.length,
+      pendingPayments: pendingPaymentsAll.length, overduePayments
     },
-    stageData, recentActivities, upcomingTasks, topDeals
+    stageData, recentActivities, upcomingTasks, topDeals, pendingPayments: pendingPaymentsAll.slice(0, 8)
   }
 }
 

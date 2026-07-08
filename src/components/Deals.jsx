@@ -129,7 +129,7 @@ export default function Deals({ perm, deals, companies, quotations, onAdd, onAdd
       </div>
       <DailySalesSummary deals={deals} />
       <FollowUpSummary deals={deals} companies={companies} onEdit={onEdit} />
-      <div className="filter-bar">
+      <div className="filter-bar" style={{ justifyContent: 'flex-end' }}>
         <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่สร้างดีล ตั้งแต่" />
         <span style={{ fontSize: 12, color: 'var(--text-light)', alignSelf: 'center' }}>ถึง</span>
         <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่สร้างดีล ถึง" />

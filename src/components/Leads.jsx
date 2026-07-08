@@ -101,10 +101,12 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
           {list('lead_statuses').map(s => <option key={s}>{s}</option>)}
         </select>
         <input className="filter-input" placeholder="ค้นหาชื่อ/เบอร์/อีเมล..." value={q} onChange={e => setQ(e.target.value)} />
-        <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่กรอกเข้ามา ตั้งแต่" />
-        <span style={{ fontSize: 12, color: 'var(--text-light)', alignSelf: 'center' }}>ถึง</span>
-        <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่กรอกเข้ามา ถึง" />
-        {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
+          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่กรอกเข้ามา ตั้งแต่" />
+          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>ถึง</span>
+          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่กรอกเข้ามา ถึง" />
+          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
+        </div>
       </div>
 
       <div className="card">

@@ -152,6 +152,10 @@ alter table quotations add column if not exists drive_signed_file_id text;
 alter table quotations add column if not exists payment_due_date date;
 alter table quotations add column if not exists payment_status text default 'ยังไม่ชำระ';
 
+-- credit_term บนใบเสนอราคาเอง (แยกจาก companies.credit_term) — เลือกได้ต่อใบว่าใบนี้เปิดแบบธรรมดาหรือเครดิต เผื่อลูกค้าเครดิตขอเป็นเงินสดครั้งนี้ หรือกลับกัน
+-- เก็บค่าไว้ที่ใบเสนอราคาแทนที่จะอ้างอิงจาก companies.credit_term ตรงๆ เพราะเงื่อนไขบริษัทอาจเปลี่ยนทีหลัง แต่ใบเก่าต้องคงข้อมูล ณ วันที่ออกไว้ — ค่านี้พิมพ์โชว์ในใบเสนอราคาด้วย
+alter table quotations add column if not exists credit_term text;
+
 -- ===== QUOTATION ITEMS (รายการสินค้าในใบเสนอราคา — ใบเสนอราคาหนึ่งมีได้หลายรายการ เหมือนดีล) =====
 -- description = ชื่อรายการที่แสดงจริง (เติมจากชื่อสินค้าเวลาเลือก แต่แก้ไขเองได้ เผื่อรายการที่ไม่มีในรายการสินค้า)
 -- unit_price ถือว่ารวม VAT แล้วเหมือนกับดีล — quotations.value คำนวณจากผลรวมรายการเหล่านี้ที่ฝั่ง frontend

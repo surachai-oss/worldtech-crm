@@ -36,6 +36,11 @@ export default function Dashboard({ data, onNav }) {
           <div className="kpi-label">ใบเสนอราคา</div>
           <div className="kpi-value">{s.totalQuotations}</div>
         </div>
+        <div className="kpi-card red">
+          <div className="kpi-label">ต้องตามเก็บเงิน</div>
+          <div className="kpi-value">{s.pendingPayments}</div>
+          <div className="kpi-sub">{s.overduePayments > 0 ? `เลยกำหนดแล้ว ${s.overduePayments} ใบ` : 'ยังไม่มีเลยกำหนด'}</div>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
@@ -131,6 +136,32 @@ export default function Dashboard({ data, onNav }) {
                 </table>
               ) : <div className="empty-state"><div>ไม่มีงานใน 14 วัน</div></div>}
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="card-header"><div className="card-title">ต้องตามเก็บเงิน (ลูกค้าเครดิต)</div><button className="btn btn-outline btn-sm" onClick={() => onNav('quotations')}>ดูทั้งหมด</button></div>
+        <div className="card-body" style={{ padding: 0 }}>
+          <div className="table-wrap" style={{ border: 'none' }}>
+            {d.pendingPayments.length ? (
+              <table>
+                <thead><tr><th>เลขที่</th><th>บริษัท</th><th>ครบกำหนด</th><th>มูลค่า</th></tr></thead>
+                <tbody>
+                  {d.pendingPayments.map(q => {
+                    const ov = isOverdue(q.payment_due_date), td = isDueToday(q.payment_due_date)
+                    return (
+                      <tr key={q.id}>
+                        <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{q.quot_no}</td>
+                        <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{q.companyName || '-'}</td>
+                        <td className={ov ? 'overdue' : td ? 'due-today' : ''}>{fmtDate(q.payment_due_date)}</td>
+                        <td style={{ fontWeight: 600 }}>{fmtCurrency(q.value)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            ) : <div className="empty-state"><div>ยังไม่มีใบเสนอราคาที่ต้องตามเก็บเงิน</div></div>}
           </div>
         </div>
       </div>

@@ -121,6 +121,10 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
           <div>${fmtDate(quot.quot_date)}</div>
           <div class="label">เลขที่</div>
           <div>${escapeHtml(quot.quot_no)}</div>
+          ${quot.credit_term ? `
+          <div class="label">เงื่อนไขการชำระเงิน</div>
+          <div>${escapeHtml(quot.credit_term)}${quot.payment_due_date ? `<br/>ครบกำหนด ${fmtDate(quot.payment_due_date)}` : ''}</div>
+          ` : ''}
         </div>
       </div>
 

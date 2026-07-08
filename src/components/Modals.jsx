@@ -308,7 +308,7 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
     const base = {
       company_id: defaultCompanyId || '', subject: '', status: 'Draft', sale_phone: '0918086924', proposer_name: currentUserName || '',
       quot_date: new Date().toISOString().split('T')[0], expire_date: '', note: DEFAULT_QUOTATION_NOTE, deal_id: null,
-      payment_due_date: '', payment_status: 'ยังไม่ชำระ'
+      credit_term: '', payment_due_date: '', payment_status: 'ยังไม่ชำระ'
     }
     if (!initial) return base
     // items เป็นแค่ค่าตั้งต้นสำหรับ seed ไม่ใช่คอลัมน์ในตาราง quotations, company/product เป็น relation ที่ join มาตอน select (ไม่ใช่คอลัมน์จริง) — ต้องตัดออกก่อนเก็บใน f ไม่งั้น update จะพังเพราะ Supabase หาคอลัมน์ชื่อนี้ไม่เจอ
@@ -316,6 +316,8 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
     return { ...base, ...rest }
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
+  // สลับใบเสนอราคาแบบธรรมดา/เครดิต — เป็น state แยกจาก f.credit_term เพื่อให้กดปุ่ม "เครดิต" แล้วเห็นช่องกรอกได้ทันทีก่อนเลือกจำนวนวัน
+  const [isCredit, setIsCredit] = useState(() => !!(initial?.credit_term))
 
   const [products, setProducts] = useState(null) // null = กำลังโหลดรายการสินค้า
   // initial.items = รายการที่ก็อปมาจากดีล (ตอนยังไม่มี initial.id) — ถ้ามีให้ใช้เป็นค่าเริ่มต้นแทนแถวเปล่า
@@ -352,23 +354,53 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
   }
 
   const totals = computeDealTotals(items)
-  const selectedCompany = companies.find(c => c.id === f.company_id)
+
+  // เลือกบริษัทแล้วเช็คว่าบริษัทนี้ตั้งเงื่อนไขเครดิตไว้ไหม — ถ้ามีและยังไม่ได้เลือกเครดิตเอง ช่วยสลับโหมดเป็นเครดิตให้อัตโนมัติ (แก้กลับเป็นธรรมดาได้ถ้าใบนี้ไม่ต้องการ)
+  const onCompanyChange = (companyId) => {
+    const co = companies.find(c => c.id === companyId)
+    const autoSuggestCredit = co?.credit_term && !f.credit_term
+    if (autoSuggestCredit) setIsCredit(true)
+    setF(s => ({ ...s, company_id: companyId, credit_term: autoSuggestCredit ? co.credit_term : s.credit_term }))
+  }
 
   // แถวที่ไม่ได้เลือกสินค้าและไม่ได้พิมพ์ชื่อรายการเอง ถือว่าเป็นช่องว่างที่ยังไม่ได้ใช้ ตัดทิ้งก่อนบันทึก
   const submit = () => onSave(f, items.filter(it => it.product_id || it.description?.trim()))
 
   return (
     <ModalShell title={initial?.id ? 'แก้ไขใบเสนอราคา' : 'สร้างใบเสนอราคา'} onClose={onClose} onSave={submit} wide>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 14 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className={`btn btn-sm ${!isCredit ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => { setIsCredit(false); setF(s => ({ ...s, credit_term: '', payment_due_date: '', payment_status: 'ยังไม่ชำระ' })) }}>ใบเสนอราคาแบบธรรมดา</button>
+          <button type="button" className={`btn btn-sm ${isCredit ? 'btn-primary' : 'btn-outline'}`} onClick={() => setIsCredit(true)}>ลูกค้าเครดิต</button>
+        </div>
+        <div>
+          <label className="form-label" style={{ textAlign: 'right', display: 'block' }}>วันที่</label>
+          <input className="form-control" type="date" style={{ width: 160 }} value={f.quot_date} onChange={set('quot_date')} />
+        </div>
+      </div>
+
+      {isCredit && (
+        <>
+          <div className="form-row">
+            <Field label="จำนวนวันเครดิต">
+              <EditableSelect listKey="credit_terms" value={f.credit_term} onChange={v => setF(s => ({ ...s, credit_term: v }))} isAdmin={isAdmin} />
+            </Field>
+            <Field label="วันครบกำหนดชำระ">
+              <input className="form-control" type="date" value={f.payment_due_date || ''} onChange={set('payment_due_date')} />
+            </Field>
+          </div>
+          <Field label="สถานะการชำระ">
+            <EditableSelect listKey="payment_statuses" value={f.payment_status} onChange={v => setF(s => ({ ...s, payment_status: v }))} isAdmin={isAdmin} />
+          </Field>
+        </>
+      )}
+
       <Field label="ประเภทลูกค้า">
         <EditableSelect listKey="customer_types" value={customerTypeFilter} onChange={setCustomerTypeFilter} placeholder="-- ทุกประเภท (เลือกเพื่อกรองรายชื่อบริษัทด้านล่าง) --" isAdmin={isAdmin} />
       </Field>
       <Field label="บริษัท">
-        <CompanySelect companies={filteredCompanies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} />
-        {selectedCompany?.credit_term && (
-          <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4, fontWeight: 500 }}>
-            ลูกค้าเครดิต: {selectedCompany.credit_term} — อย่าลืมกรอกวันครบกำหนดชำระด้านล่าง
-          </div>
-        )}
+        <CompanySelect companies={filteredCompanies} value={f.company_id} onChange={onCompanyChange} />
       </Field>
       <Field label="หัวข้อใบเสนอราคา" required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder="ใบเสนอราคาสำหรับ..." /></Field>
 
@@ -433,20 +465,11 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
         <Field label="วันหมดอายุ"><input className="form-control" type="date" value={f.expire_date || ''} onChange={set('expire_date')} /></Field>
       </div>
       <div className="form-row">
-        <Field label="วันที่"><input className="form-control" type="date" value={f.quot_date} onChange={set('quot_date')} /></Field>
         <Field label="เบอร์ติดต่อเซลล์"><input className="form-control" value={f.sale_phone || ''} onChange={set('sale_phone')} placeholder="08x-xxx-xxxx" /></Field>
-      </div>
-      <div className="form-row">
-        <Field label="วันครบกำหนดชำระ">
-          <input className="form-control" type="date" value={f.payment_due_date || ''} onChange={set('payment_due_date')} />
-        </Field>
-        <Field label="สถานะการชำระ">
-          <EditableSelect listKey="payment_statuses" value={f.payment_status} onChange={v => setF(s => ({ ...s, payment_status: v }))} isAdmin={isAdmin} />
+        <Field label="ชื่อผู้เสนอราคา">
+          <input className="form-control" value={f.proposer_name || ''} onChange={set('proposer_name')} placeholder="ชื่อผู้ออกใบเสนอราคา — พิมพ์ไว้เหนือช่องลงชื่อตอนพิมพ์ ไม่ต้องเซ็นสด" />
         </Field>
       </div>
-      <Field label="ชื่อผู้เสนอราคา">
-        <input className="form-control" value={f.proposer_name || ''} onChange={set('proposer_name')} placeholder="ชื่อผู้ออกใบเสนอราคา — พิมพ์ไว้เหนือช่องลงชื่อตอนพิมพ์ ไม่ต้องเซ็นสด" />
-      </Field>
       <Field label="หมายเหตุ"><textarea className="form-control" rows={6} value={f.note || ''} onChange={set('note')} /></Field>
     </ModalShell>
   )
