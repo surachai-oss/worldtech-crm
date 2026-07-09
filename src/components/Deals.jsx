@@ -11,14 +11,14 @@ const SALES_MODES = [
   { key: 'month', label: 'รายเดือน' },
 ]
 
-// จัดกลุ่มดีลที่ปิดสำเร็จ (Closed Won) ตามวันที่ปิด (close_date) แบบราย วัน/สัปดาห์/เดือน
-// week = อิงวันจันทร์ต้นสัปดาห์, ไม่กรองตามช่วงวันที่บนหน้าจอ เพื่อให้เห็นภาพรวมยอดขายเสมอ
-function groupWonSales(won, mode) {
+// จัดกลุ่มดีลตามวันในฟิลด์ที่เลือก (close_date / follow_up_date) แบบราย วัน/สัปดาห์/เดือน
+// week = อิงวันจันทร์ต้นสัปดาห์ — ascending=true เรียงวันใกล้สุดก่อน (ใช้กับยอดที่ต้องติดตาม), false เรียงล่าสุดก่อน (ใช้กับยอดขาย)
+function groupDealsByPeriod(items, mode, dateField, ascending = false) {
   const groups = {}
-  won.forEach(d => {
-    const raw = d.close_date
+  items.forEach(d => {
+    const raw = d[dateField]
     let key, label
-    if (!raw) { key = 'zzz-ไม่ระบุ'; label = 'ไม่ระบุวันที่ปิด' }
+    if (!raw) { key = 'zzz-ไม่ระบุ'; label = 'ไม่ระบุวันที่' }
     else {
       const [y, m, dd] = raw.split('-').map(Number)
       if (mode === 'month') {
@@ -37,23 +37,32 @@ function groupWonSales(won, mode) {
     }
     ;(groups[key] ||= { label, rows: [] }).rows.push(d)
   })
-  return Object.keys(groups).sort().reverse().map(k => ({ key: k, ...groups[k] }))
+  const keys = Object.keys(groups).sort()
+  if (!ascending) keys.reverse()
+  return keys.map(k => ({ key: k, ...groups[k] }))
 }
 
-// ป็อปอัปแสดงว่ายอดขายที่ปิดสำเร็จมาจากดีลไหนบ้าง ตามช่วงที่เลือก (วัน/สัปดาห์/เดือน) — แต่ละกลุ่มลิสต์ดีลที่อยู่ในนั้น
-function SalesDetailModal({ won, companies, mode, onClose }) {
-  const groups = groupWonSales(won, mode)
-  const grandTotal = won.reduce((s, d) => s + (Number(d.value) || 0), 0)
+function todayStr() {
+  const t = new Date()
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+}
+
+// ป็อปอัปแสดงรายละเอียดดีลตามช่วง (วัน/สัปดาห์/เดือน) ของฟิลด์วันที่ที่เลือก — แต่ละกลุ่มลิสต์ดีลที่อยู่ในนั้น
+// highlightOverdue = ไฮไลต์วันที่เป็นสีแดงถ้าเลยกำหนดแล้ว (ใช้กับยอดที่ต้องติดตาม)
+function DealPeriodModal({ title, deals, companies, mode, dateField, ascending = false, highlightOverdue = false, onClose }) {
+  const groups = groupDealsByPeriod(deals, mode, dateField, ascending)
+  const grandTotal = deals.reduce((s, d) => s + (Number(d.value) || 0), 0)
   const modeLabel = (SALES_MODES.find(m => m.key === mode) || {}).label || ''
+  const today = todayStr()
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={{ maxWidth: 640 }}>
         <div className="modal-header">
-          <div className="modal-title">ยอดขายที่ปิดดีลสำเร็จ · {modeLabel} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({won.length} ดีล · {fmtCurrency(grandTotal)})</span></div>
+          <div className="modal-title">{title} · {modeLabel} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({deals.length} ดีล · {fmtCurrency(grandTotal)})</span></div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
-          {groups.map(g => {
+          {groups.length ? groups.map(g => {
             const total = g.rows.reduce((s, d) => s + (Number(d.value) || 0), 0)
             return (
               <div key={g.key} style={{ border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8, overflow: 'hidden' }}>
@@ -65,11 +74,12 @@ function SalesDetailModal({ won, companies, mode, onClose }) {
                   <tbody>
                     {g.rows.map(d => {
                       const co = companies.find(c => c.id === d.company_id)
+                      const ov = highlightOverdue && d[dateField] && d[dateField] < today
                       return (
                         <tr key={d.id}>
                           <td style={{ fontWeight: 500 }}>{d.name}</td>
                           <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{co ? co.name : '-'}</td>
-                          <td style={{ fontSize: 12 }}>{fmtDate(d.close_date)}</td>
+                          <td className={ov ? 'overdue' : ''} style={{ fontSize: 12 }}>{fmtDate(d[dateField])}</td>
                           <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(d.value)}</td>
                         </tr>
                       )
@@ -78,71 +88,8 @@ function SalesDetailModal({ won, companies, mode, onClose }) {
                 </table>
               </div>
             )
-          })}
+          }) : <div className="empty-state"><div>ไม่มีข้อมูล</div></div>}
         </div>
-      </div>
-    </div>
-  )
-}
-
-// สรุปดีลที่ยังไม่ปิด (เปิดอยู่) ที่มีวันที่ต้อง Follow up ไว้ แยกเป็นกลุ่มตามเดือน
-// ให้เซลล์เห็นภาพรวมว่าเดือนไหนมีดีลต้องตามบ้าง กันดีลตกหล่น — เดือนที่เลยกำหนดมาแล้วไฮไลต์สีแดง
-function FollowUpSummary({ deals, companies, onEdit }) {
-  const openWithFollowUp = deals.filter(d => !OPEN_STAGES_EXCLUDED.includes(d.stage) && d.follow_up_date)
-  if (!openWithFollowUp.length) return null
-
-  const groups = {}
-  openWithFollowUp.forEach(d => {
-    const key = d.follow_up_date.slice(0, 7) // YYYY-MM (follow_up_date เป็น date เฉยๆ ไม่มี timezone ให้ต้องแปลง)
-    ;(groups[key] ||= []).push(d)
-  })
-  const monthKeys = Object.keys(groups).sort()
-
-  const now = new Date()
-  const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
-  return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card-header"><div className="card-title">ดีลที่ต้องติดตาม (Follow-up) แยกตามเดือน</div></div>
-      <div className="card-body" style={{ padding: 0 }}>
-        {monthKeys.map(key => {
-          const rows = groups[key].sort((a, b) => a.follow_up_date < b.follow_up_date ? -1 : 1)
-          const total = rows.reduce((s, d) => s + (Number(d.value) || 0), 0)
-          const [y, m] = key.split('-').map(Number)
-          const label = new Date(y, m - 1, 1).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
-          const overdue = key < thisMonthKey
-          return (
-            <div key={key} style={{ borderBottom: '1px solid var(--border)' }}>
-              <div style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px',
-                background: overdue ? '#fff5f5' : key === thisMonthKey ? '#fffbeb' : undefined
-              }}>
-                <div style={{ fontWeight: 600, color: overdue ? 'var(--danger)' : undefined }}>
-                  {overdue ? 'เลยกำหนดแล้ว — ' : ''}{label}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{rows.length} ดีล · {fmtCurrency(total)}</div>
-              </div>
-              <div className="table-wrap" style={{ border: 'none' }}>
-                <table>
-                  <tbody>
-                    {rows.map(d => {
-                      const co = companies.find(c => c.id === d.company_id)
-                      return (
-                        <tr key={d.id}>
-                          <td style={{ fontWeight: 500 }}>{d.name}</td>
-                          <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{co ? co.name : '-'}</td>
-                          <td style={{ fontSize: 12 }}>ตามวันที่ {fmtDate(d.follow_up_date)}</td>
-                          <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(d.value)}</td>
-                          <td className="td-actions"><button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>แก้ไข</button></td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )
-        })}
       </div>
     </div>
   )
@@ -153,6 +100,7 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [salesMode, setSalesMode] = useState(null) // null = ปิด, 'day'/'week'/'month' = เปิด popup ของช่วงนั้น
+  const [followMode, setFollowMode] = useState(null)
 
   // กรองตามวันที่สร้างดีล (created_at) — เทียบเป็นวันที่ตามเวลาเครื่อง ไม่ใช่ UTC เพราะ created_at เก็บเป็น timestamptz
   const filtered = deals.filter(d => {
@@ -164,6 +112,9 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
   const totalVal = filtered.reduce((s, d) => s + (Number(d.value) || 0), 0)
   const won = deals.filter(d => d.stage === 'Closed Won')
   const wonTotal = won.reduce((s, d) => s + (Number(d.value) || 0), 0)
+  // ดีลที่ยังไม่ปิดและมีวันที่ต้องติดตาม (follow_up_date) — ยอดรวมที่ต้องตามต่อ
+  const followUp = deals.filter(d => !OPEN_STAGES_EXCLUDED.includes(d.stage) && d.follow_up_date)
+  const followTotal = followUp.reduce((s, d) => s + (Number(d.value) || 0), 0)
 
   return (
     <div>
@@ -171,18 +122,31 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
         <div className="section-title">ดีลการขาย <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({filtered.length} ดีล · {fmtCurrency(totalVal)})</span></div>
         <button className="btn btn-primary" onClick={onAdd}>+ เพิ่มดีล</button>
       </div>
-      {/* ยอดขายรวมแบบกดดูรายละเอียดได้ ชิดซ้าย + ตัวกรองวันที่ชิดขวาบรรทัดเดียวกัน */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 10 }}>
-        <div className="kpi-card green" style={{ flex: '0 0 auto', minWidth: 320 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-            <div className="kpi-label">ยอดขายที่ปิดดีลสำเร็จ</div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {SALES_MODES.map(m => (
-                <button key={m.key} type="button" className={`btn btn-xs ${salesMode === m.key ? 'btn-primary' : 'btn-outline'}`} onClick={() => setSalesMode(m.key)} title={`ดูยอดขาย${m.label}`}>{m.label}</button>
-              ))}
+      {/* กล่องสรุป 2 ใบ (ยอดขายปิดสำเร็จ + ยอดที่ต้องติดตาม) ชิดซ้าย + ตัวกรองวันที่ชิดขวา — กดปุ่มช่วงเวลาเพื่อเปิด popup รายละเอียด */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <div className="kpi-card green" style={{ flex: '0 0 auto', minWidth: 300 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+              <div className="kpi-label">ยอดขายที่ปิดดีลสำเร็จ</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {SALES_MODES.map(m => (
+                  <button key={m.key} type="button" className={`btn btn-xs ${salesMode === m.key ? 'btn-primary' : 'btn-outline'}`} onClick={() => setSalesMode(m.key)} title={`ดูยอดขาย${m.label}`}>{m.label}</button>
+                ))}
+              </div>
             </div>
+            <div className="kpi-value">{fmtCurrency(wonTotal)}</div>
           </div>
-          <div className="kpi-value">{fmtCurrency(wonTotal)}</div>
+          <div className="kpi-card navy" style={{ flex: '0 0 auto', minWidth: 300 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+              <div className="kpi-label">ยอดที่ต้องติดตาม</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {SALES_MODES.map(m => (
+                  <button key={m.key} type="button" className={`btn btn-xs ${followMode === m.key ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFollowMode(m.key)} title={`ดูยอดที่ต้องติดตาม${m.label}`}>{m.label}</button>
+                ))}
+              </div>
+            </div>
+            <div className="kpi-value">{fmtCurrency(followTotal)}</div>
+          </div>
         </div>
         <div className="filter-bar" style={{ margin: 0, flexShrink: 0 }}>
           <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่สร้างดีล ตั้งแต่" />
@@ -191,8 +155,8 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
           {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
         </div>
       </div>
-      {salesMode && <SalesDetailModal won={won} companies={companies} mode={salesMode} onClose={() => setSalesMode(null)} />}
-      <FollowUpSummary deals={deals} companies={companies} onEdit={onEdit} />
+      {salesMode && <DealPeriodModal title="ยอดขายที่ปิดดีลสำเร็จ" deals={won} companies={companies} mode={salesMode} dateField="close_date" onClose={() => setSalesMode(null)} />}
+      {followMode && <DealPeriodModal title="ยอดที่ต้องติดตาม" deals={followUp} companies={companies} mode={followMode} dateField="follow_up_date" ascending highlightOverdue onClose={() => setFollowMode(null)} />}
       <div className="kanban-board">
         {list('deal_stages').map(stage => {
           const sd = filtered.filter(d => d.stage === stage)
