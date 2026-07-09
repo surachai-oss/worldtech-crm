@@ -167,7 +167,11 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
   const totals = computeDealTotals(items)
 
   // แถวที่ไม่ได้เลือกสินค้าและไม่ได้พิมพ์ชื่อรายการเอง ถือว่าเป็นช่องว่างที่ยังไม่ได้ใช้ ตัดทิ้งก่อนบันทึก
-  const submit = () => onSave(f, items.filter(it => it.product_id || it.description?.trim()))
+  // close_date/follow_up_date ไม่บังคับ ถ้าไม่ได้กรอก/เคลียร์ทิ้งจะได้ "" มา ต้องแปลงเป็น null ก่อนส่ง ไม่งั้น Postgres ปฏิเสธ (invalid input syntax for type date)
+  const submit = () => onSave(
+    { ...f, close_date: f.close_date || null, follow_up_date: f.follow_up_date || null },
+    items.filter(it => it.product_id || it.description?.trim())
+  )
 
   return (
     <ModalShell title={initial?.id ? 'แก้ไขดีล' : 'เพิ่มดีล'} onClose={onClose} onSave={submit} wide>
@@ -271,8 +275,10 @@ export function TaskModal({ initial, companies, defaultCompanyId, currentUserNam
     company_id: defaultCompanyId || '', subject: '', due_date: '', priority: 'ปกติ', status: 'รอดำเนินการ', owner: currentUserName || '', note: ''
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
+  // due_date ไม่บังคับ ถ้าไม่ได้กรอก/เคลียร์ทิ้งจะได้ "" มา ต้องแปลงเป็น null ก่อนส่ง ไม่งั้น Postgres ปฏิเสธ (invalid input syntax for type date)
+  const submit = () => onSave({ ...f, due_date: f.due_date || null })
   return (
-    <ModalShell title={initial?.id ? 'แก้ไขงาน' : 'เพิ่มงาน Follow-up'} onClose={onClose} onSave={() => onSave(f)}>
+    <ModalShell title={initial?.id ? 'แก้ไขงาน' : 'เพิ่มงาน Follow-up'} onClose={onClose} onSave={submit}>
       <Field label="บริษัท"><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
       <Field label="หัวข้องาน" required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder="เช่น โทรติดตามใบเสนอราคา" /></Field>
       <div className="form-row">
@@ -364,7 +370,11 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
   }
 
   // แถวที่ไม่ได้เลือกสินค้าและไม่ได้พิมพ์ชื่อรายการเอง ถือว่าเป็นช่องว่างที่ยังไม่ได้ใช้ ตัดทิ้งก่อนบันทึก
-  const submit = () => onSave(f, items.filter(it => it.product_id || it.description?.trim()))
+  // ช่องวันที่ที่ไม่บังคับ (expire_date/payment_due_date) ถ้าเคลียร์ค่าจนว่างจะได้ "" มา ต้องแปลงเป็น null ก่อนส่ง ไม่งั้น Postgres ปฏิเสธ (invalid input syntax for type date)
+  const submit = () => onSave(
+    { ...f, expire_date: f.expire_date || null, payment_due_date: f.payment_due_date || null },
+    items.filter(it => it.product_id || it.description?.trim())
+  )
 
   return (
     <ModalShell title={initial?.id ? 'แก้ไขใบเสนอราคา' : 'สร้างใบเสนอราคา'} onClose={onClose} onSave={submit} wide>

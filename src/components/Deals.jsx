@@ -49,14 +49,16 @@ function todayStr() {
 
 // ป็อปอัปแสดงรายละเอียดดีลตามช่วง (วัน/สัปดาห์/เดือน) ของฟิลด์วันที่ที่เลือก — แต่ละกลุ่มลิสต์ดีลที่อยู่ในนั้น
 // highlightOverdue = ไฮไลต์วันที่เป็นสีแดงถ้าเลยกำหนดแล้ว (ใช้กับยอดที่ต้องติดตาม)
-function DealPeriodModal({ title, deals, companies, mode, dateField, ascending = false, highlightOverdue = false, onClose }) {
+function DealPeriodModal({ title, deals, companies, mode, dateField, ascending = false, highlightOverdue = false, onEdit, onClose }) {
   const groups = groupDealsByPeriod(deals, mode, dateField, ascending)
   const grandTotal = deals.reduce((s, d) => s + (Number(d.value) || 0), 0)
   const modeLabel = (SALES_MODES.find(m => m.key === mode) || {}).label || ''
   const today = todayStr()
+  // กดดู/แก้ไขดีล → ปิด popup ก่อนแล้วเปิดหน้าแก้ไขดีล กันไม่ให้ modal ซ้อนกัน
+  const openDeal = (d) => { onClose(); onEdit(d) }
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="modal" style={{ maxWidth: 760 }}>
+      <div className="modal" style={{ maxWidth: 920 }}>
         <div className="modal-header">
           <div className="modal-title">{title} · {modeLabel} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({deals.length} ดีล · {fmtCurrency(grandTotal)})</span></div>
           <button className="modal-close" onClick={onClose}>×</button>
@@ -81,6 +83,7 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
                           <td style={{ fontSize: 12, color: 'var(--text-light)', padding: '12px 14px' }}>{co ? co.name : '-'}</td>
                           <td className={ov ? 'overdue' : ''} style={{ fontSize: 12, padding: '12px 14px', whiteSpace: 'nowrap' }}>{fmtDate(d[dateField])}</td>
                           <td style={{ fontWeight: 600, color: 'var(--navy)', padding: '12px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtCurrency(d.value)}</td>
+                          <td style={{ padding: '12px 18px' }}><button className="btn btn-outline btn-xs" onClick={() => openDeal(d)}>ดู/แก้ไข</button></td>
                         </tr>
                       )
                     })}
@@ -155,8 +158,8 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
           {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
         </div>
       </div>
-      {salesMode && <DealPeriodModal title="ยอดขายที่ปิดดีลสำเร็จ" deals={won} companies={companies} mode={salesMode} dateField="close_date" onClose={() => setSalesMode(null)} />}
-      {followMode && <DealPeriodModal title="ยอดที่ต้องติดตาม" deals={followUp} companies={companies} mode={followMode} dateField="follow_up_date" ascending highlightOverdue onClose={() => setFollowMode(null)} />}
+      {salesMode && <DealPeriodModal title="ยอดขายที่ปิดดีลสำเร็จ" deals={won} companies={companies} mode={salesMode} dateField="close_date" onEdit={onEdit} onClose={() => setSalesMode(null)} />}
+      {followMode && <DealPeriodModal title="ยอดที่ต้องติดตาม" deals={followUp} companies={companies} mode={followMode} dateField="follow_up_date" ascending highlightOverdue onEdit={onEdit} onClose={() => setFollowMode(null)} />}
       <div className="kanban-board">
         {list('deal_stages').map(stage => {
           const sd = filtered.filter(d => d.stage === stage)
