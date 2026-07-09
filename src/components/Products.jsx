@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { listProducts, addProduct, updateProduct, deleteProduct, uploadProductImage, deleteProductImage, getProductImageUrl } from '../lib/api'
+import { exportProductsToExcel } from '../lib/importExport'
 import { useUi } from './UiContext'
 import ImportProductsModal from './ImportProductsModal'
 
@@ -53,6 +54,14 @@ export default function Products() {
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null) // { initial }
   const [showImport, setShowImport] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  const doExport = async () => {
+    setExporting(true)
+    try { await exportProductsToExcel(rows) }
+    catch (e) { toast('ส่งออกไม่สำเร็จ: ' + e.message, 'error') }
+    finally { setExporting(false) }
+  }
 
   const load = async () => {
     setLoading(true)
@@ -90,6 +99,7 @@ export default function Products() {
         <div className="section-title">สินค้า <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} รายการ)</span></div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-outline" onClick={() => setShowImport(true)}>นำเข้าจากไฟล์</button>
+          <button className="btn btn-outline" onClick={doExport} disabled={exporting}>{exporting ? 'กำลังส่งออก...' : 'ส่งออกเป็น Excel'}</button>
           <button className="btn btn-primary" onClick={() => setModal({ initial: null })}>เพิ่มสินค้า</button>
         </div>
       </div>

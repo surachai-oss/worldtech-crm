@@ -1,26 +1,10 @@
 import { useState } from 'react'
 import { submitPublicLead } from '../lib/api'
+import { POSITION_OPTIONS, BUSINESS_TYPE_OTHER, BUSINESS_TYPE_OPTIONS, APPLIANCE_OPTIONS, PURCHASE_REASON_OPTIONS } from '../lib/leadOptions'
 import '../App.css'
 
 // หน้าฟอร์มลีดสาธารณะ — ไม่ต้อง login เอาลิงก์ไปแปะใน Facebook Ads/เว็บไซต์ได้เลย (เช่น /lead?src=facebook)
 // ที่มา (source) อ่านจาก query param ให้อัตโนมัติ ไม่ต้องให้ลูกค้ากรอกเอง
-
-const POSITION_OPTIONS = ['เจ้าของกิจการ', 'ฝ่ายจัดซื้อ', 'พนักงานขาย', 'บุคคลทั่วไป']
-
-const BUSINESS_TYPE_OTHER = 'อื่นๆ โปรดระบุ'
-const BUSINESS_TYPE_OPTIONS = [
-  'ตัวแทนจำหน่าย เช่น ร้านค้าปลีกเครื่องใช้ไฟฟ้า',
-  'ธุรกิจอสังหาริมทรัพย์ เช่น หอพัก / คอนโด / อพาร์ทเม้นท์',
-  'กลุ่มโรงแรม / รีสอร์ท / โฮสเทล',
-  'สำนักงาน / ออฟฟิศ / หน่วยงานราชการ',
-  'ธุรกิจของพรีเมียม / ของสมนาคุณ / จัดอีเวนต์',
-  'ร้านอาหาร / คาเฟ่',
-  BUSINESS_TYPE_OTHER
-]
-
-const APPLIANCE_OPTIONS = ['ตู้เย็น', 'ตู้แช่แข็ง', 'เครื่องชงกาแฟ', 'ทีวี', 'เครื่องฟอกอากาศ', 'เตาอบ', 'เครื่องผสมอาหาร']
-
-const PURCHASE_REASON_OPTIONS = ['สำหรับใช้เอง', 'สำหรับธุรกิจ']
 
 function FieldSection({ title, children }) {
   return (

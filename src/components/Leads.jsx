@@ -6,6 +6,7 @@ import { useUi } from './UiContext'
 import { usePicklists } from './PicklistsContext'
 import EditableSelect from './EditableSelect'
 import Pagination from './Pagination'
+import ImportLeadsModal from './ImportLeadsModal'
 
 export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, onStatusChange, onDelete }) {
   const { toast } = useUi()
@@ -21,6 +22,8 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
   const [exporting, setExporting] = useState(false)
   const [sourceSummary, setSourceSummary] = useState({})
   const [statusSummary, setStatusSummary] = useState({})
+  const [showImport, setShowImport] = useState(false)
+  const [localBump, setLocalBump] = useState(0)
 
   const doExport = async () => {
     setExporting(true)
@@ -50,7 +53,7 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
       fetchLeadsStatusSummary({ q, dateFrom: fromDate, dateTo: toDate }).then(s => { if (alive) setStatusSummary(s) }).catch(() => {})
     }, 250)
     return () => { alive = false; clearTimeout(t) }
-  }, [page, status, q, fromDate, toDate, reloadKey])
+  }, [page, status, q, fromDate, toDate, reloadKey, localBump])
 
   const sourceKeys = Object.keys(sourceSummary)
   // เรียงตามลำดับ picklist ก่อน แล้วต่อท้ายด้วยสถานะเก่าที่ไม่อยู่ใน picklist ปัจจุบัน (ถ้ามี) กันข้อมูลตกหล่น
@@ -64,8 +67,12 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
     <div className="list-view">
       <div className="section-header">
         <div className="section-title">ผู้ติดต่อ <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
-        <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting}>{exporting ? 'กำลังส่งออก...' : 'ส่งออกเป็น Excel'}</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline btn-sm" onClick={() => setShowImport(true)}>นำเข้าจากไฟล์</button>
+          <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting}>{exporting ? 'กำลังส่งออก...' : 'ส่งออกเป็น Excel'}</button>
+        </div>
       </div>
+      {showImport && <ImportLeadsModal onClose={() => setShowImport(false)} onImported={() => setLocalBump(b => b + 1)} />}
 
       {(statusKeys.length > 0 || sourceKeys.length > 0) && (
         // สองสรุปวางข้างกันคนละครึ่ง กันหน้ายาวเกินไป — การ์ดในแต่ละฝั่งไหลต่อกันเองตามความกว้างที่เหลือ

@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs'
+import { POSITION_OPTIONS, BUSINESS_TYPE_OPTIONS, PURCHASE_REASON_OPTIONS } from './leadOptions'
 
 // ===== เครื่องมือกลางสำหรับอ่าน/สร้างไฟล์ Excel (.xlsx) — ใช้ร่วมกันทุกฟีเจอร์ import ในระบบ =====
 // ใช้ exceljs แทน xlsx บน npm เพราะเวอร์ชันที่ติดตั้งผ่าน npm มีช่องโหว่ความปลอดภัยที่ยังไม่มีแพตช์
@@ -218,6 +219,16 @@ export async function parseProductImportFile(file, existingCodes) {
   return { validRows, invalidRows }
 }
 
+// ===== ส่งออกสินค้าเป็นไฟล์ Excel =====
+const PRODUCT_EXPORT_COLUMNS = [
+  { key: 'code', label: 'รหัสสินค้า' },
+  { key: 'name', label: 'ชื่อสินค้า' },
+  { key: 'created_at', label: 'วันที่เพิ่ม' },
+]
+
+export const exportProductsToExcel = (rows) =>
+  exportRowsToExcel(PRODUCT_EXPORT_COLUMNS, rows.map(r => ({ ...r, created_at: (r.created_at || '').slice(0, 10) })), 'สินค้า.xlsx')
+
 // ===== ส่งออกลีด/ผู้ติดต่อเป็นไฟล์ Excel =====
 const LEAD_EXPORT_COLUMNS = [
   { key: 'subject', label: 'หัวข้อ' },
@@ -240,3 +251,57 @@ export const exportLeadsToExcel = (rows) =>
     created_at: (r.created_at || '').slice(0, 10),
     appliance_interest: r.appliance_interest?.length ? r.appliance_interest.join(', ') : (r.interested_product || '')
   })), 'ผู้ติดต่อ.xlsx')
+
+// ===== นำเข้าผู้ติดต่อ/ลีดจากไฟล์ Excel =====
+export const LEAD_IMPORT_COLUMNS = [
+  { key: 'subject', label: 'หัวข้อ', required: true },
+  { key: 'full_name', label: 'ชื่อ-นามสกุล', required: true },
+  { key: 'phone', label: 'โทรศัพท์', required: true },
+  { key: 'email', label: 'อีเมล' },
+  { key: 'position', label: 'ตำแหน่ง' },
+  { key: 'business_type', label: 'ประเภทธุรกิจ' },
+  { key: 'appliance_interest', label: 'สนใจเครื่องใช้ไฟฟ้า (คั่นด้วยจุลภาคถ้ามีหลายอย่าง)' },
+  { key: 'purchase_reason', label: 'เหตุผลในการซื้อ' },
+  { key: 'message', label: 'ข้อความเพิ่มเติม' },
+  { key: 'source', label: 'ที่มา' },
+]
+
+const LEAD_EXAMPLE_ROW = {
+  subject: 'สอบถามราคาตู้แช่แข็ง', full_name: 'สมชาย ใจดี', phone: '08x-xxx-xxxx', email: 'somchai@example.com',
+  position: 'เจ้าของกิจการ', business_type: 'ร้านอาหาร / คาเฟ่', appliance_interest: 'ตู้แช่แข็ง, ตู้เย็น',
+  purchase_reason: 'สำหรับธุรกิจ', message: '', source: 'เว็บไซต์'
+}
+
+// ใช้ตัวเลือกชุดเดียวกับฟอร์มสาธารณะ (leadOptions.js) เป็น dropdown ในไฟล์ template — ไม่ใส่ dropdown ให้ "สนใจเครื่องใช้ไฟฟ้า" เพราะเป็นช่องกรอกได้หลายค่าคั่นด้วยจุลภาค
+export const downloadLeadTemplate = () =>
+  downloadExcelTemplate(LEAD_IMPORT_COLUMNS, LEAD_EXAMPLE_ROW, 'template_นำเข้าผู้ติดต่อ.xlsx', {
+    position: POSITION_OPTIONS, business_type: BUSINESS_TYPE_OPTIONS, purchase_reason: PURCHASE_REASON_OPTIONS
+  })
+
+// ไม่เช็คซ้ำกับข้อมูลเดิม (ต่างจากบริษัท/สินค้า) เพราะลีดหลายรายการมาจากคนเดียวกัน/เบอร์เดียวกันได้ตามปกติ (ติดต่อมาหลายครั้ง)
+export async function parseLeadImportFile(file) {
+  const rawRows = await readExcelRows(file)
+  const labelToKey = {}
+  LEAD_IMPORT_COLUMNS.forEach(c => { labelToKey[c.label] = c.key })
+
+  const validRows = []
+  const invalidRows = []
+  rawRows.forEach((raw, i) => {
+    const row = {}
+    Object.entries(raw).forEach(([label, value]) => {
+      const key = labelToKey[label.trim()]
+      if (key) row[key] = (value || '').trim()
+    })
+    const errors = []
+    if (!row.subject) errors.push('กรุณากรอกหัวข้อ')
+    if (!row.full_name) errors.push('กรุณากรอกชื่อ-นามสกุล')
+    if (!row.phone) errors.push('กรุณากรอกโทรศัพท์')
+    if (errors.length) { invalidRows.push({ row: i + 2, errors, data: row }); return }
+    validRows.push({
+      ...row,
+      appliance_interest: row.appliance_interest ? row.appliance_interest.split(',').map(s => s.trim()).filter(Boolean) : [],
+      status: 'ใหม่'
+    })
+  })
+  return { validRows, invalidRows }
+}

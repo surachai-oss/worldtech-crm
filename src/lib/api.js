@@ -545,6 +545,8 @@ export async function fetchLeadsStatusSummary({ q = '', dateFrom = '', dateTo = 
 
 export const updateLead = (id, d) => supabase.from('leads').update(d).eq('id', id).select().single().then(handle)
 export const deleteLead = (id) => supabase.from('leads').delete().eq('id', id).then(handle)
+// นำเข้าผู้ติดต่อจากไฟล์ Excel — insert ตรงผ่าน client ได้เลย (ต่างจากฟอร์มสาธารณะที่ต้องผ่าน Netlify Function) เพราะผู้ใช้ในหน้านี้ login แล้ว ตรงกับ RLS policy "leads insert"
+export const bulkImportLeads = (rows) => supabase.from('leads').insert(rows).select().then(handle)
 
 // ฟอร์มลีดสาธารณะไม่ต้อง login — ส่งผ่าน Netlify Function ที่ใช้ Service Role Key เขียนแทน ไม่เรียก supabase client ตรงๆ
 export async function submitPublicLead({ subject, full_name, phone, email, interested_product, message, source, position, business_type, appliance_interest, purchase_reason }) {
