@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { fmtCurrency, fmtDate, stageColor, toLocalDateStr } from '../lib/format'
 import { canEdit } from '../lib/permissions'
 import { usePicklists } from './PicklistsContext'
-import EditableSelect from './EditableSelect'
 
 const OPEN_STAGES_EXCLUDED = ['Closed Won', 'Closed Lost']
 
@@ -41,37 +40,51 @@ function groupWonSales(won, mode) {
   return Object.keys(groups).sort().reverse().map(k => ({ key: k, ...groups[k] }))
 }
 
-function SalesSummary({ deals }) {
+// ป็อปอัปแสดงว่ายอดขายที่ปิดสำเร็จมาจากดีลไหนบ้าง — สลับดู ราย วัน/สัปดาห์/เดือน แต่ละกลุ่มลิสต์ดีลที่อยู่ในนั้น
+function SalesDetailModal({ won, companies, onClose }) {
   const [mode, setMode] = useState('day')
-  const won = deals.filter(d => d.stage === 'Closed Won')
-  if (!won.length) return null
-  const rows = groupWonSales(won, mode)
-
+  const groups = groupWonSales(won, mode)
+  const grandTotal = won.reduce((s, d) => s + (Number(d.value) || 0), 0)
   return (
-    <div className="card">
-      <div className="card-header" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <div className="card-title">ยอดขาย (ปิดดีลสำเร็จ)</div>
-        <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
-          {SALES_MODES.map(m => (
-            <button key={m.key} type="button" className={`btn btn-xs ${mode === m.key ? 'btn-primary' : 'btn-outline'}`} onClick={() => setMode(m.key)}>{m.label}</button>
-          ))}
+    <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="modal" style={{ maxWidth: 640 }}>
+        <div className="modal-header">
+          <div className="modal-title">ยอดขายที่ปิดดีลสำเร็จ <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({won.length} ดีล · {fmtCurrency(grandTotal)})</span></div>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
-      </div>
-      <div className="table-wrap" style={{ border: 'none', maxHeight: 220, overflowY: 'auto' }}>
-        <table>
-          <tbody>
-            {rows.map(g => {
-              const total = g.rows.reduce((s, d) => s + (Number(d.value) || 0), 0)
-              return (
-                <tr key={g.key}>
-                  <td style={{ fontWeight: 500, width: 160 }}>{g.label}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{g.rows.length} ดีล</td>
-                  <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(total)}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <div className="modal-body">
+          <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+            {SALES_MODES.map(m => (
+              <button key={m.key} type="button" className={`btn btn-xs ${mode === m.key ? 'btn-primary' : 'btn-outline'}`} onClick={() => setMode(m.key)}>{m.label}</button>
+            ))}
+          </div>
+          {groups.map(g => {
+            const total = g.rows.reduce((s, d) => s + (Number(d.value) || 0), 0)
+            return (
+              <div key={g.key} style={{ border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--gray-bg)', fontWeight: 600 }}>
+                  <span>{g.label}</span>
+                  <span style={{ color: 'var(--navy)' }}>{g.rows.length} ดีล · {fmtCurrency(total)}</span>
+                </div>
+                <table>
+                  <tbody>
+                    {g.rows.map(d => {
+                      const co = companies.find(c => c.id === d.company_id)
+                      return (
+                        <tr key={d.id}>
+                          <td style={{ fontWeight: 500 }}>{d.name}</td>
+                          <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{co ? co.name : '-'}</td>
+                          <td style={{ fontSize: 12 }}>{fmtDate(d.close_date)}</td>
+                          <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(d.value)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
@@ -140,10 +153,11 @@ function FollowUpSummary({ deals, companies, onEdit }) {
   )
 }
 
-export default function Deals({ perm, deals, companies, quotations, onAdd, onAddStage, onEdit, onMoveStage, onCreateQuotation }) {
+export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdit, onCreateQuotation }) {
   const { list } = usePicklists()
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
+  const [salesOpen, setSalesOpen] = useState(false)
 
   // กรองตามวันที่สร้างดีล (created_at) — เทียบเป็นวันที่ตามเวลาเครื่อง ไม่ใช่ UTC เพราะ created_at เก็บเป็น timestamptz
   const filtered = deals.filter(d => {
@@ -153,6 +167,8 @@ export default function Deals({ perm, deals, companies, quotations, onAdd, onAdd
     return true
   })
   const totalVal = filtered.reduce((s, d) => s + (Number(d.value) || 0), 0)
+  const won = deals.filter(d => d.stage === 'Closed Won')
+  const wonTotal = won.reduce((s, d) => s + (Number(d.value) || 0), 0)
 
   return (
     <div>
@@ -160,10 +176,12 @@ export default function Deals({ perm, deals, companies, quotations, onAdd, onAdd
         <div className="section-title">ดีลการขาย <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({filtered.length} ดีล · {fmtCurrency(totalVal)})</span></div>
         <button className="btn btn-primary" onClick={onAdd}>+ เพิ่มดีล</button>
       </div>
-      {/* ยอดขายรายวันชิดซ้ายครึ่งเดียว + ตัวกรองวันที่ชิดขวาบรรทัดเดียวกัน */}
+      {/* ยอดขายรวมแบบกดดูรายละเอียดได้ ชิดซ้าย + ตัวกรองวันที่ชิดขวาบรรทัดเดียวกัน */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 10 }}>
-        <div style={{ flex: '0 1 520px', minWidth: 0 }}>
-          <SalesSummary deals={deals} />
+        <div className="kpi-card green" style={{ cursor: 'pointer', flex: '0 0 auto', minWidth: 240 }} onClick={() => setSalesOpen(true)} title="กดเพื่อดูว่ายอดขายมาจากดีลไหนบ้าง">
+          <div className="kpi-label">ยอดขายที่ปิดดีลสำเร็จ</div>
+          <div className="kpi-value">{fmtCurrency(wonTotal)}</div>
+          <div className="kpi-sub">{won.length} ดีล — กดเพื่อดูรายละเอียด</div>
         </div>
         <div className="filter-bar" style={{ margin: 0, flexShrink: 0 }}>
           <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่สร้างดีล ตั้งแต่" />
@@ -172,6 +190,7 @@ export default function Deals({ perm, deals, companies, quotations, onAdd, onAdd
           {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
         </div>
       </div>
+      {salesOpen && <SalesDetailModal won={won} companies={companies} onClose={() => setSalesOpen(false)} />}
       <FollowUpSummary deals={deals} companies={companies} onEdit={onEdit} />
       <div className="kanban-board">
         {list('deal_stages').map(stage => {
@@ -188,20 +207,17 @@ export default function Deals({ perm, deals, companies, quotations, onAdd, onAdd
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
                 {sd.map(d => {
                   const co = companies.find(c => c.id === d.company_id)
-                  const qCount = quotations.filter(q => q.deal_id === d.id).length
                   return (
-                    <div className="kanban-card" key={d.id}>
-                      <div className="deal-name">{d.name}</div>
+                    <div className="kanban-card" key={d.id} style={{ position: 'relative' }}>
+                      {canEdit(d, perm) && (
+                        <button className="btn btn-secondary btn-xs" style={{ position: 'absolute', top: 6, right: 6, padding: '2px 6px', fontSize: 10 }} onClick={() => onCreateQuotation(d)} title="ก็อปข้อมูลดีลนี้ไปสร้างใบเสนอราคา">ออกใบเสนอราคา</button>
+                      )}
+                      <div className="deal-name" style={{ paddingRight: canEdit(d, perm) ? 92 : 0 }}>{d.name}</div>
                       <div className="deal-co">{co ? co.name : '-'}{co?.credit_term && <span className="badge badge-orange" style={{ marginLeft: 6, fontSize: 9, fontWeight: 400 }}>{co.credit_term}</span>}</div>
                       <div className="deal-val">{fmtCurrency(d.value)}</div>
-                      {d.close_date && <div className="deal-date">{fmtDate(d.close_date)}</div>}
-                      <div className="deal-owner">{d.owner || ''}</div>
-                      {qCount > 0 && <div style={{ fontSize: 10, color: 'var(--text-light)' }}>ออกใบเสนอราคาแล้ว {qCount} ใบ</div>}
                       {canEdit(d, perm) && (
-                        <div style={{ marginTop: 8, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <div style={{ marginTop: 8 }}>
                           <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>แก้ไข</button>
-                          <button className="btn btn-secondary btn-xs" onClick={() => onCreateQuotation(d)}>ออกใบเสนอราคา</button>
-                          <EditableSelect listKey="deal_stages" value={d.stage} onChange={v => onMoveStage(d.id, v)} isAdmin={perm.isAdmin} style={{ width: 140 }} />
                         </div>
                       )}
                     </div>
