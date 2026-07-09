@@ -543,6 +543,7 @@ export async function fetchLeadsStatusSummary({ q = '', dateFrom = '', dateTo = 
   return byStatus
 }
 
+export const addLead = (d) => supabase.from('leads').insert(d).select().single().then(handle)
 export const updateLead = (id, d) => supabase.from('leads').update(d).eq('id', id).select().single().then(handle)
 export const deleteLead = (id) => supabase.from('leads').delete().eq('id', id).then(handle)
 // นำเข้าผู้ติดต่อจากไฟล์ Excel — insert ตรงผ่าน client ได้เลย (ต่างจากฟอร์มสาธารณะที่ต้องผ่าน Netlify Function) เพราะผู้ใช้ในหน้านี้ login แล้ว ตรงกับ RLS policy "leads insert"

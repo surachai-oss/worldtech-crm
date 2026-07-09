@@ -15,7 +15,7 @@ import Users from './components/Users'
 import Products from './components/Products'
 import Leads from './components/Leads'
 import { PicklistsProvider } from './components/PicklistsContext'
-import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal } from './components/Modals'
+import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal, LeadModal } from './components/Modals'
 import { renderQuotationPdfBlob, loadQuotationPdfItems } from './lib/printQuotation'
 import './App.css'
 
@@ -148,6 +148,8 @@ function AppInner({ session }) {
       } catch (e) { toast('โหลดรายการสินค้าของใบเสนอราคาไม่สำเร็จ: ' + e.message, 'error') }
     },
     leadStatus: async (id, status) => { await run(() => api.updateLead(id, { status }), 'อัปเดตสถานะสำเร็จ') },
+    // เซลล์กรอกผู้ติดต่อเองตอนลูกค้าทักมาเอง หรือได้นามบัตรมาจากงานอีเวนต์ (ไม่ผ่านฟอร์มสาธารณะ)
+    addLead: () => setModal({ type: 'lead', payload: {} }),
     deleteLead: async (id) => {
       if (!(await confirm('ลบลีดนี้?'))) return
       await run(() => api.deleteLead(id), 'ลบสำเร็จ')
@@ -223,6 +225,14 @@ function AppInner({ session }) {
     if (!f.subject?.trim()) { toast('กรุณากรอกหัวข้องาน', 'error'); return }
     if (f.id) await run(() => api.updateTask(f.id, f), 'อัปเดตสำเร็จ')
     else await run(() => api.addTask({ ...f, created_by: session.user.id }), 'เพิ่มงานสำเร็จ')
+  }
+  const saveLead = async (f) => {
+    closeModal()
+    if (!f.subject?.trim()) { toast('กรุณากรอกหัวข้อ', 'error'); return }
+    if (!f.full_name?.trim()) { toast('กรุณากรอกชื่อ-นามสกุล', 'error'); return }
+    if (!f.phone?.trim()) { toast('กรุณากรอกเบอร์โทรศัพท์', 'error'); return }
+    if (f.id) await run(() => api.updateLead(f.id, f), 'อัปเดตสำเร็จ')
+    else await run(() => api.addLead(f), 'เพิ่มผู้ติดต่อสำเร็จ')
   }
   // อัปโหลดสำเนา PDF ของใบเสนอราคาขึ้น Google Drive อัตโนมัติหลังบันทึก — ทำเป็น background ไม่บล็อกผู้ใช้ ถ้าพลาดแค่เตือน ไม่กระทบข้อมูลที่บันทึกไปแล้วใน Supabase
   const mirrorQuotationToDrive = async (quot) => {
@@ -317,7 +327,7 @@ function AppInner({ session }) {
             />
           )}
           {view === 'leads' && (
-            <Leads perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onCreateCompany={actions.convertLeadToCompany} onStatusChange={actions.leadStatus} onDelete={actions.deleteLead} />
+            <Leads perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={actions.addLead} onCreateCompany={actions.convertLeadToCompany} onStatusChange={actions.leadStatus} onDelete={actions.deleteLead} />
           )}
           {view === 'deals' && (
             <Deals perm={perm} deals={data.deals} companies={data.companies} quotations={data.quotations} onAdd={() => actions.addDeal(null)} onAddStage={actions.addDealStage} onEdit={actions.editDeal} onMoveStage={actions.moveDealStage} onCreateQuotation={actions.createQuotationFromDeal} />
@@ -342,6 +352,7 @@ function AppInner({ session }) {
       {modal?.type === 'activity' && <ActivityModal companies={data.companies} contacts={data.contacts} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveActivity} />}
       {modal?.type === 'task' && <TaskModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveTask} />}
       {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
+      {modal?.type === 'lead' && <LeadModal initial={modal.payload?.initial} isAdmin={isAdmin} onClose={closeModal} onSave={saveLead} />}
     </div>
   )
 }

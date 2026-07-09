@@ -3,6 +3,7 @@ import EditableSelect from './EditableSelect'
 import SearchableSelect from './SearchableSelect'
 import { useUi } from './UiContext'
 import { listProducts, listDealItems, listQuotationItems, computeDealTotals, getProductImageUrl } from '../lib/api'
+import { POSITION_OPTIONS, BUSINESS_TYPE_OTHER, BUSINESS_TYPE_OPTIONS, APPLIANCE_OPTIONS, PURCHASE_REASON_OPTIONS } from '../lib/leadOptions'
 
 function Field({ label, required, children }) {
   return (
@@ -118,6 +119,84 @@ export function ContactModal({ initial, companies, defaultCompanyId, onClose, on
         <Field label="อีเมล"><input className="form-control" type="email" value={f.email || ''} onChange={set('email')} /></Field>
       </div>
       <Field label="หมายเหตุ"><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
+    </ModalShell>
+  )
+}
+
+// ให้เซลล์กรอกผู้ติดต่อ/ลีดเองตอนลูกค้าทักมาเอง หรือได้นามบัตรมาจากงานอีเวนต์ ฯลฯ — ฟิลด์เดียวกับฟอร์มสาธารณะ /lead ทุกอย่าง
+// ต่างจากฟอร์มสาธารณะที่ status เริ่มที่ "ใหม่" เสมอ — ที่นี่ default เป็น "ติดต่อแล้ว" เพราะเซลล์คุยกับลูกค้าไปแล้วก่อนจะมากรอก แก้เป็นอย่างอื่นได้ถ้าไม่ตรง
+export function LeadModal({ initial, isAdmin, onClose, onSave }) {
+  const [f, setF] = useState(() => {
+    const base = {
+      subject: '', full_name: '', phone: '', email: '', position: '', business_type: '', businessTypeOther: '',
+      appliance_interest: [], purchase_reason: '', message: '', source: '', status: 'ติดต่อแล้ว'
+    }
+    if (!initial) return base
+    return { ...base, ...initial, businessTypeOther: BUSINESS_TYPE_OPTIONS.includes(initial.business_type) ? '' : (initial.business_type || '') }
+  })
+  const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
+
+  const toggleAppliance = (value) => setF(s => ({
+    ...s,
+    appliance_interest: s.appliance_interest.includes(value) ? s.appliance_interest.filter(v => v !== value) : [...s.appliance_interest, value]
+  }))
+
+  const isOtherBusiness = f.business_type === BUSINESS_TYPE_OTHER || (f.businessTypeOther && !BUSINESS_TYPE_OPTIONS.includes(f.business_type))
+
+  const submit = () => {
+    const { businessTypeOther, ...rest } = f
+    onSave({ ...rest, business_type: isOtherBusiness ? businessTypeOther.trim() : (f.business_type || null) })
+  }
+
+  return (
+    <ModalShell title={initial?.id ? 'แก้ไขผู้ติดต่อ' : 'เพิ่มผู้ติดต่อ'} onClose={onClose} onSave={submit}>
+      <div className="form-row">
+        <Field label="ชื่อ-นามสกุล" required><input className="form-control" value={f.full_name} onChange={set('full_name')} placeholder="เช่น สมชาย ใจดี" /></Field>
+        <Field label="เบอร์โทรศัพท์" required><input className="form-control" value={f.phone} onChange={set('phone')} placeholder="08x-xxx-xxxx" /></Field>
+      </div>
+      <Field label="อีเมล"><input className="form-control" type="email" value={f.email || ''} onChange={set('email')} placeholder="ไม่บังคับ" /></Field>
+      <Field label="หัวข้อที่ติดต่อ" required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder="เช่น สอบถามราคาเครื่องฟอกอากาศ" /></Field>
+      <div className="form-row">
+        <Field label="ตำแหน่ง">
+          <select className="form-control" value={f.position || ''} onChange={set('position')}>
+            <option value="">-- เลือก --</option>
+            {POSITION_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </Field>
+        <Field label="เหตุผลในการซื้อ">
+          <select className="form-control" value={f.purchase_reason || ''} onChange={set('purchase_reason')}>
+            <option value="">-- เลือก --</option>
+            {PURCHASE_REASON_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </Field>
+      </div>
+      <Field label="ประเภทธุรกิจ">
+        <select className="form-control" value={f.business_type || ''} onChange={set('business_type')}>
+          <option value="">-- เลือก --</option>
+          {BUSINESS_TYPE_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
+        {isOtherBusiness && (
+          <input className="form-control" style={{ marginTop: 8 }} value={f.businessTypeOther} onChange={set('businessTypeOther')} placeholder="ระบุประเภทธุรกิจ" />
+        )}
+      </Field>
+      <Field label="ประเภทเครื่องใช้ไฟฟ้าที่สนใจ (เลือกได้หลายข้อ)">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+          {APPLIANCE_OPTIONS.map(v => (
+            <label key={v} style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input type="checkbox" checked={f.appliance_interest.includes(v)} onChange={() => toggleAppliance(v)} /> {v}
+            </label>
+          ))}
+        </div>
+      </Field>
+      <div className="form-row">
+        <Field label="ที่มา">
+          <EditableSelect listKey="lead_sources" value={f.source} onChange={v => setF(s => ({ ...s, source: v }))} placeholder="-- ไม่ระบุ --" isAdmin={isAdmin} />
+        </Field>
+        <Field label="สถานะ">
+          <EditableSelect listKey="lead_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} isAdmin={isAdmin} />
+        </Field>
+      </div>
+      <Field label="ข้อความเพิ่มเติม"><textarea className="form-control" rows={2} value={f.message || ''} onChange={set('message')} placeholder="ไม่บังคับ" /></Field>
     </ModalShell>
   )
 }

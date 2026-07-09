@@ -8,7 +8,7 @@ import EditableSelect from './EditableSelect'
 import Pagination from './Pagination'
 import ImportLeadsModal from './ImportLeadsModal'
 
-export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, onStatusChange, onDelete }) {
+export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onCreateCompany, onStatusChange, onDelete }) {
   const { toast } = useUi()
   const { list } = usePicklists()
   const [status, setStatus] = useState('')
@@ -70,6 +70,7 @@ export default function Leads({ perm, reloadKey, onNavCompany, onCreateCompany, 
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-outline btn-sm" onClick={() => setShowImport(true)}>นำเข้าจากไฟล์</button>
           <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting}>{exporting ? 'กำลังส่งออก...' : 'ส่งออกเป็น Excel'}</button>
+          <button className="btn btn-primary btn-sm" onClick={onAdd}>+ เพิ่มผู้ติดต่อ</button>
         </div>
       </div>
       {showImport && <ImportLeadsModal onClose={() => setShowImport(false)} onImported={() => setLocalBump(b => b + 1)} />}
