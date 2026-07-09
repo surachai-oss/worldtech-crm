@@ -173,14 +173,16 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
       </div>
       {/* ยอดขายรวมแบบกดดูรายละเอียดได้ ชิดซ้าย + ตัวกรองวันที่ชิดขวาบรรทัดเดียวกัน */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 10 }}>
-        <div className="kpi-card green" style={{ flex: '0 0 auto', minWidth: 260 }}>
-          <div className="kpi-label">ยอดขายที่ปิดดีลสำเร็จ</div>
-          <div className="kpi-value">{fmtCurrency(wonTotal)}</div>
-          <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-            {SALES_MODES.map(m => (
-              <button key={m.key} type="button" className="btn btn-xs btn-outline" onClick={() => setSalesMode(m.key)} title={`ดูยอดขาย${m.label}`}>{m.label}</button>
-            ))}
+        <div className="kpi-card green" style={{ flex: '0 0 auto', minWidth: 320 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+            <div className="kpi-label">ยอดขายที่ปิดดีลสำเร็จ</div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {SALES_MODES.map(m => (
+                <button key={m.key} type="button" className={`btn btn-xs ${salesMode === m.key ? 'btn-primary' : 'btn-outline'}`} onClick={() => setSalesMode(m.key)} title={`ดูยอดขาย${m.label}`}>{m.label}</button>
+              ))}
+            </div>
           </div>
+          <div className="kpi-value">{fmtCurrency(wonTotal)}</div>
         </div>
         <div className="filter-bar" style={{ margin: 0, flexShrink: 0 }}>
           <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่สร้างดีล ตั้งแต่" />
