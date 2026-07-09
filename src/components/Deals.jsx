@@ -214,12 +214,11 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
                       )}
                       <div className="deal-name" style={{ paddingRight: canEdit(d, perm) ? 92 : 0 }}>{d.name}</div>
                       <div className="deal-co">{co ? co.name : '-'}{co?.credit_term && <span className="badge badge-orange" style={{ marginLeft: 6, fontSize: 9, fontWeight: 400 }}>{co.credit_term}</span>}</div>
-                      <div className="deal-val">{fmtCurrency(d.value)}</div>
-                      {canEdit(d, perm) && (
-                        <div style={{ marginTop: 8 }}>
-                          <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>แก้ไข</button>
-                        </div>
-                      )}
+                      {/* ราคา + ปุ่มแก้ไข อยู่บรรทัดเดียวกัน (แก้ไขชิดขวา) เพื่อให้การ์ดสั้นลง */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, gap: 8 }}>
+                        <div className="deal-val">{fmtCurrency(d.value)}</div>
+                        {canEdit(d, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>แก้ไข</button>}
+                      </div>
                     </div>
                   )
                 })}
