@@ -56,7 +56,7 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
   const today = todayStr()
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="modal" style={{ maxWidth: 640 }}>
+      <div className="modal" style={{ maxWidth: 760 }}>
         <div className="modal-header">
           <div className="modal-title">{title} · {modeLabel} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({deals.length} ดีล · {fmtCurrency(grandTotal)})</span></div>
           <button className="modal-close" onClick={onClose}>×</button>
@@ -65,22 +65,22 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
           {groups.length ? groups.map(g => {
             const total = g.rows.reduce((s, d) => s + (Number(d.value) || 0), 0)
             return (
-              <div key={g.key} style={{ border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--gray-bg)', fontWeight: 600 }}>
+              <div key={g.key} style={{ border: '1px solid var(--border)', borderRadius: 10, marginBottom: 16, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', background: 'var(--gray-bg)', fontWeight: 700, fontSize: 14 }}>
                   <span>{g.label}</span>
                   <span style={{ color: 'var(--navy)' }}>{g.rows.length} ดีล · {fmtCurrency(total)}</span>
                 </div>
                 <table>
                   <tbody>
-                    {g.rows.map(d => {
+                    {g.rows.map((d, i) => {
                       const co = companies.find(c => c.id === d.company_id)
                       const ov = highlightOverdue && d[dateField] && d[dateField] < today
                       return (
-                        <tr key={d.id}>
-                          <td style={{ fontWeight: 500 }}>{d.name}</td>
-                          <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{co ? co.name : '-'}</td>
-                          <td className={ov ? 'overdue' : ''} style={{ fontSize: 12 }}>{fmtDate(d[dateField])}</td>
-                          <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(d.value)}</td>
+                        <tr key={d.id} style={{ borderTop: i === 0 ? 'none' : undefined }}>
+                          <td style={{ fontWeight: 500, padding: '12px 18px' }}>{d.name}</td>
+                          <td style={{ fontSize: 12, color: 'var(--text-light)', padding: '12px 14px' }}>{co ? co.name : '-'}</td>
+                          <td className={ov ? 'overdue' : ''} style={{ fontSize: 12, padding: '12px 14px', whiteSpace: 'nowrap' }}>{fmtDate(d[dateField])}</td>
+                          <td style={{ fontWeight: 600, color: 'var(--navy)', padding: '12px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtCurrency(d.value)}</td>
                         </tr>
                       )
                     })}
@@ -124,8 +124,8 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
       </div>
       {/* กล่องสรุป 2 ใบ (ยอดขายปิดสำเร็จ + ยอดที่ต้องติดตาม) ชิดซ้าย + ตัวกรองวันที่ชิดขวา — กดปุ่มช่วงเวลาเพื่อเปิด popup รายละเอียด */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <div className="kpi-card green" style={{ flex: '0 0 auto', minWidth: 300 }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+          <div className="kpi-card green" style={{ flex: '1 1 380px', padding: '16px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
               <div className="kpi-label">ยอดขายที่ปิดดีลสำเร็จ</div>
               <div style={{ display: 'flex', gap: 4 }}>
@@ -136,7 +136,7 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
             </div>
             <div className="kpi-value">{fmtCurrency(wonTotal)}</div>
           </div>
-          <div className="kpi-card navy" style={{ flex: '0 0 auto', minWidth: 300 }}>
+          <div className="kpi-card navy" style={{ flex: '1 1 380px', padding: '16px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
               <div className="kpi-label">ยอดที่ต้องติดตาม</div>
               <div style={{ display: 'flex', gap: 4 }}>
