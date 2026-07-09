@@ -40,24 +40,19 @@ function groupWonSales(won, mode) {
   return Object.keys(groups).sort().reverse().map(k => ({ key: k, ...groups[k] }))
 }
 
-// ป็อปอัปแสดงว่ายอดขายที่ปิดสำเร็จมาจากดีลไหนบ้าง — สลับดู ราย วัน/สัปดาห์/เดือน แต่ละกลุ่มลิสต์ดีลที่อยู่ในนั้น
-function SalesDetailModal({ won, companies, onClose }) {
-  const [mode, setMode] = useState('day')
+// ป็อปอัปแสดงว่ายอดขายที่ปิดสำเร็จมาจากดีลไหนบ้าง ตามช่วงที่เลือก (วัน/สัปดาห์/เดือน) — แต่ละกลุ่มลิสต์ดีลที่อยู่ในนั้น
+function SalesDetailModal({ won, companies, mode, onClose }) {
   const groups = groupWonSales(won, mode)
   const grandTotal = won.reduce((s, d) => s + (Number(d.value) || 0), 0)
+  const modeLabel = (SALES_MODES.find(m => m.key === mode) || {}).label || ''
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={{ maxWidth: 640 }}>
         <div className="modal-header">
-          <div className="modal-title">ยอดขายที่ปิดดีลสำเร็จ <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({won.length} ดีล · {fmtCurrency(grandTotal)})</span></div>
+          <div className="modal-title">ยอดขายที่ปิดดีลสำเร็จ · {modeLabel} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({won.length} ดีล · {fmtCurrency(grandTotal)})</span></div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
-          <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-            {SALES_MODES.map(m => (
-              <button key={m.key} type="button" className={`btn btn-xs ${mode === m.key ? 'btn-primary' : 'btn-outline'}`} onClick={() => setMode(m.key)}>{m.label}</button>
-            ))}
-          </div>
           {groups.map(g => {
             const total = g.rows.reduce((s, d) => s + (Number(d.value) || 0), 0)
             return (
@@ -157,7 +152,7 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
   const { list } = usePicklists()
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
-  const [salesOpen, setSalesOpen] = useState(false)
+  const [salesMode, setSalesMode] = useState(null) // null = ปิด, 'day'/'week'/'month' = เปิด popup ของช่วงนั้น
 
   // กรองตามวันที่สร้างดีล (created_at) — เทียบเป็นวันที่ตามเวลาเครื่อง ไม่ใช่ UTC เพราะ created_at เก็บเป็น timestamptz
   const filtered = deals.filter(d => {
@@ -178,10 +173,14 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
       </div>
       {/* ยอดขายรวมแบบกดดูรายละเอียดได้ ชิดซ้าย + ตัวกรองวันที่ชิดขวาบรรทัดเดียวกัน */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 10 }}>
-        <div className="kpi-card green" style={{ cursor: 'pointer', flex: '0 0 auto', minWidth: 240 }} onClick={() => setSalesOpen(true)} title="กดเพื่อดูว่ายอดขายมาจากดีลไหนบ้าง">
+        <div className="kpi-card green" style={{ flex: '0 0 auto', minWidth: 260 }}>
           <div className="kpi-label">ยอดขายที่ปิดดีลสำเร็จ</div>
           <div className="kpi-value">{fmtCurrency(wonTotal)}</div>
-          <div className="kpi-sub">{won.length} ดีล — กดเพื่อดูรายละเอียด</div>
+          <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+            {SALES_MODES.map(m => (
+              <button key={m.key} type="button" className="btn btn-xs btn-outline" onClick={() => setSalesMode(m.key)} title={`ดูยอดขาย${m.label}`}>{m.label}</button>
+            ))}
+          </div>
         </div>
         <div className="filter-bar" style={{ margin: 0, flexShrink: 0 }}>
           <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่สร้างดีล ตั้งแต่" />
@@ -190,7 +189,7 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
           {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
         </div>
       </div>
-      {salesOpen && <SalesDetailModal won={won} companies={companies} onClose={() => setSalesOpen(false)} />}
+      {salesMode && <SalesDetailModal won={won} companies={companies} mode={salesMode} onClose={() => setSalesMode(null)} />}
       <FollowUpSummary deals={deals} companies={companies} onEdit={onEdit} />
       <div className="kanban-board">
         {list('deal_stages').map(stage => {
