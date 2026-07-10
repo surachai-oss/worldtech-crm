@@ -14,6 +14,7 @@ import Quotations from './components/Quotations'
 import Users from './components/Users'
 import Products from './components/Products'
 import Leads from './components/Leads'
+import PaymentComingSoon from './components/PaymentComingSoon'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal, LeadModal } from './components/Modals'
 import { renderQuotationPdfBlob, loadQuotationPdfItems } from './lib/printQuotation'
@@ -22,7 +23,8 @@ import './App.css'
 const TITLES = {
   dashboard: 'แดชบอร์ด', companies: 'บริษัทลูกค้า', 'company-detail': 'รายละเอียดบริษัท',
   deals: 'ดีลการขาย', activities: 'ประวัติการติดต่อ', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา',
-  users: 'ผู้ใช้งาน', products: 'สินค้า', leads: 'ผู้ติดต่อ'
+  users: 'ผู้ใช้งาน', products: 'สินค้า', leads: 'ผู้ติดต่อ',
+  'payment-requests': 'คำขอตรวจยอด', 'finance-review': 'ตรวจสอบยอดโอน', 'payment-dashboard': 'แดชบอร์ดการชำระเงิน'
 }
 
 function AppInner({ session }) {
@@ -356,6 +358,27 @@ function AppInner({ session }) {
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products />}
+          {view === 'payment-requests' && (
+            <PaymentComingSoon title="คำขอตรวจยอด" bullets={[
+              'Sale สร้างคำขอตรวจยอดโอน แนบสลิป + รายการสินค้า ผูกกับลูกค้า/ดีล/ใบเสนอราคา',
+              'กดส่งให้บัญชีตรวจ (Submit to Finance) แล้วแก้ไขไม่ได้จนกว่าจะถูกตีกลับ',
+              'หลังอนุมัติแล้ว กด "เปิดออเดอร์" (Mark as Order Created) ได้จากหน้านี้',
+            ]} />
+          )}
+          {view === 'finance-review' && (
+            <PaymentComingSoon title="ตรวจสอบยอดโอน" bullets={[
+              'คิวคำขอที่รอบัญชีตรวจ (Pending Finance Review)',
+              'ดูสลิป + รายการสินค้าที่แนบมา',
+              'เลือกผล: อนุมัติ / ขอข้อมูลเพิ่ม / ยอดไม่ตรง / ปฏิเสธ พร้อมหมายเหตุ',
+            ]} />
+          )}
+          {view === 'payment-dashboard' && (
+            <PaymentComingSoon title="แดชบอร์ดการชำระเงิน" bullets={[
+              'สรุปจำนวนคำขอแยกตามสถานะ (รอตรวจ/ขอข้อมูลเพิ่ม/ยอดไม่ตรง/อนุมัติแล้ว/เปิดออเดอร์แล้ว/ปฏิเสธ)',
+              'ยอดอนุมัติรวม, คำขอที่สร้าง/อนุมัติวันนี้',
+              'รายการที่อนุมัติแล้วแต่ยังไม่เปิดออเดอร์',
+            ]} />
+          )}
         </div>
       </div>
 

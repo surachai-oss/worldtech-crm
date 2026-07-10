@@ -2,6 +2,13 @@ const NAV = [
   { section: 'หลัก', items: [{ id: 'dashboard', label: 'แดชบอร์ด' }] },
   { section: 'ข้อมูลลูกค้า', items: [{ id: 'companies', label: 'บริษัทลูกค้า' }, { id: 'leads', label: 'ผู้ติดต่อ' }] },
   { section: 'การขาย', items: [{ id: 'deals', label: 'ดีลการขาย' }, { id: 'quotations', label: 'ใบเสนอราคา' }] },
+  {
+    section: 'การเงิน', items: [
+      { id: 'payment-requests', label: 'คำขอตรวจยอด' },
+      { id: 'finance-review', label: 'ตรวจสอบยอดโอน' },
+      { id: 'payment-dashboard', label: 'แดชบอร์ดการชำระเงิน' },
+    ]
+  },
   { section: 'ข้อมูลสินค้า', items: [{ id: 'products', label: 'สินค้า' }] },
   { section: 'ติดตาม', items: [{ id: 'activities', label: 'ประวัติการติดต่อ' }, { id: 'tasks', label: 'งาน Follow-up' }] },
 ]
