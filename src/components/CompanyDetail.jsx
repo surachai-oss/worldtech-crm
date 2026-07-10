@@ -67,7 +67,7 @@ export default function CompanyDetail({ company, contacts, deals, activities, ta
       {tab === 'deals' && <DealsTab deals={deals} quotations={quotations} perm={perm} onAdd={() => actions.addDeal(company.id)} onEdit={actions.editDeal} onDelete={actions.deleteDeal} onCreateQuotation={actions.createQuotationFromDeal} />}
       {tab === 'activities' && <ActivitiesTab activities={activities} perm={perm} company={company} onAdd={() => actions.addActivity(company.id)} onDelete={actions.deleteActivity} />}
       {tab === 'tasks' && <TasksTab tasks={tasks} perm={perm} onAdd={() => actions.addTask(company.id)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />}
-      {tab === 'quotations' && <QuotationsTab quotations={quotations} deals={deals} company={company} perm={perm} settings={settings} onAdd={() => actions.addQuotation(company.id)} onEdit={actions.editQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onRefresh={actions.refreshData} onCreateDeal={actions.createDealFromQuotation} />}
+      {tab === 'quotations' && <QuotationsTab quotations={quotations} deals={deals} company={company} perm={perm} settings={settings} onAdd={() => actions.addQuotation(company.id)} onEdit={actions.editQuotation} onCopy={actions.copyQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onRefresh={actions.refreshData} onCreateDeal={actions.createDealFromQuotation} />}
       {tab === 'attachments' && <AttachmentsTab company={company} perm={perm} currentUserName={currentUserName} />}
     </div>
   )
@@ -219,7 +219,7 @@ function TasksTab({ tasks, perm, onAdd, onEdit, onComplete, onDelete }) {
   )
 }
 
-function QuotationsTab({ quotations, deals, company, perm, settings, onAdd, onEdit, onStatusChange, onPaymentStatusChange, onDelete, onRefresh, onCreateDeal }) {
+function QuotationsTab({ quotations, deals, company, perm, settings, onAdd, onEdit, onCopy, onStatusChange, onPaymentStatusChange, onDelete, onRefresh, onCreateDeal }) {
   const manageable = canManageChild(company, perm)
   return (
     <>
@@ -249,6 +249,7 @@ function QuotationsTab({ quotations, deals, company, perm, settings, onAdd, onEd
                       <EditableSelect listKey="quot_statuses" value={q.status} onChange={v => onStatusChange(q.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
                     )}
                     {manageable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(q)}>แก้ไข</button>}
+                    {manageable && <button className="btn btn-outline btn-xs" onClick={() => onCopy(q)} title="คัดลอกเป็นใบเสนอราคาใหม่">คัดลอก</button>}
                     {manageable && !q.deal_id && <button className="btn btn-secondary btn-xs" onClick={() => onCreateDeal(q)}>สร้างดีล</button>}
                     <button className="btn btn-secondary btn-xs" onClick={() => printQuotation(q, company, settings)}>PDF</button>
                     <SignedQuotationControl quotation={q} manageable={manageable} onChanged={onRefresh} />

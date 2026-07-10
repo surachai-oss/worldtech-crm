@@ -147,6 +147,19 @@ function AppInner({ session }) {
         setModal({ type: 'deal', payload: { initial: { company_id: quot.company_id, name: quot.subject, items }, linkQuotationId: quot.id } })
       } catch (e) { toast('โหลดรายการสินค้าของใบเสนอราคาไม่สำเร็จ: ' + e.message, 'error') }
     },
+    // ลูกค้าเก่ากลับมาซื้อของเดิมซ้ำ — ก็อปรายการสินค้า/บริษัท/เงื่อนไขจากใบเสนอราคาเดิมมาตั้งต้นใบใหม่ ไม่ต้องพิมพ์ซ้ำ
+    // ไม่ก็อป id/เลขที่/สถานะ/วันที่/การชำระ/deal_id เพราะเป็นข้อมูลของใบเดิมที่ใบใหม่ต้องเริ่มสดใหม่ (ได้ค่า default จาก QuotationModal เอง)
+    copyQuotation: async (quot) => {
+      try {
+        const rows = await api.listQuotationItems(quot.id)
+        const items = rows.map(r => ({ product_id: r.product_id || '', description: r.description || '', quantity: r.quantity, unit_price: r.unit_price }))
+        setModal({ type: 'quotation', payload: { initial: {
+          company_id: quot.company_id, subject: quot.subject, note: quot.note, sale_phone: quot.sale_phone,
+          proposer_name: quot.proposer_name, credit_term: quot.credit_term || '', items
+        } } })
+        toast('คัดลอกข้อมูลแล้ว ตรวจสอบก่อนบันทึก', 'success')
+      } catch (e) { toast('คัดลอกใบเสนอราคาไม่สำเร็จ: ' + e.message, 'error') }
+    },
     leadStatus: async (id, status) => { await run(() => api.updateLead(id, { status }), 'อัปเดตสถานะสำเร็จ') },
     // เซลล์กรอกผู้ติดต่อเองตอนลูกค้าทักมาเอง หรือได้นามบัตรมาจากงานอีเวนต์ (ไม่ผ่านฟอร์มสาธารณะ)
     addLead: () => setModal({ type: 'lead', payload: {} }),
@@ -339,7 +352,7 @@ function AppInner({ session }) {
             <Tasks perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addTask(null)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />
           )}
           {view === 'quotations' && (
-            <Quotations perm={perm} reloadKey={reloadKey} settings={settings} deals={data.deals} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onCreateDeal={actions.createDealFromQuotation} />
+            <Quotations perm={perm} reloadKey={reloadKey} settings={settings} deals={data.deals} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onCopy={actions.copyQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onCreateDeal={actions.createDealFromQuotation} />
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products />}

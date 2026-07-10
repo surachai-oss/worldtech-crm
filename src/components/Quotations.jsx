@@ -9,7 +9,7 @@ import EditableSelect from './EditableSelect'
 import SignedQuotationControl from './SignedQuotationControl'
 import Pagination from './Pagination'
 
-export default function Quotations({ perm, reloadKey, settings, deals, onAdd, onEdit, onStatusChange, onDelete, onCreateDeal }) {
+export default function Quotations({ perm, reloadKey, settings, deals, onAdd, onEdit, onCopy, onStatusChange, onDelete, onCreateDeal }) {
   const { toast } = useUi()
   const { list } = usePicklists()
   const [status, setStatus] = useState('')
@@ -107,6 +107,7 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
                           <EditableSelect listKey="quot_statuses" value={qt.status} onChange={v => onStatusChange(qt.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
                         )}
                         {canManageChild(qt.company, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(qt)}>แก้ไข</button>}
+                        {canManageChild(qt.company, perm) && <button className="btn btn-outline btn-xs" onClick={() => onCopy(qt)} title="คัดลอกเป็นใบเสนอราคาใหม่">คัดลอก</button>}
                         {canManageChild(qt.company, perm) && !qt.deal_id && <button className="btn btn-secondary btn-xs" onClick={() => onCreateDeal(qt)}>สร้างดีล</button>}
                         <button className="btn btn-secondary btn-xs" onClick={() => doPrint(qt)}>PDF</button>
                         <SignedQuotationControl quotation={qt} manageable={canManageChild(qt.company, perm)} onChanged={() => setLocalBump(b => b + 1)} />
