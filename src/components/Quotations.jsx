@@ -93,7 +93,12 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
                   const fromDeal = qt.deal_id ? deals.find(d => d.id === qt.deal_id) : null
                   return (
                     <tr key={qt.id}>
-                      <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{qt.quot_no}</td>
+                      <td style={{ fontWeight: 600, color: 'var(--navy)' }} onClick={e => e.stopPropagation()}>
+                        {qt.quot_no}
+                        {canManageChild(qt.company, perm) && !qt.deal_id && (
+                          <button className="btn btn-secondary btn-xs" style={{ marginLeft: 8 }} onClick={() => onCreateDeal(qt)}>สร้างดีล</button>
+                        )}
+                      </td>
                       <td style={{ fontWeight: 500 }}>{qt.subject}{fromDeal && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>จากดีล: {fromDeal.name}</div>}</td>
                       <td>{qt.company ? qt.company.name : '-'}</td>
                       <td style={{ fontWeight: 600 }}>{fmtCurrency(qt.value)}</td>
@@ -108,7 +113,6 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
                         )}
                         {canManageChild(qt.company, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(qt)}>แก้ไข</button>}
                         {canManageChild(qt.company, perm) && <button className="btn btn-outline btn-xs" onClick={() => onCopy(qt)} title="คัดลอกเป็นใบเสนอราคาใหม่">คัดลอก</button>}
-                        {canManageChild(qt.company, perm) && !qt.deal_id && <button className="btn btn-secondary btn-xs" onClick={() => onCreateDeal(qt)}>สร้างดีล</button>}
                         <button className="btn btn-secondary btn-xs" onClick={() => doPrint(qt)}>PDF</button>
                         <SignedQuotationControl quotation={qt} manageable={canManageChild(qt.company, perm)} onChanged={() => setLocalBump(b => b + 1)} />
                         {canManageChild(qt.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(qt.id)}>ลบ</button>}

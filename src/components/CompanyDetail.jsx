@@ -233,7 +233,12 @@ function QuotationsTab({ quotations, deals, company, perm, settings, onAdd, onEd
               const ov = q.payment_status !== 'ชำระแล้ว' && isOverdue(q.payment_due_date)
               return (
                 <tr key={q.id} style={{ background: ov ? '#fff5f5' : undefined }}>
-                  <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{q.quot_no}</td>
+                  <td style={{ fontWeight: 600, color: 'var(--navy)' }}>
+                    {q.quot_no}
+                    {manageable && !q.deal_id && (
+                      <button className="btn btn-secondary btn-xs" style={{ marginLeft: 8 }} onClick={() => onCreateDeal(q)}>สร้างดีล</button>
+                    )}
+                  </td>
                   <td>{q.subject}{fromDeal && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>จากดีล: {fromDeal.name}</div>}</td>
                   <td style={{ fontWeight: 600 }}>{fmtCurrency(q.value)}</td>
                   <td><span className={`badge ${quotBadgeClass(q.status)}`}>{q.status}</span></td>
@@ -250,7 +255,6 @@ function QuotationsTab({ quotations, deals, company, perm, settings, onAdd, onEd
                     )}
                     {manageable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(q)}>แก้ไข</button>}
                     {manageable && <button className="btn btn-outline btn-xs" onClick={() => onCopy(q)} title="คัดลอกเป็นใบเสนอราคาใหม่">คัดลอก</button>}
-                    {manageable && !q.deal_id && <button className="btn btn-secondary btn-xs" onClick={() => onCreateDeal(q)}>สร้างดีล</button>}
                     <button className="btn btn-secondary btn-xs" onClick={() => printQuotation(q, company, settings)}>PDF</button>
                     <SignedQuotationControl quotation={q} manageable={manageable} onChanged={onRefresh} />
                     {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(q.id)}>ลบ</button>}
