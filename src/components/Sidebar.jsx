@@ -2,13 +2,6 @@ const NAV = [
   { section: 'หลัก', items: [{ id: 'dashboard', label: 'แดชบอร์ด' }] },
   { section: 'ข้อมูลลูกค้า', items: [{ id: 'companies', label: 'บริษัทลูกค้า' }, { id: 'leads', label: 'ผู้ติดต่อ' }] },
   { section: 'การขาย', items: [{ id: 'deals', label: 'ดีลการขาย' }, { id: 'quotations', label: 'ใบเสนอราคา' }] },
-  {
-    section: 'การเงิน', items: [
-      { id: 'payment-requests', label: 'คำขอตรวจยอด' },
-      { id: 'finance-review', label: 'ตรวจสอบยอดโอน' },
-      { id: 'payment-dashboard', label: 'แดชบอร์ดการชำระเงิน' },
-    ]
-  },
   { section: 'ข้อมูลสินค้า', items: [{ id: 'products', label: 'สินค้า' }] },
   { section: 'ติดตาม', items: [{ id: 'activities', label: 'ประวัติการติดต่อ' }, { id: 'tasks', label: 'งาน Follow-up' }] },
 ]
@@ -16,9 +9,17 @@ const ADMIN_SECTION = { section: 'ผู้ดูแลระบบ', items: [
   { id: 'users', label: 'ผู้ใช้งาน' },
 ] }
 
-export default function Sidebar({ activeView, onNav, user, isAdmin, onLogout }) {
+export default function Sidebar({ activeView, onNav, user, isAdmin, isFinance, onLogout }) {
   const name = user?.name || 'ผู้ใช้งาน'
-  const sections = isAdmin ? [...NAV, ADMIN_SECTION] : NAV
+  // เมนู "ตรวจสอบยอดโอน" ให้เห็นเฉพาะฝ่ายบัญชี/แอดมิน ส่วนคำขอตรวจยอด + แดชบอร์ดการเงิน เห็นได้ทุกคน
+  const financeSection = {
+    section: 'การเงิน', items: [
+      { id: 'payment-requests', label: 'คำขอตรวจยอด' },
+      ...((isFinance || isAdmin) ? [{ id: 'finance-review', label: 'ตรวจสอบยอดโอน' }] : []),
+      { id: 'payment-dashboard', label: 'แดชบอร์ดการชำระเงิน' },
+    ]
+  }
+  const sections = [...NAV.slice(0, 3), financeSection, ...NAV.slice(3), ...(isAdmin ? [ADMIN_SECTION] : [])]
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">

@@ -14,9 +14,12 @@ import Quotations from './components/Quotations'
 import Users from './components/Users'
 import Products from './components/Products'
 import Leads from './components/Leads'
-import PaymentComingSoon from './components/PaymentComingSoon'
+import PaymentRequests from './components/PaymentRequests'
+import FinanceReview from './components/FinanceReview'
+import PaymentDashboard from './components/PaymentDashboard'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal, LeadModal } from './components/Modals'
+import PaymentRequestModal, { PaymentOrderModal } from './components/PaymentRequestModal'
 import { renderQuotationPdfBlob, loadQuotationPdfItems } from './lib/printQuotation'
 import './App.css'
 
@@ -41,7 +44,8 @@ function AppInner({ session }) {
   const [showResults, setShowResults] = useState(false)
 
   const isAdmin = profile?.role === 'admin'
-  const perm = { userId: session.user.id, isAdmin }
+  const isFinance = profile?.role === 'finance'
+  const perm = { userId: session.user.id, isAdmin, isFinance }
 
   const reload = async () => {
     try {
@@ -180,6 +184,35 @@ function AppInner({ session }) {
       })
     },
     refreshData: reload,
+
+    // ===== Payment Verification (คำขอตรวจยอด) =====
+    addPaymentRequest: () => setModal({ type: 'payment', payload: {} }),
+    editPaymentRequest: (pr) => setModal({ type: 'payment', payload: { initial: pr } }),
+    // ส่งให้บัญชีตรวจ — เช็คข้อมูลสำคัญครบก่อน (ตาม requirement 4.2) แล้วล็อกไม่ให้ sale แก้ต่อจนกว่าจะถูกตีกลับ
+    submitPayment: async (pr) => {
+      const problems = []
+      if (!pr.company_id) problems.push('ลูกค้า')
+      if (!(Number(pr.expected_amount) > 0)) problems.push('ยอดที่ต้องชำระ')
+      if (!(Number(pr.paid_amount) > 0)) problems.push('ยอดที่ลูกค้าโอนจริง')
+      if (!pr.transfer_date) problems.push('วันที่โอน')
+      if (!pr.bank_account) problems.push('ธนาคารที่รับโอน')
+      if (!pr.slip_file_url) problems.push('สลิปการโอน')
+      if (problems.length) { toast('กรอกไม่ครบก่อนส่ง: ' + problems.join(', '), 'error'); return }
+      const items = await api.listPaymentItems(pr.id).catch(() => [])
+      if (!items.length) { toast('ต้องมีรายการสินค้าอย่างน้อย 1 รายการก่อนส่ง', 'error'); return }
+      if (!(await confirm(`ส่งคำขอ ${pr.pr_no} ให้บัญชีตรวจ? หลังส่งแล้วจะแก้ไขไม่ได้จนกว่าบัญชีจะตีกลับ`))) return
+      await run(() => api.submitPaymentRequest(pr.id, currentUser.name), 'ส่งให้บัญชีตรวจแล้ว')
+    },
+    deletePaymentRequest: async (pr) => {
+      if (!(await confirm(`ลบคำขอ ${pr.pr_no}?`))) return
+      await run(() => api.deletePaymentRequest(pr.id), 'ลบสำเร็จ')
+    },
+    markPaymentOrder: (pr) => setModal({ type: 'payment-order', payload: { initial: pr } }),
+    // ฝ่ายบัญชีตัดสินผลตรวจ (ส่ง reviewerName ไปเก็บ + เขียน audit log)
+    approvePayment: async (pr, remark) => { await run(() => api.approvePaymentRequest(pr.id, { remark, reviewerName: currentUser.name }), 'อนุมัติแล้ว') },
+    needInfoPayment: async (pr, remark) => { await run(() => api.requestMorePaymentInfo(pr.id, { remark, reviewerName: currentUser.name }), 'ส่งกลับให้แก้ไขแล้ว') },
+    mismatchPayment: async (pr, remark) => { await run(() => api.markPaymentMismatch(pr.id, { remark, reviewerName: currentUser.name }), 'ทำเครื่องหมายยอดไม่ตรงแล้ว') },
+    rejectPayment: async (pr, remark) => { await run(() => api.rejectPaymentRequest(pr.id, { remark, reviewerName: currentUser.name }), 'ปฏิเสธคำขอแล้ว') },
   }
 
   const saveCompany = async (f, files = []) => {
@@ -249,6 +282,25 @@ function AppInner({ session }) {
     if (f.id) await run(() => api.updateLead(f.id, f), 'อัปเดตสำเร็จ')
     else await run(() => api.addLead(f), 'เพิ่มผู้ติดต่อสำเร็จ')
   }
+  const savePaymentRequest = async (f, items, slipFile) => {
+    closeModal()
+    if (!f.company_id) { toast('กรุณาเลือกลูกค้า', 'error'); return }
+    await run(async () => {
+      let slip_file_url = f.slip_file_url
+      if (slipFile) slip_file_url = await api.uploadPaymentSlip(f.id || null, slipFile)
+      const fields = { ...f, slip_file_url, _actorName: currentUser.name }
+      if (f.id) {
+        const { id, ...rest } = fields
+        await api.updatePaymentRequestWithItems(id, rest, items)
+      } else {
+        await api.addPaymentRequestWithItems({ ...fields, status: 'Draft', requested_by_name: currentUser.name, requested_by_email: currentUser.email }, items)
+      }
+    }, 'บันทึกคำขอตรวจยอดสำเร็จ')
+  }
+  const savePaymentOrder = async (pr, orderNo, remark) => {
+    closeModal()
+    await run(() => api.markPaymentOrderCreated(pr.id, { orderNo, remark, actorName: currentUser.name }), 'บันทึกการเปิดออเดอร์แล้ว')
+  }
   // อัปโหลดสำเนา PDF ของใบเสนอราคาขึ้น Google Drive อัตโนมัติหลังบันทึก — ทำเป็น background ไม่บล็อกผู้ใช้ ถ้าพลาดแค่เตือน ไม่กระทบข้อมูลที่บันทึกไปแล้วใน Supabase
   const mirrorQuotationToDrive = async (quot) => {
     try {
@@ -292,7 +344,7 @@ function AppInner({ session }) {
 
   return (
     <div id="app">
-      <Sidebar activeView={view} onNav={nav} user={currentUser} isAdmin={isAdmin} onLogout={() => supabase.auth.signOut()} />
+      <Sidebar activeView={view} onNav={nav} user={currentUser} isAdmin={isAdmin} isFinance={isFinance} onLogout={() => supabase.auth.signOut()} />
       <div className="main-content">
         <div className="topbar">
           <div className="topbar-title">{TITLES[view]}</div>
@@ -359,26 +411,12 @@ function AppInner({ session }) {
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products />}
           {view === 'payment-requests' && (
-            <PaymentComingSoon title="คำขอตรวจยอด" bullets={[
-              'Sale สร้างคำขอตรวจยอดโอน แนบสลิป + รายการสินค้า ผูกกับลูกค้า/ดีล/ใบเสนอราคา',
-              'กดส่งให้บัญชีตรวจ (Submit to Finance) แล้วแก้ไขไม่ได้จนกว่าจะถูกตีกลับ',
-              'หลังอนุมัติแล้ว กด "เปิดออเดอร์" (Mark as Order Created) ได้จากหน้านี้',
-            ]} />
+            <PaymentRequests reloadKey={reloadKey} onAdd={actions.addPaymentRequest} onEdit={actions.editPaymentRequest} onSubmit={actions.submitPayment} onDelete={actions.deletePaymentRequest} onMarkOrder={actions.markPaymentOrder} />
           )}
-          {view === 'finance-review' && (
-            <PaymentComingSoon title="ตรวจสอบยอดโอน" bullets={[
-              'คิวคำขอที่รอบัญชีตรวจ (Pending Finance Review)',
-              'ดูสลิป + รายการสินค้าที่แนบมา',
-              'เลือกผล: อนุมัติ / ขอข้อมูลเพิ่ม / ยอดไม่ตรง / ปฏิเสธ พร้อมหมายเหตุ',
-            ]} />
+          {view === 'finance-review' && (isFinance || isAdmin) && (
+            <FinanceReview reloadKey={reloadKey} onApprove={actions.approvePayment} onNeedInfo={actions.needInfoPayment} onMismatch={actions.mismatchPayment} onReject={actions.rejectPayment} />
           )}
-          {view === 'payment-dashboard' && (
-            <PaymentComingSoon title="แดชบอร์ดการชำระเงิน" bullets={[
-              'สรุปจำนวนคำขอแยกตามสถานะ (รอตรวจ/ขอข้อมูลเพิ่ม/ยอดไม่ตรง/อนุมัติแล้ว/เปิดออเดอร์แล้ว/ปฏิเสธ)',
-              'ยอดอนุมัติรวม, คำขอที่สร้าง/อนุมัติวันนี้',
-              'รายการที่อนุมัติแล้วแต่ยังไม่เปิดออเดอร์',
-            ]} />
-          )}
+          {view === 'payment-dashboard' && <PaymentDashboard reloadKey={reloadKey} />}
         </div>
       </div>
 
@@ -389,6 +427,8 @@ function AppInner({ session }) {
       {modal?.type === 'task' && <TaskModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveTask} />}
       {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
       {modal?.type === 'lead' && <LeadModal initial={modal.payload?.initial} isAdmin={isAdmin} onClose={closeModal} onSave={saveLead} />}
+      {modal?.type === 'payment' && <PaymentRequestModal initial={modal.payload?.initial} companies={data.companies} deals={data.deals} quotations={data.quotations} isAdmin={isAdmin} onClose={closeModal} onSave={savePaymentRequest} />}
+      {modal?.type === 'payment-order' && <PaymentOrderModal pr={modal.payload.initial} onClose={closeModal} onSave={savePaymentOrder} />}
     </div>
   )
 }

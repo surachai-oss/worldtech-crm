@@ -178,6 +178,84 @@ from quotations q
 where q.product_id is not null
   and not exists (select 1 from quotation_items qi where qi.quotation_id = q.id);
 
+-- ===== PAYMENT REQUESTS (คำขอตรวจยอดโอน — Sale สร้าง, Finance ตรวจ/อนุมัติ) =====
+-- status ขับด้วย workflow ในโค้ด (ไม่ใช่ picklist ที่แก้เองได้): Draft → Pending Finance Review → (Need More Info / Payment Mismatch / Rejected / Approved to Create Order) → Order Created
+create table if not exists payment_requests (
+  id                   uuid primary key default uuid_generate_v4(),
+  pr_no                text unique,        -- เลขคำขอ เช่น PR-000001 (gen_pr_no())
+  company_id           uuid references companies(id) on delete set null,
+  customer_name        text,               -- snapshot ชื่อลูกค้า ณ ตอนสร้าง
+  deal_id              uuid references deals(id) on delete set null,
+  quotation_id         uuid references quotations(id) on delete set null,
+  po_reference         text,
+  requested_by_name    text,               -- snapshot ชื่อ Sale ผู้สร้างคำขอ (คู่กับ created_by ที่เป็น uuid)
+  requested_by_email   text,
+  payment_type         text default 'ชำระเต็มจำนวน',   -- picklist payment_types
+  expected_amount      numeric default 0,
+  paid_amount          numeric default 0,
+  difference_amount    numeric default 0,   -- คำนวณ paid - expected ที่ฝั่ง frontend
+  difference_reason    text,
+  bank_account         text,
+  transfer_date        date,
+  transfer_time        text,
+  slip_file_url        text,               -- path ใน storage bucket "attachments"
+  slip_drive_file_id   text,
+  status               text default 'Draft',
+  finance_reviewer_id  uuid references auth.users(id),
+  finance_reviewer_name text,
+  finance_reviewed_at  timestamptz,
+  finance_remark       text,
+  approval_ref_no      text,               -- gen_approval_ref_no() ตอน approve เช่น PAY-APP-000001
+  order_no             text,
+  order_created_at     timestamptz,
+  order_created_by     text,
+  remark               text,
+  created_by           uuid references auth.users(id),
+  created_at           timestamptz default now(),
+  updated_at           timestamptz default now()
+);
+
+-- ===== PAYMENT ITEMS (รายการสินค้าในคำขอตรวจยอด) =====
+create table if not exists payment_items (
+  id                 uuid primary key default uuid_generate_v4(),
+  payment_request_id uuid references payment_requests(id) on delete cascade,
+  product_id         uuid references products(id) on delete set null,
+  sku                text,
+  product_name       text,
+  quantity           numeric not null default 1,
+  unit_price         numeric not null default 0,
+  discount           numeric not null default 0,
+  line_total         numeric not null default 0,
+  remark             text,
+  sort_order         int default 0,
+  created_at         timestamptz default now()
+);
+
+-- ===== AUDIT LOGS (บันทึกทุก write action สำคัญ เช่น payment request submit/approve/reject) =====
+create table if not exists audit_logs (
+  id           uuid primary key default uuid_generate_v4(),
+  entity_type  text not null,   -- เช่น 'payment_request'
+  entity_id    uuid,
+  action       text not null,   -- เช่น 'create','submit','approve','reject','need_info','mismatch','order_created'
+  actor_id     uuid references auth.users(id),
+  actor_name   text,
+  detail       text,
+  created_at   timestamptz default now()
+);
+
+-- ===== helper: เลขคำขอตรวจยอด + เลขอ้างอิงการอนุมัติ =====
+create sequence if not exists pr_seq start 1;
+create or replace function gen_pr_no() returns text as $$
+declare n int;
+begin n := nextval('pr_seq'); return 'PR-' || lpad(n::text, 6, '0'); end;
+$$ language plpgsql;
+
+create sequence if not exists pay_app_seq start 1;
+create or replace function gen_approval_ref_no() returns text as $$
+declare n int;
+begin n := nextval('pay_app_seq'); return 'PAY-APP-' || lpad(n::text, 6, '0'); end;
+$$ language plpgsql;
+
 -- ===== LEADS (ลีดจากฟอร์มสาธารณะ เช่น Facebook/เว็บไซต์ — insert ผ่าน Netlify Function ด้วย service role key เท่านั้น ไม่เปิด RLS ให้ anon insert ตรงๆ) =====
 create table if not exists leads (
   id                  uuid primary key default uuid_generate_v4(),
@@ -292,6 +370,10 @@ insert into picklists (list_key, value, sort_order)
 select 'payment_statuses', v, i from unnest(array['ยังไม่ชำระ', 'ชำระแล้ว']) with ordinality as t(v, i)
 on conflict (list_key, value) do nothing;
 
+insert into picklists (list_key, value, sort_order)
+select 'payment_types', v, i from unnest(array['ชำระเต็มจำนวน', 'มัดจำ', 'ชำระบางส่วน', 'ชำระยอดคงเหลือ']) with ordinality as t(v, i)
+on conflict (list_key, value) do nothing;
+
 -- ย้ายรายการ "ที่มาลูกค้า" เดิม (ถ้าเคยเพิ่ม/ลบผ่านหน้าจัดการมาก่อน) เข้ามาอยู่ในระบบ picklists เดียวกัน
 insert into picklists (list_key, value)
 select 'lead_sources', name from lead_sources
@@ -312,7 +394,7 @@ create table if not exists attachments (
 -- drive_file_id = Google Drive file id ของเอกสารแนบนี้ (มิเรอร์คู่กับ Supabase Storage) เก็บไว้เพื่ออัปโหลดซ้ำแล้วเขียนทับไฟล์เดิมได้
 alter table attachments add column if not exists drive_file_id text;
 
--- ===== PROFILES (ข้อมูลผู้ใช้งาน + สิทธิ์ Admin/Sale) =====
+-- ===== PROFILES (ข้อมูลผู้ใช้งาน + สิทธิ์ Admin/Sale/Finance) =====
 create table if not exists profiles (
   id          uuid primary key references auth.users(id) on delete cascade,
   email       text,
@@ -320,6 +402,11 @@ create table if not exists profiles (
   role        text not null default 'sale' check (role in ('admin', 'sale')),
   created_at  timestamptz default now()
 );
+
+-- เพิ่มสิทธิ์ 'finance' (ฝ่ายบัญชี — ตรวจสอบยอดโอน) เข้ากับ check constraint เดิม
+-- drop แล้ว add ใหม่ ปลอดภัยที่จะรันซ้ำ (constraint ชื่อ profiles_role_check ถูกตั้งอัตโนมัติจาก inline check ตอน create table)
+alter table profiles drop constraint if exists profiles_role_check;
+alter table profiles add constraint profiles_role_check check (role in ('admin', 'sale', 'finance'));
 
 -- ===== helper: auto quotation number =====
 create sequence if not exists quot_seq start 1;
@@ -347,6 +434,10 @@ create trigger trg_companies_updated before update on companies
 
 drop trigger if exists trg_deals_updated on deals;
 create trigger trg_deals_updated before update on deals
+  for each row execute function set_updated_at();
+
+drop trigger if exists trg_payment_requests_updated on payment_requests;
+create trigger trg_payment_requests_updated before update on payment_requests
   for each row execute function set_updated_at();
 
 -- ===== ownership columns (สำหรับ role-based access) =====
@@ -378,6 +469,10 @@ drop trigger if exists trg_tasks_created_by on tasks;
 create trigger trg_tasks_created_by before insert on tasks
   for each row execute function set_created_by();
 
+drop trigger if exists trg_payment_requests_created_by on payment_requests;
+create trigger trg_payment_requests_created_by before insert on payment_requests
+  for each row execute function set_created_by();
+
 -- ===== helper: is_admin() =====
 create or replace function is_admin() returns boolean as $$
   select exists (
@@ -386,6 +481,15 @@ create or replace function is_admin() returns boolean as $$
 $$ language sql security definer stable set search_path = public;
 
 grant execute on function is_admin() to authenticated;
+
+-- ===== helper: is_finance() (ฝ่ายบัญชี — เห็นทุกคำขอตรวจยอดและอนุมัติได้) =====
+create or replace function is_finance() returns boolean as $$
+  select exists (
+    select 1 from profiles where id = auth.uid() and role = 'finance'
+  );
+$$ language sql security definer stable set search_path = public;
+
+grant execute on function is_finance() to authenticated;
 
 -- ===== auto-create profile row เมื่อมีผู้ใช้งานใหม่ (สมัคร หรือ admin เพิ่มใน Supabase dashboard) =====
 create or replace function handle_new_user() returns trigger as $$
@@ -468,6 +572,9 @@ alter table products    enable row level security;
 alter table deal_items  enable row level security;
 alter table quotation_items enable row level security;
 alter table leads       enable row level security;
+alter table payment_requests enable row level security;
+alter table payment_items enable row level security;
+alter table audit_logs   enable row level security;
 
 -- ลบ policy แบบเก่า "authenticated ทำได้ทุกอย่าง" (ถ้ามีจากเวอร์ชันก่อนหน้า)
 drop policy if exists "allow all for authenticated" on companies;
@@ -637,3 +744,38 @@ drop policy if exists "leads update" on leads;
 create policy "leads update" on leads for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 drop policy if exists "leads delete" on leads;
 create policy "leads delete" on leads for delete using (is_admin());
+
+-- ----- payment_requests: sale เห็น/แก้เฉพาะของตัวเอง, finance + admin เห็น/แก้ได้ทุกใบ (สำหรับตรวจยอด) -----
+-- ระดับ RLS คุมแค่ว่าใครแตะแถวไหนได้ ส่วนกฎ workflow (แก้ไม่ได้หลัง Submit / ต้องมี remark ฯลฯ) บังคับที่ฝั่งแอปเหมือนโมดูลอื่นในระบบ
+drop policy if exists "payment_requests select" on payment_requests;
+create policy "payment_requests select" on payment_requests for select using (
+  is_admin() or is_finance() or created_by = auth.uid() or created_by is null
+);
+drop policy if exists "payment_requests insert" on payment_requests;
+create policy "payment_requests insert" on payment_requests for insert with check (auth.role() = 'authenticated');
+drop policy if exists "payment_requests update" on payment_requests;
+create policy "payment_requests update" on payment_requests for update using (
+  is_admin() or is_finance() or created_by = auth.uid() or created_by is null
+) with check (
+  is_admin() or is_finance() or created_by = auth.uid() or created_by is null
+);
+drop policy if exists "payment_requests delete" on payment_requests;
+create policy "payment_requests delete" on payment_requests for delete using (
+  is_admin() or created_by = auth.uid()
+);
+
+-- ----- payment_items: สืบสิทธิ์จากคำขอตรวจยอดแม่ (payment_request_id) -----
+drop policy if exists "payment_items all" on payment_items;
+create policy "payment_items all" on payment_items for all using (
+  exists (select 1 from payment_requests pr where pr.id = payment_items.payment_request_id
+    and (is_admin() or is_finance() or pr.created_by = auth.uid() or pr.created_by is null))
+) with check (
+  exists (select 1 from payment_requests pr where pr.id = payment_items.payment_request_id
+    and (is_admin() or is_finance() or pr.created_by = auth.uid() or pr.created_by is null))
+);
+
+-- ----- audit_logs: ทุกคนที่ login อ่าน/เขียนเพิ่มได้ แต่แก้/ลบไม่ได้ (ไม่มี policy update/delete = ถูกบล็อกโดยปริยาย) -----
+drop policy if exists "audit_logs select" on audit_logs;
+create policy "audit_logs select" on audit_logs for select using (auth.role() = 'authenticated');
+drop policy if exists "audit_logs insert" on audit_logs;
+create policy "audit_logs insert" on audit_logs for insert with check (auth.role() = 'authenticated');

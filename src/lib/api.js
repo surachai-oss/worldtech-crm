@@ -3,8 +3,20 @@ import { supabase } from '../supabaseClient'
 // ===== CONSTANTS (ค่าคงที่ระบบที่ไม่ให้ผู้ใช้แก้เอง) =====
 // รายการ dropdown อื่นๆ (สถานะ, stage, ประเภท ฯลฯ) ย้ายไปเป็น picklists ที่แก้ไขได้ในแอปแล้ว — ดู PicklistsContext
 export const CONSTANTS = {
-  ROLES: ['admin', 'sale'],
+  ROLES: ['admin', 'sale', 'finance'],
 }
+
+// สถานะของคำขอตรวจยอด (payment_requests.status) — workflow คงที่ ไม่ใช่ picklist ที่แก้เองได้
+export const PAYMENT_STATUS = {
+  DRAFT: 'Draft',
+  PENDING: 'Pending Finance Review',
+  NEED_INFO: 'Need More Info',
+  MISMATCH: 'Payment Mismatch',
+  REJECTED: 'Rejected',
+  APPROVED: 'Approved to Create Order',
+  ORDER_CREATED: 'Order Created',
+}
+export const PAYMENT_STATUS_LIST = Object.values(PAYMENT_STATUS)
 
 function handle(res) {
   if (res.error) throw res.error
@@ -559,6 +571,157 @@ export async function submitPublicLead({ subject, full_name, phone, email, inter
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.error || 'ส่งข้อมูลไม่สำเร็จ')
   return json
+}
+
+// ===== AUDIT LOG (บันทึกประวัติ write action สำคัญ เช่น payment request submit/approve) =====
+export async function writeAuditLog({ entity_type, entity_id, action, actor_name, detail = '' }) {
+  // best-effort — ถ้าเขียน log พลาดไม่ควรทำให้ action หลักล้มเหลว
+  const { data: s } = await supabase.auth.getUser()
+  await supabase.from('audit_logs').insert({ entity_type, entity_id, action, actor_id: s?.user?.id || null, actor_name, detail }).then(() => {}, () => {})
+}
+export const fetchAuditLogs = (entityId) =>
+  supabase.from('audit_logs').select('*').eq('entity_id', entityId).order('created_at', { ascending: false }).then(handle)
+
+// ===== PAYMENT REQUESTS (คำขอตรวจยอดโอน) =====
+// เลขคำขอ / เลขอ้างอิงอนุมัติ สร้างจาก sequence ฝั่ง DB (rpc) กัน race condition เหมือน gen_quot_no
+async function genPrNo() {
+  const { data, error } = await supabase.rpc('gen_pr_no')
+  if (error) throw error
+  return data
+}
+async function genApprovalRefNo() {
+  const { data, error } = await supabase.rpc('gen_approval_ref_no')
+  if (error) throw error
+  return data
+}
+
+export async function fetchPaymentRequests({ status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
+  let query = supabase.from('payment_requests').select('*, company:companies(id,name)').order('created_at', { ascending: false })
+  if (status) query = query.eq('status', status)
+  const sq = safeLike(q)
+  if (sq) query = query.or(`customer_name.ilike.%${sq}%,pr_no.ilike.%${sq}%,po_reference.ilike.%${sq}%,order_no.ilike.%${sq}%`)
+  const { fromIso, toIso } = dateRangeToIso(dateFrom, dateTo)
+  if (fromIso) query = query.gte('created_at', fromIso)
+  if (toIso) query = query.lte('created_at', toIso)
+  const { data, error } = await query
+  if (error) throw error
+  return data
+}
+
+export const fetchPaymentRequestById = (id) =>
+  supabase.from('payment_requests').select('*, company:companies(id,name)').eq('id', id).single().then(handle)
+
+export const listPaymentItems = (paymentRequestId) =>
+  supabase.from('payment_items').select('*').eq('payment_request_id', paymentRequestId).order('sort_order', { ascending: true }).then(handle)
+
+function paymentItemRows(paymentRequestId, items) {
+  return items.map((it, i) => ({
+    payment_request_id: paymentRequestId,
+    product_id: it.product_id || null,
+    sku: it.sku || '',
+    product_name: it.product_name || '',
+    quantity: Number(it.quantity) || 0,
+    unit_price: Number(it.unit_price) || 0,
+    discount: Number(it.discount) || 0,
+    line_total: (Number(it.quantity) || 0) * (Number(it.unit_price) || 0) - (Number(it.discount) || 0),
+    remark: it.remark || '',
+    sort_order: i,
+  }))
+}
+
+// สร้างคำขอ + รายการสินค้า — created_by ถูกเซ็ตโดย trigger ฝั่ง DB (set_created_by)
+export async function addPaymentRequestWithItems(fields, items) {
+  const { _actorName, ...rest } = fields   // _actorName ใช้แค่เขียน audit log ไม่ใช่คอลัมน์จริง ต้องตัดออกก่อน insert
+  const pr_no = await genPrNo()
+  const pr = await supabase.from('payment_requests').insert({ ...rest, pr_no }).select().single().then(handle)
+  if (items?.length) await supabase.from('payment_items').insert(paymentItemRows(pr.id, items)).then(handle)
+  await writeAuditLog({ entity_type: 'payment_request', entity_id: pr.id, action: 'create', actor_name: _actorName, detail: `สร้างคำขอ ${pr_no}` })
+  return pr
+}
+
+// แก้ไข — ลบรายการเดิมทั้งหมดแล้วใส่ชุดใหม่ (แบบเดียวกับดีล/ใบเสนอราคา)
+export async function updatePaymentRequestWithItems(id, fields, items) {
+  const { _actorName, ...rest } = fields
+  const pr = await supabase.from('payment_requests').update(rest).eq('id', id).select().single().then(handle)
+  await supabase.from('payment_items').delete().eq('payment_request_id', id).then(handle)
+  if (items?.length) await supabase.from('payment_items').insert(paymentItemRows(id, items)).then(handle)
+  return pr
+}
+
+export const updatePaymentRequest = (id, d) =>
+  supabase.from('payment_requests').update(d).eq('id', id).select().single().then(handle)
+
+export const deletePaymentRequest = (id) =>
+  supabase.from('payment_requests').delete().eq('id', id).then(handle)
+
+// Sale กด Submit ให้บัญชีตรวจ — validation หลักเช็คที่ฝั่ง frontend ก่อนเรียก
+export async function submitPaymentRequest(id, actorName) {
+  const pr = await updatePaymentRequest(id, { status: PAYMENT_STATUS.PENDING })
+  await writeAuditLog({ entity_type: 'payment_request', entity_id: id, action: 'submit', actor_name: actorName, detail: 'ส่งให้บัญชีตรวจ' })
+  return pr
+}
+
+// ===== Finance actions =====
+export async function approvePaymentRequest(id, { remark = '', reviewerName } = {}) {
+  const approval_ref_no = await genApprovalRefNo()
+  const pr = await updatePaymentRequest(id, {
+    status: PAYMENT_STATUS.APPROVED, approval_ref_no,
+    finance_reviewer_name: reviewerName, finance_reviewed_at: new Date().toISOString(), finance_remark: remark || null,
+  })
+  await writeAuditLog({ entity_type: 'payment_request', entity_id: id, action: 'approve', actor_name: reviewerName, detail: `อนุมัติ ${approval_ref_no}` })
+  return pr
+}
+
+async function financeSetStatus(id, status, action, { remark, reviewerName }) {
+  const pr = await updatePaymentRequest(id, {
+    status, finance_reviewer_name: reviewerName, finance_reviewed_at: new Date().toISOString(), finance_remark: remark,
+  })
+  await writeAuditLog({ entity_type: 'payment_request', entity_id: id, action, actor_name: reviewerName, detail: remark })
+  return pr
+}
+export const requestMorePaymentInfo = (id, opts) => financeSetStatus(id, PAYMENT_STATUS.NEED_INFO, 'need_info', opts)
+export const markPaymentMismatch = (id, opts) => financeSetStatus(id, PAYMENT_STATUS.MISMATCH, 'mismatch', opts)
+export const rejectPaymentRequest = (id, opts) => financeSetStatus(id, PAYMENT_STATUS.REJECTED, 'reject', opts)
+
+// Sale เปิดออเดอร์หลังอนุมัติ
+export async function markPaymentOrderCreated(id, { orderNo, remark = '', actorName }) {
+  const pr = await updatePaymentRequest(id, {
+    status: PAYMENT_STATUS.ORDER_CREATED, order_no: orderNo,
+    order_created_at: new Date().toISOString(), order_created_by: actorName,
+    remark: remark || null,
+  })
+  await writeAuditLog({ entity_type: 'payment_request', entity_id: id, action: 'order_created', actor_name: actorName, detail: `เปิดออเดอร์ ${orderNo}` })
+  return pr
+}
+
+// อัปโหลดสลิปการโอน — เก็บใน bucket "attachments" เดียวกับเอกสารแนบอื่น (path แยกโฟลเดอร์ payment-slips)
+export async function uploadPaymentSlip(paymentRequestId, file) {
+  if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('ไฟล์ใหญ่เกิน 20MB')
+  const safeName = file.name.replace(/[^\w.-]/g, '_')
+  const path = `payment-slips/${paymentRequestId || 'new'}/${Date.now()}_${safeName}`
+  const { error: upErr } = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file)
+  if (upErr) throw upErr
+  return path
+}
+export const getPaymentSlipUrl = (filePath) => getAttachmentUrl(filePath)
+
+// สรุปหน้า Payment Dashboard — นับตามสถานะ + ยอด/ตัวเลขวันนี้ (คำนวณฝั่ง client จากทุกคำขอที่ผู้ใช้มีสิทธิ์เห็น)
+export async function fetchPaymentDashboard() {
+  const { data, error } = await supabase.from('payment_requests').select('status, paid_amount, approval_ref_no, order_no, created_at, finance_reviewed_at')
+  if (error) throw error
+  const byStatus = {}
+  PAYMENT_STATUS_LIST.forEach(s => { byStatus[s] = 0 })
+  let totalApproved = 0, createdToday = 0, approvedToday = 0, approvedNoOrder = 0
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const isToday = (ts) => ts && new Date(ts) >= today
+  data.forEach(r => {
+    byStatus[r.status] = (byStatus[r.status] || 0) + 1
+    if (r.status === PAYMENT_STATUS.APPROVED || r.status === PAYMENT_STATUS.ORDER_CREATED) totalApproved += Number(r.paid_amount) || 0
+    if (isToday(r.created_at)) createdToday++
+    if (r.approval_ref_no && isToday(r.finance_reviewed_at)) approvedToday++
+    if (r.status === PAYMENT_STATUS.APPROVED) approvedNoOrder++
+  })
+  return { byStatus, totalApproved, createdToday, approvedToday, approvedNoOrder, total: data.length }
 }
 
 // ===== มิเรอร์ไฟล์ใบเสนอราคาขึ้น Google Drive (โฟลเดอร์ปี > เดือน) — คู่กับ Supabase Storage ไม่ได้แทนที่ =====

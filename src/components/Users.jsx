@@ -3,7 +3,7 @@ import { CONSTANTS, listProfiles, updateProfileRole, adminCreateUser } from '../
 import { fmtDate } from '../lib/format'
 import { useUi } from './UiContext'
 
-const ROLE_LABEL = { admin: 'ผู้ดูแลระบบ', sale: 'พนักงานขาย' }
+const ROLE_LABEL = { admin: 'ผู้ดูแลระบบ', sale: 'พนักงานขาย', finance: 'ฝ่ายบัญชี' }
 
 function genPassword() {
   return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6).toUpperCase()

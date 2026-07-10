@@ -44,6 +44,19 @@ export function quotBadgeClass(s) {
   return m[s] || 'badge-gray'
 }
 
+// สถานะคำขอตรวจยอด (payment_requests.status) — คู่ label ไทย + สี badge
+const PAYMENT_STATUS_META = {
+  'Draft': { label: 'ร่าง', cls: 'badge-gray' },
+  'Pending Finance Review': { label: 'รอบัญชีตรวจ', cls: 'badge-yellow' },
+  'Need More Info': { label: 'ขอข้อมูลเพิ่ม', cls: 'badge-orange' },
+  'Payment Mismatch': { label: 'ยอดไม่ตรง', cls: 'badge-red' },
+  'Rejected': { label: 'ปฏิเสธ', cls: 'badge-red' },
+  'Approved to Create Order': { label: 'อนุมัติ — เปิดออเดอร์ได้', cls: 'badge-green' },
+  'Order Created': { label: 'เปิดออเดอร์แล้ว', cls: 'badge-navy' },
+}
+export function paymentStatusLabel(s) { return PAYMENT_STATUS_META[s]?.label || s }
+export function paymentBadgeClass(s) { return PAYMENT_STATUS_META[s]?.cls || 'badge-gray' }
+
 export function activityColor(t) {
   return { 'โทรศัพท์': '#e6f4fd', 'อีเมล': '#e6f7f0', 'ประชุม': '#fff3cd', 'Line': '#f0faf0', 'เยี่ยมชมลูกค้า': '#f3e6ff', 'สาธิตสินค้า': '#ebf0fa', 'อื่นๆ': '#f7fafc' }[t] || '#f7fafc'
 }
