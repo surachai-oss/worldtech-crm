@@ -1,8 +1,29 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchMyNotifications, fetchUnreadNotificationCount, markNotificationRead, markAllNotificationsRead } from '../lib/api'
 import { useUi } from './UiContext'
 
 const POLL_MS = 30000
+
+// เสียงเตือน "ติ๊ง" สั้นๆ สังเคราะห์ด้วย Web Audio API — ไม่ต้องใช้ไฟล์เสียงแนบมาในโปรเจกต์
+function playChime() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext
+    const ctx = new Ctx()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(880, ctx.currentTime)
+    osc.frequency.setValueAtTime(1175, ctx.currentTime + 0.1)
+    gain.gain.setValueAtTime(0.15, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3)
+    osc.connect(gain).connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.3)
+    osc.onended = () => ctx.close()
+  } catch {
+    // เบราว์เซอร์บล็อกเสียงถ้ายังไม่มี interaction — ปล่อยผ่านเงียบๆ ไม่กระทบการแจ้งเตือนหลัก
+  }
+}
 
 function timeAgo(ts) {
   const diffSec = Math.max(0, (Date.now() - new Date(ts).getTime()) / 1000)
@@ -18,9 +39,14 @@ export default function NotificationBell({ onNav }) {
   const [open, setOpen] = useState(false)
   const [rows, setRows] = useState([])
   const [unread, setUnread] = useState(0)
+  const prevUnreadRef = useRef(null) // null = ยังไม่เคยโหลด (กันเสียงดังตอนเปิดแอปครั้งแรก)
 
   const loadCount = useCallback(() => {
-    fetchUnreadNotificationCount().then(setUnread).catch(() => {})
+    fetchUnreadNotificationCount().then(n => {
+      if (prevUnreadRef.current !== null && n > prevUnreadRef.current) playChime()
+      prevUnreadRef.current = n
+      setUnread(n)
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -41,7 +67,7 @@ export default function NotificationBell({ onNav }) {
   const onClickItem = async (n) => {
     if (!n.read_at) {
       markNotificationRead(n.id).catch(() => {})
-      setUnread(u => Math.max(0, u - 1))
+      setUnread(u => { const next = Math.max(0, u - 1); prevUnreadRef.current = next; return next })
       setRows(rs => rs.map(r => r.id === n.id ? { ...r, read_at: new Date().toISOString() } : r))
     }
     setOpen(false)
@@ -51,6 +77,7 @@ export default function NotificationBell({ onNav }) {
   const markAll = async (e) => {
     e.stopPropagation()
     markAllNotificationsRead().catch(() => {})
+    prevUnreadRef.current = 0
     setUnread(0)
     setRows(rs => rs.map(r => ({ ...r, read_at: r.read_at || new Date().toISOString() })))
   }

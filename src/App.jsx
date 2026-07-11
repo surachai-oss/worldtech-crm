@@ -199,7 +199,7 @@ function AppInner({ session }) {
       if (!(await confirm(`ส่งคำขอ ${pr.pr_no} ให้บัญชีตรวจ? หลังส่งแล้วจะแก้ไขไม่ได้จนกว่าบัญชีจะตีกลับ`))) return
       const ok = await run(() => api.submitPaymentRequest(pr.id, currentUser.name), 'ส่งให้บัญชีตรวจแล้ว')
       if (ok) api.notifyFinancePaymentSubmitted(pr.id).then(res => {
-        if (res?.inApp || res?.telegram || res?.email) toast('แจ้งเตือนฝ่ายบัญชีแล้ว', 'success')
+        if (res?.inApp || res?.email) toast('แจ้งเตือนฝ่ายบัญชีแล้ว', 'success')
       }).catch(() => {})
     },
     deletePaymentRequest: async (pr) => {
@@ -427,7 +427,7 @@ function AppInner({ session }) {
       {modal?.type === 'task' && <TaskModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveTask} />}
       {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
       {modal?.type === 'lead' && <LeadModal initial={modal.payload?.initial} isAdmin={isAdmin} onClose={closeModal} onSave={saveLead} />}
-      {modal?.type === 'payment' && <PaymentRequestModal initial={modal.payload?.initial} companies={data.companies} deals={data.deals} quotations={data.quotations} isAdmin={isAdmin} onClose={closeModal} onSave={savePaymentRequest} />}
+      {modal?.type === 'payment' && <PaymentRequestModal initial={modal.payload?.initial} companies={data.companies} quotations={data.quotations} isAdmin={isAdmin} onClose={closeModal} onSave={savePaymentRequest} />}
       {modal?.type === 'payment-order' && <PaymentOrderModal pr={modal.payload.initial} onClose={closeModal} onSave={savePaymentOrder} />}
     </div>
   )

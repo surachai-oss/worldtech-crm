@@ -71,7 +71,12 @@ export default function PaymentRequests({ reloadKey, onAdd, onEdit, onSubmit, on
                   const editable = EDITABLE.includes(pr.status)
                   return (
                     <tr key={pr.id}>
-                      <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{pr.pr_no}{pr.approval_ref_no && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>{pr.approval_ref_no}</div>}{pr.order_no && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>ออเดอร์: {pr.order_no}</div>}</td>
+                      <td style={{ fontWeight: 600, color: 'var(--navy)' }}>
+                        {pr.pr_no}
+                        {pr.bill_no && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>Bill No.: {pr.bill_no}</div>}
+                        {pr.approval_ref_no && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>{pr.approval_ref_no}</div>}
+                        {pr.order_no && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>ออเดอร์: {pr.order_no}</div>}
+                      </td>
                       <td style={{ fontSize: 12 }}>{fmtDate(pr.request_date || pr.created_at)}</td>
                       <td>{pr.customer_name || pr.company?.name || '-'}</td>
                       <td style={{ fontSize: 12 }}>{pr.credit_type ? <span className={`badge ${pr.credit_type.startsWith('ลูกค้าเครดิต') ? 'badge-orange' : 'badge-green'}`}>{pr.credit_type}</span> : '-'}</td>

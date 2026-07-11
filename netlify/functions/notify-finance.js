@@ -1,9 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 
-// แจ้งเตือนฝ่ายบัญชีเมื่อเซลล์กด "ส่งให้บัญชี" — ยิงพร้อมกันหลายช่องทาง (ไม่บังคับต้องตั้งครบทุกช่อง):
+// แจ้งเตือนฝ่ายบัญชีเมื่อเซลล์กด "ส่งให้บัญชี":
 //   1) แจ้งเตือนในระบบ (ตาราง notifications) — insert ให้ทุก user สิทธิ์ finance เสมอ ไม่ต้องตั้งค่าเพิ่ม
-//   2) Telegram — ตั้ง TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID ใน Netlify env ถ้าต้องการ
-//   3) อีเมล (Resend) — ตั้ง RESEND_API_KEY + NOTIFY_FROM_EMAIL ถ้าต้องการ
+//   2) อีเมล (Resend) — ตั้ง RESEND_API_KEY + NOTIFY_FROM_EMAIL ใน Netlify env ถ้าต้องการ (ไม่บังคับ)
 // ต้องใช้ Service Role Key ข้าม RLS เพราะ Sale (ผู้เรียก) ไม่มีสิทธิ์เห็น/เขียนแถวของผู้ใช้อื่น (ตาราง profiles/notifications)
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
@@ -36,7 +35,7 @@ export default async (req) => {
   const title = `คำขอตรวจยอดใหม่ ${pr.pr_no}`
   const summary = `ลูกค้า ${pr.customer_name || '-'} · ยอดรวม ${amount} บาท · ผู้ส่ง ${pr.requested_by_name || '-'}`
 
-  const result = { inApp: false, telegram: false, email: false }
+  const result = { inApp: false, email: false }
 
   // 1) แจ้งเตือนในระบบ (กระดิ่งมุมบน) — ใช้งานได้เสมอ ไม่ต้องตั้งค่าเพิ่ม
   const { error: notifErr } = await admin.from('notifications').insert(
@@ -47,26 +46,7 @@ export default async (req) => {
   )
   result.inApp = !notifErr
 
-  // 2) Telegram (ไม่บังคับ)
-  const tgToken = process.env.TELEGRAM_BOT_TOKEN
-  const tgChatId = process.env.TELEGRAM_CHAT_ID
-  if (tgToken && tgChatId) {
-    try {
-      const tgRes = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: tgChatId,
-          text: `[Worldtech CRM] ${title}\n${summary}\nPO: ${pr.po_reference || '-'}`
-        })
-      })
-      result.telegram = tgRes.ok
-    } catch {
-      result.telegram = false
-    }
-  }
-
-  // 3) อีเมล ผ่าน Resend (ไม่บังคับ)
+  // 2) อีเมล ผ่าน Resend (ไม่บังคับ)
   const resendKey = process.env.RESEND_API_KEY
   const fromEmail = process.env.NOTIFY_FROM_EMAIL
   const emails = financeUsers.map(u => u.email).filter(Boolean)

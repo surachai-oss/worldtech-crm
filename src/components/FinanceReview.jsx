@@ -61,6 +61,7 @@ function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMi
           <Row label="ประเภทลูกค้า" value={pr.credit_type || '-'} />
           <Row label="ประเภทการชำระ" value={pr.payment_type || '-'} />
           <Row label="เลขที่ PO" value={pr.po_reference || '-'} />
+          <Row label="Bill No." value={pr.bill_no || '-'} />
           <Row label="ยอดไม่รวม VAT" value={fmtCurrency(exVat)} />
           <Row label="VAT 7%" value={fmtCurrency(vat)} />
           <Row label="ยอดรวมทั้งสิ้น" value={<b>{fmtCurrency(total)}</b>} />
@@ -160,7 +161,10 @@ export default function FinanceReview({ reloadKey, currentUserName, onApprove, o
               <tbody>
                 {rows.map(pr => (
                   <tr key={pr.id}>
-                    <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{pr.pr_no}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--navy)' }}>
+                      {pr.pr_no}
+                      {pr.bill_no && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>Bill No.: {pr.bill_no}</div>}
+                    </td>
                     <td style={{ fontSize: 12 }}>{fmtDate(pr.request_date || pr.created_at)}</td>
                     <td>{pr.customer_name || pr.company?.name || '-'}</td>
                     <td style={{ fontSize: 12 }}>{pr.credit_type ? <span className={`badge ${pr.credit_type.startsWith('ลูกค้าเครดิต') ? 'badge-orange' : 'badge-green'}`}>{pr.credit_type}</span> : '-'}</td>

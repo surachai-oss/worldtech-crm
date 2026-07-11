@@ -224,6 +224,8 @@ alter table payment_requests add column if not exists request_date date default 
 alter table payment_requests add column if not exists credit_type text;
 alter table payment_requests add column if not exists total_amount numeric default 0;
 alter table payment_requests add column if not exists finance_ref_no text;
+-- bill_no = เลขที่บิลของออเดอร์ที่เซลล์ต้องเปิดในระบบ กรอกเองแทนการผูก deal_id (ฟอร์มไม่ใช้ deal_id แล้ว แต่คงคอลัมน์เดิมไว้เผื่อข้อมูลเก่า)
+alter table payment_requests add column if not exists bill_no text;
 
 -- ===== PAYMENT ITEMS (รายการสินค้าในคำขอตรวจยอด) =====
 create table if not exists payment_items (

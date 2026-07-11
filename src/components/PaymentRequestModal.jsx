@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { listProducts, listPaymentItems, listDealItems, listQuotationItems, computeDealTotals } from '../lib/api'
+import { listProducts, listPaymentItems, listQuotationItems, computeDealTotals } from '../lib/api'
 import { fmtCurrency } from '../lib/format'
 import { useUi } from './UiContext'
 import EditableSelect from './EditableSelect'
@@ -16,7 +16,7 @@ function creditLabel(term) {
   return Number.isFinite(days) && days > 0 ? `ลูกค้าเครดิต (เครดิต ${days} วัน)` : 'ลูกค้าเครดิต'
 }
 
-// map แถวรายการสินค้าจากดีล/ใบเสนอราคา -> รูปแบบรายการของคำขอตรวจยอด
+// map แถวรายการสินค้าจากใบเสนอราคา -> รูปแบบรายการของคำขอตรวจยอด
 function mapCopiedItems(rows) {
   return rows.map(r => ({
     product_id: r.product_id || '',
@@ -63,11 +63,11 @@ export function PaymentOrderModal({ pr, onClose, onSave }) {
 
 // ฟอร์มสร้าง/แก้ไขคำขอตรวจยอดโอน — บัญชีเทียบยอดจากรายการสินค้า (รวม VAT) กับสลิปจริงเอง จึงไม่ต้องกรอกยอดโอน/ธนาคาร/วันเวลา
 // onSave(fields, items, slipFile) — App เป็นคนอัปโหลดสลิป + เขียน DB
-export default function PaymentRequestModal({ initial, companies, deals, quotations, isAdmin, onClose, onSave }) {
+export default function PaymentRequestModal({ initial, companies, quotations, isAdmin, onClose, onSave }) {
   const { toast } = useUi()
   const [f, setF] = useState(() => {
     const base = {
-      request_date: todayStr(), company_id: '', deal_id: '', quotation_id: '', po_reference: '',
+      request_date: todayStr(), company_id: '', quotation_id: '', po_reference: '', bill_no: '',
       payment_type: 'ชำระเต็มจำนวน', credit_type: '', slip_file_url: '', remark: ''
     }
     if (!initial) return base
@@ -92,25 +92,14 @@ export default function PaymentRequestModal({ initial, companies, deals, quotati
     }).catch(() => {})
   }, [initial?.id])
 
-  const companyDeals = f.company_id ? deals.filter(d => d.company_id === f.company_id) : []
   const companyQuots = f.company_id ? quotations.filter(q => q.company_id === f.company_id) : []
 
-  // เปลี่ยนลูกค้า -> ตั้งประเภทลูกค้า (เครดิต/เงินสด) จากข้อมูลบริษัทให้อัตโนมัติ + ล้างดีล/ใบเสนอราคาเดิม
+  // เปลี่ยนลูกค้า -> ตั้งประเภทลูกค้า (เครดิต/เงินสด) จากข้อมูลบริษัทให้อัตโนมัติ + ล้างใบเสนอราคาเดิม
   const onCompanyChange = (v) => {
     const c = companies.find(x => x.id === v)
-    setF(s => ({ ...s, company_id: v, deal_id: '', quotation_id: '', credit_type: creditLabel(c?.credit_term) }))
+    setF(s => ({ ...s, company_id: v, quotation_id: '', credit_type: creditLabel(c?.credit_term) }))
   }
 
-  // ปุ่มคัดลอกข้อมูลจากดีล — ดึงรายการสินค้ามาตั้งต้น ไม่ต้องกรอกซ้ำ
-  const copyFromDeal = async () => {
-    if (!f.deal_id) { toast('เลือกดีลก่อน', 'error'); return }
-    try {
-      const rows = await listDealItems(f.deal_id)
-      if (!rows.length) { toast('ดีลนี้ไม่มีรายการสินค้า', 'info'); return }
-      setItems(mapCopiedItems(rows))
-      toast('คัดลอกรายการจากดีลแล้ว', 'success')
-    } catch (e) { toast('ดึงข้อมูลจากดีลไม่สำเร็จ: ' + e.message, 'error') }
-  }
   // ปุ่มคัดลอกข้อมูลจากใบเสนอราคา — ดึงรายการสินค้า + ประเภทลูกค้า (เครดิต/เงินสด) ตามใบเสนอราคานั้น
   const copyFromQuotation = async () => {
     if (!f.quotation_id) { toast('เลือกใบเสนอราคาก่อน', 'error'); return }
@@ -145,9 +134,9 @@ export default function PaymentRequestModal({ initial, companies, deals, quotati
       company_id: f.company_id || null,
       customer_name: company ? company.name : '',
       credit_type: f.credit_type || creditLabel(company?.credit_term),
-      deal_id: f.deal_id || null,
       quotation_id: f.quotation_id || null,
       po_reference: f.po_reference || null,
+      bill_no: f.bill_no || null,
       payment_type: f.payment_type || null,
       total_amount: itemsTotal,
       slip_file_url: f.slip_file_url || null,
@@ -180,20 +169,11 @@ export default function PaymentRequestModal({ initial, companies, deals, quotati
               ประเภทลูกค้า: <span className={`badge ${f.credit_type.startsWith('ลูกค้าเครดิต') ? 'badge-orange' : 'badge-green'}`}>{f.credit_type}</span>
             </div>
           )}
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">ดีล (ถ้ามี)</label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <SearchableSelect options={companyDeals} value={f.deal_id} onChange={v => setF(s => ({ ...s, deal_id: v }))} placeholder={f.company_id ? '-- ไม่ระบุ --' : 'เลือกลูกค้าก่อน'} getOptionLabel={d => d.name} disabled={!f.company_id} />
-                <button type="button" className="btn btn-outline btn-sm" onClick={copyFromDeal} disabled={!f.deal_id} title="ดึงรายการสินค้าจากดีลนี้" style={{ whiteSpace: 'nowrap' }}>คัดลอก</button>
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">ใบเสนอราคา (ถ้ามี)</label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <SearchableSelect options={companyQuots} value={f.quotation_id} onChange={v => setF(s => ({ ...s, quotation_id: v }))} placeholder={f.company_id ? '-- ไม่ระบุ --' : 'เลือกลูกค้าก่อน'} getOptionLabel={q => `${q.quot_no} - ${q.subject}`} disabled={!f.company_id} />
-                <button type="button" className="btn btn-outline btn-sm" onClick={copyFromQuotation} disabled={!f.quotation_id} title="ดึงรายการสินค้า + ประเภทลูกค้าจากใบเสนอราคานี้" style={{ whiteSpace: 'nowrap' }}>คัดลอก</button>
-              </div>
+          <div className="form-group">
+            <label className="form-label">ใบเสนอราคา (ถ้ามี)</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <SearchableSelect options={companyQuots} value={f.quotation_id} onChange={v => setF(s => ({ ...s, quotation_id: v }))} placeholder={f.company_id ? '-- ไม่ระบุ --' : 'เลือกลูกค้าก่อน'} getOptionLabel={q => `${q.quot_no} - ${q.subject}`} disabled={!f.company_id} />
+              <button type="button" className="btn btn-outline btn-sm" onClick={copyFromQuotation} disabled={!f.quotation_id} title="ดึงรายการสินค้า + ประเภทลูกค้าจากใบเสนอราคานี้" style={{ whiteSpace: 'nowrap' }}>คัดลอก</button>
             </div>
           </div>
           <div className="form-row">
@@ -202,9 +182,13 @@ export default function PaymentRequestModal({ initial, companies, deals, quotati
               <input className="form-control" value={f.po_reference || ''} onChange={set('po_reference')} placeholder="ไม่บังคับ" />
             </div>
             <div className="form-group">
-              <label className="form-label">ประเภทการชำระ</label>
-              <EditableSelect listKey="payment_types" value={f.payment_type} onChange={v => setF(s => ({ ...s, payment_type: v }))} isAdmin={isAdmin} />
+              <label className="form-label">Bill No.</label>
+              <input className="form-control" value={f.bill_no || ''} onChange={set('bill_no')} placeholder="เลขที่บิลของออเดอร์ที่ต้องเปิดในระบบ" />
             </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">ประเภทการชำระ</label>
+            <EditableSelect listKey="payment_types" value={f.payment_type} onChange={v => setF(s => ({ ...s, payment_type: v }))} isAdmin={isAdmin} />
           </div>
 
           <label className="form-label" style={{ marginTop: 4 }}>รายการสินค้า (ราคาต่อหน่วยกรอกแบบรวม VAT แล้ว)</label>

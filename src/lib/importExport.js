@@ -262,6 +262,7 @@ const PAYMENT_EXPORT_COLUMNS = [
   { key: 'credit_type', label: 'ประเภทลูกค้า' },
   { key: 'payment_type', label: 'ประเภทการชำระ' },
   { key: 'po_reference', label: 'เลขที่ PO' },
+  { key: 'bill_no', label: 'Bill No.' },
   { key: 'total_amount', label: 'ยอดรวม (รวม VAT)' },
   { key: 'status_label', label: 'สถานะ' },
   { key: 'requested_by_name', label: 'ผู้ส่งคำขอ' },
