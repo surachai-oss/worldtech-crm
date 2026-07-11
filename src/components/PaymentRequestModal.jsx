@@ -61,7 +61,13 @@ export function PaymentOrderModal({ pr, onClose, onSave }) {
   )
 }
 
+// มี credit_term = ลูกค้าเครดิต, ไม่มี = ลูกค้าธรรมดา — ใช้กรองรายการใบเสนอราคาตามปุ่มที่เซลล์เลือก
+function custTypeOf(creditTerm) {
+  return creditTerm ? 'credit' : 'normal'
+}
+
 // ฟอร์มสร้าง/แก้ไขคำขอตรวจยอดโอน — บัญชีเทียบยอดจากรายการสินค้า (รวม VAT) กับสลิปจริงเอง จึงไม่ต้องกรอกยอดโอน/ธนาคาร/วันเวลา
+// flow: เลือกประเภทลูกค้า -> เลือกเลขใบเสนอราคา -> ระบบคัดลอกประเภทลูกค้า/บริษัท/รายการสินค้าให้อัตโนมัติ -> กรอกประเภทการชำระ/Bill No./PO/สลิป
 // onSave(fields, items, slipFile) — App เป็นคนอัปโหลดสลิป + เขียน DB
 export default function PaymentRequestModal({ initial, companies, quotations, isAdmin, onClose, onSave }) {
   const { toast } = useUi()
@@ -75,6 +81,10 @@ export default function PaymentRequestModal({ initial, companies, quotations, is
     return { ...base, ...rest, request_date: (rest.request_date || base.request_date).slice(0, 10) }
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
+  // ปุ่มประเภทลูกค้าที่เซลล์เลือกก่อน ใช้กรองรายการใบเสนอราคาให้หาง่ายขึ้น — แก้ไขคำขอเดิมให้ตั้งตามค่า credit_type ที่บันทึกไว้
+  const [custType, setCustType] = useState(() =>
+    initial?.credit_type ? (initial.credit_type.startsWith('ลูกค้าเครดิต') ? 'credit' : 'normal') : null
+  )
 
   const [products, setProducts] = useState(null)
   const [items, setItems] = useState(() => initial?.items?.length
@@ -92,23 +102,26 @@ export default function PaymentRequestModal({ initial, companies, quotations, is
     }).catch(() => {})
   }, [initial?.id])
 
-  const companyQuots = f.company_id ? quotations.filter(q => q.company_id === f.company_id) : []
+  const companyById = new Map(companies.map(c => [c.id, c]))
+  // รายการใบเสนอราคาให้เลือก กรองตามปุ่มประเภทลูกค้าที่เลือกไว้ก่อน
+  const filteredQuots = custType ? quotations.filter(q => custTypeOf(q.credit_term) === custType) : []
 
-  // เปลี่ยนลูกค้า -> ตั้งประเภทลูกค้า (เครดิต/เงินสด) จากข้อมูลบริษัทให้อัตโนมัติ + ล้างใบเสนอราคาเดิม
-  const onCompanyChange = (v) => {
-    const c = companies.find(x => x.id === v)
-    setF(s => ({ ...s, company_id: v, quotation_id: '', credit_type: creditLabel(c?.credit_term) }))
+  // เลือกปุ่มประเภทลูกค้าใหม่ -> ล้างใบเสนอราคา/บริษัท/รายการสินค้าเดิมทิ้ง (เริ่มเลือกใหม่ให้ตรงกับประเภทที่เลือก)
+  const onCustTypeChange = (type) => {
+    setCustType(type)
+    setF(s => ({ ...s, quotation_id: '', company_id: '', credit_type: '' }))
+    setItems([{ ...EMPTY_ITEM }])
   }
 
-  // ปุ่มคัดลอกข้อมูลจากใบเสนอราคา — ดึงรายการสินค้า + ประเภทลูกค้า (เครดิต/เงินสด) ตามใบเสนอราคานั้น
-  const copyFromQuotation = async () => {
-    if (!f.quotation_id) { toast('เลือกใบเสนอราคาก่อน', 'error'); return }
+  // เลือกใบเสนอราคา -> คัดลอกประเภทลูกค้า/บริษัท/รายการสินค้าทั้งหมดจากใบเสนอราคานั้นมาให้อัตโนมัติ ไม่ต้องกรอกซ้ำ
+  const onQuotationChange = async (quotId) => {
+    if (!quotId) { setF(s => ({ ...s, quotation_id: '', company_id: '', credit_type: '' })); return }
+    const quot = quotations.find(q => q.id === quotId)
+    setF(s => ({ ...s, quotation_id: quotId, company_id: quot?.company_id || '', credit_type: creditLabel(quot?.credit_term) }))
     try {
-      const rows = await listQuotationItems(f.quotation_id)
-      const quot = quotations.find(q => q.id === f.quotation_id)
+      const rows = await listQuotationItems(quotId)
       if (rows.length) setItems(mapCopiedItems(rows))
-      setF(s => ({ ...s, credit_type: creditLabel(quot?.credit_term) }))
-      toast(rows.length ? 'คัดลอกรายการจากใบเสนอราคาแล้ว' : 'ใบเสนอราคานี้ไม่มีรายการสินค้า', rows.length ? 'success' : 'info')
+      toast('คัดลอกข้อมูลจากใบเสนอราคาแล้ว', 'success')
     } catch (e) { toast('ดึงข้อมูลจากใบเสนอราคาไม่สำเร็จ: ' + e.message, 'error') }
   }
 
@@ -126,7 +139,9 @@ export default function PaymentRequestModal({ initial, companies, quotations, is
   const itemsTotal = items.reduce((s, it) => s + lineTotal(it), 0)
 
   const submit = () => {
-    if (!f.company_id) { toast('กรุณาเลือกลูกค้า', 'error'); return }
+    if (!custType) { toast('กรุณาเลือกประเภทลูกค้าก่อน', 'error'); return }
+    if (!f.quotation_id) { toast('กรุณาเลือกใบเสนอราคา', 'error'); return }
+    if (!f.company_id) { toast('ไม่พบข้อมูลบริษัทจากใบเสนอราคานี้', 'error'); return }
     const company = companies.find(c => c.id === f.company_id)
     const cleanItems = items.filter(it => it.product_name?.trim() || it.sku?.trim())
     const fields = {
@@ -154,44 +169,31 @@ export default function PaymentRequestModal({ initial, companies, quotations, is
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
+          <div className="form-group">
+            <label className="form-label required">ประเภทลูกค้า</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" className={`btn btn-sm ${custType === 'credit' ? 'btn-primary' : 'btn-outline'}`} onClick={() => onCustTypeChange('credit')}>ลูกค้าเครดิต</button>
+              <button type="button" className={`btn btn-sm ${custType === 'normal' ? 'btn-primary' : 'btn-outline'}`} onClick={() => onCustTypeChange('normal')}>ลูกค้าธรรมดา</button>
+            </div>
+          </div>
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label required">ลูกค้า</label>
-              <SearchableSelect options={companies} value={f.company_id} onChange={onCompanyChange} placeholder="-- เลือกลูกค้า (พิมพ์เพื่อค้นหา) --" getOptionLabel={c => c.name} />
+              <label className="form-label required">เลขที่ใบเสนอราคา</label>
+              <SearchableSelect options={filteredQuots} value={f.quotation_id} onChange={onQuotationChange} placeholder={custType ? '-- พิมพ์เพื่อค้นหาเลขที่ใบเสนอราคา --' : 'เลือกประเภทลูกค้าก่อน'} getOptionLabel={q => `${q.quot_no} - ${q.subject} (${companyById.get(q.company_id)?.name || '-'})`} disabled={!custType} />
             </div>
             <div className="form-group">
               <label className="form-label">วันที่คำขอ</label>
               <input className="form-control" type="date" value={f.request_date || ''} onChange={set('request_date')} />
             </div>
           </div>
-          {f.credit_type && (
-            <div style={{ marginBottom: 12, fontSize: 13 }}>
-              ประเภทลูกค้า: <span className={`badge ${f.credit_type.startsWith('ลูกค้าเครดิต') ? 'badge-orange' : 'badge-green'}`}>{f.credit_type}</span>
+          {f.company_id && (
+            <div style={{ marginBottom: 12, fontSize: 13, display: 'flex', gap: 16, alignItems: 'center' }}>
+              <span>บริษัท: <b>{companyById.get(f.company_id)?.name || '-'}</b></span>
+              {f.credit_type && <span className={`badge ${f.credit_type.startsWith('ลูกค้าเครดิต') ? 'badge-orange' : 'badge-green'}`}>{f.credit_type}</span>}
             </div>
           )}
-          <div className="form-group">
-            <label className="form-label">ใบเสนอราคา (ถ้ามี)</label>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <SearchableSelect options={companyQuots} value={f.quotation_id} onChange={v => setF(s => ({ ...s, quotation_id: v }))} placeholder={f.company_id ? '-- ไม่ระบุ --' : 'เลือกลูกค้าก่อน'} getOptionLabel={q => `${q.quot_no} - ${q.subject}`} disabled={!f.company_id} />
-              <button type="button" className="btn btn-outline btn-sm" onClick={copyFromQuotation} disabled={!f.quotation_id} title="ดึงรายการสินค้า + ประเภทลูกค้าจากใบเสนอราคานี้" style={{ whiteSpace: 'nowrap' }}>คัดลอก</button>
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">เลขที่ PO</label>
-              <input className="form-control" value={f.po_reference || ''} onChange={set('po_reference')} placeholder="ไม่บังคับ" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Bill No.</label>
-              <input className="form-control" value={f.bill_no || ''} onChange={set('bill_no')} placeholder="เลขที่บิลของออเดอร์ที่ต้องเปิดในระบบ" />
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">ประเภทการชำระ</label>
-            <EditableSelect listKey="payment_types" value={f.payment_type} onChange={v => setF(s => ({ ...s, payment_type: v }))} isAdmin={isAdmin} />
-          </div>
 
-          <label className="form-label" style={{ marginTop: 4 }}>รายการสินค้า (ราคาต่อหน่วยกรอกแบบรวม VAT แล้ว)</label>
+          <label className="form-label" style={{ marginTop: 4 }}>รายการสินค้า (คัดลอกจากใบเสนอราคาให้อัตโนมัติ — ราคาต่อหน่วยรวม VAT แล้ว)</label>
           <div className="table-wrap" style={{ marginBottom: 4 }}>
             <table>
               <thead>
@@ -229,6 +231,20 @@ export default function PaymentRequestModal({ initial, companies, quotations, is
             </div>
           </div>
 
+          <div className="form-group">
+            <label className="form-label">ประเภทการชำระ</label>
+            <EditableSelect listKey="payment_types" value={f.payment_type} onChange={v => setF(s => ({ ...s, payment_type: v }))} isAdmin={isAdmin} />
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Bill No.</label>
+              <input className="form-control" value={f.bill_no || ''} onChange={set('bill_no')} placeholder="เลขที่บิลของออเดอร์ที่ต้องเปิดในระบบ" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">เลขที่ PO</label>
+              <input className="form-control" value={f.po_reference || ''} onChange={set('po_reference')} placeholder="ไม่บังคับ" />
+            </div>
+          </div>
           <div className="form-group">
             <label className="form-label">สลิปการโอน</label>
             <input className="form-control" type="file" accept="image/*,.pdf" onChange={e => setSlipFile(e.target.files?.[0] || null)} />

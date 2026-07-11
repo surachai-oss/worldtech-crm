@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchPaymentRequests, listPaymentItems, getPaymentSlipUrl, PAYMENT_STATUS, PAYMENT_STATUS_LIST } from '../lib/api'
+import { fetchPaymentRequests, listPaymentItems, getPaymentSlipUrl, PAYMENT_STATUS_LIST } from '../lib/api'
 import { exportPaymentRequestsToExcel } from '../lib/importExport'
 import { fmtCurrency, fmtDate, paymentStatusLabel, paymentBadgeClass } from '../lib/format'
 import { useUi } from './UiContext'
@@ -7,7 +7,7 @@ import { useUi } from './UiContext'
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
 // ป็อปอัปให้บัญชีดูรายละเอียด + สลิป + รายการสินค้า แล้วเลือกผลตรวจ (อนุมัติ/ขอข้อมูลเพิ่ม/ยอดไม่ตรง/ปฏิเสธ)
-// ตอนอนุมัติ: บังคับระบุชื่อผู้อนุมัติ (ลายเซ็น) + ใส่เลขอ้างอิงบัญชีได้ (ไม่บังคับ) ไว้แมทช์ภายหลัง
+// ตอนอนุมัติ: บังคับระบุชื่อผู้อนุมัติ (ลายเซ็น) + ใส่ Ref No. ได้ (ไม่บังคับ)
 function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMismatch, onReject }) {
   const { toast } = useUi()
   const [items, setItems] = useState(null)
@@ -97,8 +97,8 @@ function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMi
               <input className="form-control" value={approverName} onChange={e => setApproverName(e.target.value)} placeholder="ชื่อผู้ตรวจ/อนุมัติ" />
             </div>
             <div className="form-group">
-              <label className="form-label">เลขอ้างอิงบัญชี (Ref No.)</label>
-              <input className="form-control" value={financeRefNo} onChange={e => setFinanceRefNo(e.target.value)} placeholder="ไว้แมทช์กับระบบบัญชีภายหลัง" />
+              <label className="form-label">Ref No.</label>
+              <input className="form-control" value={financeRefNo} onChange={e => setFinanceRefNo(e.target.value)} placeholder="ไม่บังคับ" />
             </div>
           </div>
           <div className="form-group">
@@ -120,7 +120,7 @@ function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMi
 
 export default function FinanceReview({ reloadKey, currentUserName, onApprove, onNeedInfo, onMismatch, onReject }) {
   const { toast } = useUi()
-  const [status, setStatus] = useState(PAYMENT_STATUS.PENDING)
+  const [status, setStatus] = useState('') // ค่าเริ่มต้นแสดงทุกสถานะ
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [review, setReview] = useState(null)

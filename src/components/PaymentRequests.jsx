@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import { fetchPaymentRequests, getPaymentSlipUrl, PAYMENT_STATUS, PAYMENT_STATUS_LIST } from '../lib/api'
 import { exportPaymentRequestsToExcel } from '../lib/importExport'
+import { printPaymentApproval } from '../lib/printPaymentApproval'
 import { fmtCurrency, fmtDate, paymentStatusLabel, paymentBadgeClass } from '../lib/format'
 import { useUi } from './UiContext'
 
 // สถานะที่ Sale ยังกลับมาแก้ไข/ส่งใหม่ได้ (นอกเหนือจากนี้ล็อกหลังส่งให้บัญชี)
 const EDITABLE = [PAYMENT_STATUS.DRAFT, PAYMENT_STATUS.NEED_INFO, PAYMENT_STATUS.MISMATCH]
+// สถานะที่อนุมัติแล้ว — โหลด PDF ใบอนุมัติไปแนบตอนเปิดออเดอร์ได้
+const APPROVED_STATES = [PAYMENT_STATUS.APPROVED, PAYMENT_STATUS.ORDER_CREATED]
 
-export default function PaymentRequests({ reloadKey, onAdd, onEdit, onSubmit, onDelete, onMarkOrder }) {
+export default function PaymentRequests({ reloadKey, settings, onAdd, onEdit, onSubmit, onDelete, onMarkOrder }) {
   const { toast } = useUi()
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
@@ -90,6 +93,7 @@ export default function PaymentRequests({ reloadKey, onAdd, onEdit, onSubmit, on
                         {pr.slip_file_url && <button className="btn btn-outline btn-xs" onClick={() => viewSlip(pr)}>สลิป</button>}
                         {editable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(pr)}>แก้ไข</button>}
                         {editable && <button className="btn btn-secondary btn-xs" onClick={() => onSubmit(pr)}>ส่งให้บัญชี</button>}
+                        {APPROVED_STATES.includes(pr.status) && <button className="btn btn-outline btn-xs" onClick={() => printPaymentApproval(pr, settings)}>ดาวน์โหลด PDF</button>}
                         {pr.status === PAYMENT_STATUS.APPROVED && <button className="btn btn-success btn-xs" onClick={() => onMarkOrder(pr)}>เปิดออเดอร์</button>}
                         {pr.status === PAYMENT_STATUS.DRAFT && <button className="btn btn-danger btn-xs" onClick={() => onDelete(pr)}>ลบ</button>}
                       </td>
