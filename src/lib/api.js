@@ -43,6 +43,9 @@ export const DOC_FILE_TYPE_LABEL = { invoice: 'ใบแจ้งหนี้', 
 export const DOC_SENT_CHANNELS = ['email', 'line', 'whatsapp', 'manual', 'other']
 export const DOC_SENT_CHANNEL_LABEL = { email: 'อีเมล', line: 'Line', whatsapp: 'WhatsApp', manual: 'ส่งเอง/รับเอง', other: 'อื่นๆ' }
 
+// สถานะออเดอร์ — Active/Cancelled เท่านั้น (แก้ไขไม่ได้หลังบันทึก บังคับด้วย trigger ฝั่ง DB)
+export const ORDER_STATUS = { ACTIVE: 'Active', CANCELLED: 'Cancelled' }
+
 function handle(res) {
   if (res.error) throw res.error
   return res.data
@@ -799,6 +802,69 @@ export async function markAllNotificationsRead() {
   if (!s?.user) return
   await supabase.from('notifications').update({ read_at: new Date().toISOString() })
     .eq('user_id', s.user.id).is('read_at', null).then(handle)
+}
+
+// ===== ORDERS (รันเลขออเดอร์จากใบเสนอราคา เพื่อเอาไปเปิดบิลต่อในระบบบัญชีอื่น) =====
+async function genOrderNo() {
+  const { data, error } = await supabase.rpc('gen_order_no')
+  if (error) throw error
+  return data
+}
+
+export async function fetchOrders({ status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
+  let query = supabase.from('orders')
+    .select('*, quotation:quotations(id,quot_no), company:companies(id,name)')
+    .order('created_at', { ascending: false })
+  if (status) query = query.eq('status', status)
+  const sq = safeLike(q)
+  if (sq) query = query.or(`order_no.ilike.%${sq}%,customer_name.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
+  const { fromIso, toIso } = dateRangeToIso(dateFrom, dateTo)
+  if (fromIso) query = query.gte('created_at', fromIso)
+  if (toIso) query = query.lte('created_at', toIso)
+  const { data, error } = await query
+  if (error) throw error
+  return data
+}
+
+export const listOrderItems = (orderId) =>
+  supabase.from('order_items').select('*, product:products(id,code,name)').eq('order_id', orderId)
+    .order('sort_order', { ascending: true }).then(handle)
+
+// เลขที่ใบเสนอราคาที่ผูกกับออเดอร์ Active อยู่แล้ว — ใช้กรองออกจากตัวเลือกตอนสร้างออเดอร์ใหม่ (ใบเสนอราคาหนึ่งใบผูก Active order ได้แค่ 1 ใบในเวลาเดียวกัน)
+export async function fetchActiveOrderQuotationIds() {
+  const { data, error } = await supabase.from('orders').select('quotation_id').eq('status', ORDER_STATUS.ACTIVE)
+  if (error) throw error
+  return new Set(data.map(o => o.quotation_id).filter(Boolean))
+}
+
+// สร้างออเดอร์ + snapshot รายการสินค้า — เลขออเดอร์รันจาก DB (gen_order_no), sales_id/sales_name มาจากผู้ใช้ที่ล็อกอินอยู่เสมอ (ตั้งจากฝั่งแอป ไม่ให้แก้เอง)
+// ถ้าใบเสนอราคานี้ถูกใช้เปิดออเดอร์ Active ไปแล้ว unique index ฝั่ง DB จะ reject การ insert — ดักจับแล้วแปลงเป็นข้อความที่เข้าใจง่าย
+export async function addOrderWithItems(fields, items) {
+  const order_no = await genOrderNo()
+  const totals = computeDealTotals(items)
+  let order
+  try {
+    order = await supabase.from('orders').insert({ ...fields, order_no, value: totals.subtotalIncVat, status: ORDER_STATUS.ACTIVE }).select().single().then(handle)
+  } catch (e) {
+    if (e.code === '23505') throw new Error('ใบเสนอราคานี้ถูกใช้เปิดออเดอร์ไปแล้ว กรุณาเลือกใบอื่น หรือรีเฟรชแล้วลองใหม่')
+    throw e
+  }
+  if (items?.length) {
+    const rows = items.map((it, i) => ({
+      order_id: order.id, product_id: it.product_id || null, description: it.description, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
+    }))
+    await supabase.from('order_items').insert(rows).then(handle)
+  }
+  await writeAuditLog({ entity_type: 'order', entity_id: order.id, action: 'create', actor_name: fields.sales_name, detail: `สร้างออเดอร์ ${order_no}` })
+  return order
+}
+
+// ยกเลิกออเดอร์ — เป็นวิธีเดียวที่แก้ไขออเดอร์ที่บันทึกแล้วได้ (บังคับด้วย trigger guard_orders_immutable ฝั่ง DB)
+// ยกเลิกแล้วใบเสนอราคาเดิมจะว่างให้เปิดออเดอร์ใหม่ได้ (unique index คุมแค่สถานะ Active) แต่ต้องรันเลขออเดอร์ใหม่เสมอ ใช้เลขเดิมต่อไม่ได้
+export async function cancelOrder(id, reason, actorName) {
+  const order = await supabase.from('orders').update({ status: ORDER_STATUS.CANCELLED, cancelled_at: new Date().toISOString(), cancel_reason: reason }).eq('id', id).select().single().then(handle)
+  await writeAuditLog({ entity_type: 'order', entity_id: id, action: 'cancel', actor_name: actorName, detail: reason })
+  return order
 }
 
 // ===== ACCOUNTING DOCUMENT REQUESTS (คำขอเอกสารบัญชี — ใบแจ้งหนี้/ใบกำกับภาษี/ใบเสร็จ) =====

@@ -255,6 +255,87 @@ create table if not exists audit_logs (
   created_at   timestamptz default now()
 );
 
+-- ===== ORDERS (รันเลขออเดอร์จากใบเสนอราคา เพื่อเอาไปเปิดบิลต่อในระบบบัญชีอื่น) =====
+-- เลขออเดอร์รูปแบบ WTE{ปี 2 หลัก}WT{เลขรัน 4 หลัก} เช่น WTE26WT0001 — รันแยกตามปี ขึ้นปีใหม่เริ่มนับ 0001 ใหม่ (ดู gen_order_no() + order_no_counters ด้านล่าง)
+-- ออเดอร์ = snapshot ของใบเสนอราคา ณ ตอนเปิด (company/รายการสินค้า) + ที่อยู่จัดส่งที่เซลล์กรอกเพิ่ม — แก้ไขไม่ได้หลังบันทึก ยกเลิกได้อย่างเดียว (ดู trigger guard_orders_immutable)
+create table if not exists orders (
+  id                      uuid primary key default uuid_generate_v4(),
+  order_no                text unique,
+  quotation_id            uuid references quotations(id) on delete set null,
+  quot_no                 text,     -- snapshot เลขที่ใบเสนอราคา ณ ตอนเปิดออเดอร์ (เผื่อใบเสนอราคาถูกลบ/แก้ไขทีหลัง)
+  company_id              uuid references companies(id) on delete set null,
+  customer_name           text,
+  shipping_address        text not null,
+  shipping_contact_name   text,
+  shipping_contact_phone  text,
+  value                   numeric default 0,
+  sales_id                uuid references auth.users(id),
+  sales_name              text,
+  status                  text not null default 'Active' check (status in ('Active', 'Cancelled')),
+  cancel_reason           text,
+  created_at              timestamptz default now(),
+  cancelled_at            timestamptz
+);
+
+-- ===== ORDER ITEMS (snapshot รายการสินค้าจากใบเสนอราคา ณ ตอนเปิดออเดอร์ — ไม่ผูกสดกับ quotation_items เพราะใบเสนอราคาแก้ไขทีหลังได้ แต่ออเดอร์ต้องคงข้อมูล ณ วันที่เปิดไว้) =====
+create table if not exists order_items (
+  id           uuid primary key default uuid_generate_v4(),
+  order_id     uuid references orders(id) on delete cascade,
+  product_id   uuid references products(id) on delete set null,
+  description  text,
+  quantity     numeric not null default 1,
+  unit_price   numeric not null default 0,
+  sort_order   int default 0,
+  created_at   timestamptz default now()
+);
+
+-- ใบเสนอราคาหนึ่งใบผูกออเดอร์ Active ได้แค่ 1 ออเดอร์ในเวลาเดียวกัน (ยกเลิกออเดอร์เดิมก่อนถึงจะเปิดออเดอร์ใหม่จากใบเดิมได้)
+create unique index if not exists idx_orders_active_quotation on orders(quotation_id) where status = 'Active';
+
+-- เลขออเดอร์: นับแยกตามปี (ปีเปลี่ยน = เริ่มนับ 0001 ใหม่) ต่างจาก gen_pr_no/gen_quot_no ที่นับต่อเนื่องไม่รีเซ็ต
+create table if not exists order_no_counters (
+  year     int primary key,
+  counter  int not null default 0
+);
+
+create or replace function gen_order_no() returns text as $$
+declare
+  yr int := extract(year from now())::int;
+  yy text := to_char(now(), 'YY');
+  n int;
+begin
+  insert into order_no_counters (year, counter) values (yr, 1)
+  on conflict (year) do update set counter = order_no_counters.counter + 1
+  returning counter into n;
+  return 'WTE' || yy || 'WT' || lpad(n::text, 4, '0');
+end;
+$$ language plpgsql;
+
+-- บังคับกฎ "แก้ไขไม่ได้หลังบันทึก ต้องยกเลิกเท่านั้น" ที่ระดับฐานข้อมูล (กันเผลอแก้ผ่านทางอื่นนอกแอป) —
+-- อนุญาตแค่เปลี่ยนสถานะเป็น Cancelled พร้อม cancel_reason/cancelled_at เท่านั้น ห้ามแก้ฟิลด์อื่นหรือแก้ออเดอร์ที่ยกเลิกไปแล้ว
+create or replace function guard_orders_immutable() returns trigger as $$
+begin
+  if old.status = 'Cancelled' then
+    raise exception 'ออเดอร์นี้ถูกยกเลิกไปแล้ว แก้ไขไม่ได้อีก';
+  end if;
+  if new.status = 'Active' and (
+    new.order_no is distinct from old.order_no or
+    new.quotation_id is distinct from old.quotation_id or
+    new.company_id is distinct from old.company_id or
+    new.sales_id is distinct from old.sales_id or
+    new.shipping_address is distinct from old.shipping_address or
+    new.value is distinct from old.value
+  ) then
+    raise exception 'ออเดอร์ที่บันทึกแล้วแก้ไขไม่ได้ ถ้าลงข้อมูลผิดต้องยกเลิกแล้วเปิดออเดอร์ใหม่';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_orders_immutable on orders;
+create trigger trg_orders_immutable before update on orders
+  for each row execute function guard_orders_immutable();
+
 -- ===== ACCOUNTING DOCUMENT REQUESTS (คำขอเอกสารบัญชี — ใบแจ้งหนี้/ใบกำกับภาษี/ใบเสร็จ) =====
 -- ระบบนี้ไม่มีตาราง "ออเดอร์" แยก — order_id จึงผูกกับ quotations (ใบเสนอราคาที่ปิดขายแล้วถือเป็น "ออเดอร์" ในทางธุรกิจของระบบนี้)
 -- document_status ขับด้วย workflow ในโค้ด (ไม่ใช่ picklist ที่แก้เองได้) เหมือน payment_requests.status
@@ -715,6 +796,8 @@ alter table audit_logs   enable row level security;
 alter table notifications enable row level security;
 alter table accounting_document_requests enable row level security;
 alter table accounting_document_files enable row level security;
+alter table orders       enable row level security;
+alter table order_items  enable row level security;
 
 -- ลบ policy แบบเก่า "authenticated ทำได้ทุกอย่าง" (ถ้ามีจากเวอร์ชันก่อนหน้า)
 drop policy if exists "allow all for authenticated" on companies;
@@ -959,3 +1042,23 @@ create policy "accounting_document_files write" on accounting_document_files for
 ) with check (
   is_admin() or is_finance()
 );
+
+-- ----- orders: ทุกคนที่ login เห็นได้ทุกออเดอร์ (เหมือน payment_requests) — insert ได้ทุกคน, update (ยกเลิกเท่านั้น — บังคับด้วย trigger) จำกัดแค่เจ้าของ/admin, ไม่มี delete (ห้ามลบถาวร ยกเลิกได้อย่างเดียว) -----
+drop policy if exists "orders select" on orders;
+create policy "orders select" on orders for select using (auth.role() = 'authenticated');
+drop policy if exists "orders insert" on orders;
+create policy "orders insert" on orders for insert with check (auth.role() = 'authenticated');
+drop policy if exists "orders update" on orders;
+create policy "orders update" on orders for update using (
+  is_admin() or sales_id = auth.uid() or sales_id is null
+) with check (
+  is_admin() or sales_id = auth.uid() or sales_id is null
+);
+
+-- ----- order_items: select เปิดตามพาเรนต์ (ทุกคนเห็นได้), insert ได้ตอนสร้างออเดอร์เท่านั้น — ไม่มี update/delete เลย (snapshot ตายตัว ไม่แก้ไขหลังบันทึก) -----
+drop policy if exists "order_items select" on order_items;
+create policy "order_items select" on order_items for select using (
+  exists (select 1 from orders o where o.id = order_items.order_id)
+);
+drop policy if exists "order_items insert" on order_items;
+create policy "order_items insert" on order_items for insert with check (auth.role() = 'authenticated');

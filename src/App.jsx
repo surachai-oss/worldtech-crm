@@ -11,6 +11,7 @@ import Deals from './components/Deals'
 import Activities from './components/Activities'
 import Tasks from './components/Tasks'
 import Quotations from './components/Quotations'
+import Orders from './components/Orders'
 import Users from './components/Users'
 import Products from './components/Products'
 import Leads from './components/Leads'
@@ -21,12 +22,13 @@ import NotificationBell from './components/NotificationBell'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal, LeadModal } from './components/Modals'
 import PaymentRequestModal, { PaymentOrderModal } from './components/PaymentRequestModal'
+import OrderModal from './components/OrderModal'
 import { renderQuotationPdfBlob, loadQuotationPdfItems } from './lib/printQuotation'
 import './App.css'
 
 const TITLES = {
   dashboard: 'แดชบอร์ด', companies: 'บริษัทลูกค้า', 'company-detail': 'รายละเอียดบริษัท',
-  deals: 'ดีลการขาย', activities: 'ประวัติการติดต่อ', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา',
+  deals: 'ดีลการขาย', activities: 'ประวัติการติดต่อ', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา', orders: 'ออเดอร์',
   users: 'ผู้ใช้งาน', products: 'สินค้า', leads: 'ผู้ติดต่อ',
   'payment-requests': 'คำขอตรวจยอด', 'finance-review': 'ตรวจสอบยอดโอน', 'accounting-documents': 'เอกสารบัญชี'
 }
@@ -214,6 +216,12 @@ function AppInner({ session }) {
     needInfoPayment: async (pr, remark) => { await run(() => api.requestMorePaymentInfo(pr.id, { remark, reviewerName: currentUser.name }), 'ส่งกลับให้แก้ไขแล้ว') },
     mismatchPayment: async (pr, remark) => { await run(() => api.markPaymentMismatch(pr.id, { remark, reviewerName: currentUser.name }), 'ทำเครื่องหมายยอดไม่ตรงแล้ว') },
     rejectPayment: async (pr, remark) => { await run(() => api.rejectPaymentRequest(pr.id, { remark, reviewerName: currentUser.name }), 'ปฏิเสธคำขอแล้ว') },
+
+    // ===== Orders (รันเลขออเดอร์เพื่อเปิดบิลในระบบบัญชีอื่น) =====
+    addOrder: () => setModal({ type: 'order', payload: {} }),
+    cancelOrder: async (order, reason) => {
+      await run(() => api.cancelOrder(order.id, reason, currentUser.name), 'ยกเลิกออเดอร์แล้ว')
+    },
   }
 
   const saveCompany = async (f, files = []) => {
@@ -301,6 +309,11 @@ function AppInner({ session }) {
   const savePaymentOrder = async (pr, orderNo, remark) => {
     closeModal()
     await run(() => api.markPaymentOrderCreated(pr.id, { orderNo, remark, actorName: currentUser.name }), 'บันทึกการเปิดออเดอร์แล้ว')
+  }
+  const saveOrder = async (fields, items) => {
+    closeModal()
+    const order = await run(() => api.addOrderWithItems(fields, items), 'สร้างออเดอร์สำเร็จ')
+    if (order) toast(`เลขที่ออเดอร์: ${order.order_no}`, 'success')
   }
   // อัปโหลดสำเนา PDF ของใบเสนอราคาขึ้น Google Drive อัตโนมัติหลังบันทึก — ทำเป็น background ไม่บล็อกผู้ใช้ ถ้าพลาดแค่เตือน ไม่กระทบข้อมูลที่บันทึกไปแล้วใน Supabase
   const mirrorQuotationToDrive = async (quot) => {
@@ -410,6 +423,9 @@ function AppInner({ session }) {
           {view === 'quotations' && (
             <Quotations perm={perm} reloadKey={reloadKey} settings={settings} deals={data.deals} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onCopy={actions.copyQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onCreateDeal={actions.createDealFromQuotation} />
           )}
+          {view === 'orders' && (
+            <Orders reloadKey={reloadKey} onAdd={actions.addOrder} onCancel={actions.cancelOrder} />
+          )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products />}
           {view === 'payment-requests' && (
@@ -433,6 +449,7 @@ function AppInner({ session }) {
       {modal?.type === 'lead' && <LeadModal initial={modal.payload?.initial} isAdmin={isAdmin} onClose={closeModal} onSave={saveLead} />}
       {modal?.type === 'payment' && <PaymentRequestModal initial={modal.payload?.initial} companies={data.companies} quotations={data.quotations} isAdmin={isAdmin} onClose={closeModal} onSave={savePaymentRequest} />}
       {modal?.type === 'payment-order' && <PaymentOrderModal pr={modal.payload.initial} onClose={closeModal} onSave={savePaymentOrder} />}
+      {modal?.type === 'order' && <OrderModal companies={data.companies} quotations={data.quotations} currentUser={currentUser} onClose={closeModal} onSave={saveOrder} />}
     </div>
   )
 }
