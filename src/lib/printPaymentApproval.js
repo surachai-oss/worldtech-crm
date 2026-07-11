@@ -1,5 +1,5 @@
 import { fmtCurrency, fmtDate } from './format'
-import { listPaymentItems } from './api'
+import { listPaymentItems, getPaymentSlipUrl } from './api'
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
@@ -7,9 +7,18 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 }
 
+// เดาชนิดไฟล์สลิปจากนามสกุล — ใช้เลือกวิธีแสดงผล (รูปภาพฝังตรงๆ, PDF ฝังผ่าน iframe, อื่นๆ ให้ลิงก์เปิด)
+function slipKind(path) {
+  const ext = (path || '').split('.').pop().toLowerCase()
+  if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext)) return 'image'
+  if (ext === 'pdf') return 'pdf'
+  return 'other'
+}
+
 // ใบอนุมัติตรวจสอบยอดโอน — ให้ Sale ดาวน์โหลด/พิมพ์เป็น PDF แนบตอนเปิดออเดอร์ในระบบ (แสดงได้เฉพาะคำขอที่บัญชีอนุมัติแล้ว)
 // รูปแบบอ้างอิงจากเทมเพลตใบเสนอราคาเดิม (printQuotation.js) ให้หน้าตาเป็นชุดเดียวกัน
-export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl = '/worldtech-logo.png') {
+// slip: { url, kind } จาก getPaymentSlipUrl + slipKind — หรือ null ถ้าไม่มีสลิปแนบ/โหลดไม่สำเร็จ
+export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl = '/worldtech-logo.png', slip = null) {
   const name = settings.COMPANY_NAME || 'Worldtech Co., Ltd.'
   const address = settings.COMPANY_ADDRESS || ''
   const taxId = settings.COMPANY_TAX_ID || ''
@@ -117,6 +126,17 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
 
       ${pr.finance_remark ? `<div style="margin-top:16px;font-size:12px;color:#4a5568"><b>หมายเหตุจากบัญชี:</b> ${escapeHtml(pr.finance_remark)}</div>` : ''}
 
+      ${slip ? `
+      <div style="margin-top:16px">
+        <div class="section-label">หลักฐานการโอน (สลิป)</div>
+        ${slip.kind === 'image'
+          ? `<img src="${slip.url}" style="max-width:100%;max-height:500px;border:1px solid #e0e4ea;border-radius:4px" onerror="this.replaceWith(document.createTextNode('ไม่พบไฟล์สลิป'))" />`
+          : slip.kind === 'pdf'
+            ? `<iframe src="${slip.url}" style="width:100%;height:500px;border:1px solid #e0e4ea;border-radius:4px"></iframe>
+               <div style="font-size:11px;color:#718096;margin-top:4px">หากไฟล์ไม่แสดง <a href="${slip.url}" target="_blank">เปิดไฟล์สลิปที่นี่</a></div>`
+            : `<a href="${slip.url}" target="_blank">เปิดไฟล์สลิปที่แนบไว้</a>`}
+      </div>` : ''}
+
       <div class="sign">
         <div class="sign-col">
           <div class="sign-name">${pr.finance_reviewer_name ? escapeHtml(pr.finance_reviewer_name) : '&nbsp;'}</div>
@@ -145,8 +165,14 @@ export async function printPaymentApproval(pr, settings = {}) {
 
   try {
     const items = await listPaymentItems(pr.id)
+    let slip = null
+    if (pr.slip_file_url) {
+      // โหลดสลิปแบบ best-effort — ถ้าไฟล์หายหรือ signed URL พลาด ไม่ให้กระทบการพิมพ์เอกสารหลัก
+      try { slip = { url: await getPaymentSlipUrl(pr.slip_file_url), kind: slipKind(pr.slip_file_url) } }
+      catch { /* ข้ามส่วนสลิปไป */ }
+    }
     const logoUrl = `${window.location.origin}/worldtech-logo.png`
-    const html = buildPaymentApprovalHtml(pr, settings, items, logoUrl)
+    const html = buildPaymentApprovalHtml(pr, settings, items, logoUrl, slip)
     w.document.open()
     w.document.write(html)
     w.document.close()

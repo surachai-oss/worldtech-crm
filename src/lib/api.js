@@ -400,6 +400,25 @@ export async function adminCreateUser({ email, password, full_name }, accessToke
   return json
 }
 
+// แก้ไข/รีเซ็ตรหัสผ่าน/ลบผู้ใช้งาน — Admin เท่านั้น เรียก Netlify Function เดียวกัน (manage-user) ที่ถือ service role key ไว้ฝั่ง server เท่านั้น
+// หมายเหตุ: Supabase Auth เก็บรหัสผ่านแบบ hash เสมอ ไม่มีทางดูรหัสผ่านเดิมได้ — "รีเซ็ตรหัสผ่าน" คือตั้งรหัสใหม่แทนของเดิม
+async function callManageUser(action, payload, accessToken) {
+  const res = await fetch('/.netlify/functions/manage-user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ action, ...payload })
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(json.error || 'ทำรายการไม่สำเร็จ')
+  return json
+}
+export const adminUpdateUserProfile = (userId, { full_name, email }, accessToken) =>
+  callManageUser('update', { userId, full_name, email }, accessToken)
+export const adminResetUserPassword = (userId, password, accessToken) =>
+  callManageUser('reset-password', { userId, password }, accessToken)
+export const adminDeleteUser = (userId, accessToken) =>
+  callManageUser('delete', { userId }, accessToken)
+
 // ===== DASHBOARD (คำนวณฝั่ง client จาก getAllData) =====
 // stages: รายชื่อ deal stage ปัจจุบัน (จาก picklists) — ใช้แค่จัดกลุ่มตาราง Pipeline ให้ตรงกับ stage ที่มีจริงตอนนี้
 export function computeDashboard(data, stages = []) {
