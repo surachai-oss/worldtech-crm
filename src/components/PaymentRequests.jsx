@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchPaymentRequests, getPaymentSlipUrl, PAYMENT_STATUS, PAYMENT_STATUS_LIST } from '../lib/api'
+import { exportPaymentRequestsToExcel } from '../lib/importExport'
 import { fmtCurrency, fmtDate, paymentStatusLabel, paymentBadgeClass } from '../lib/format'
 import { useUi } from './UiContext'
 
@@ -33,11 +34,19 @@ export default function PaymentRequests({ reloadKey, onAdd, onEdit, onSubmit, on
     catch (e) { toast('เปิดสลิปไม่สำเร็จ: ' + e.message, 'error') }
   }
 
+  const exportExcel = () => {
+    if (!rows.length) { toast('ไม่มีข้อมูลให้ส่งออก', 'info'); return }
+    exportPaymentRequestsToExcel(rows).catch(e => toast('ส่งออกไม่สำเร็จ: ' + e.message, 'error'))
+  }
+
   return (
     <div className="list-view">
       <div className="section-header">
         <div className="section-title">คำขอตรวจยอด <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} รายการ)</span></div>
-        <button className="btn btn-primary" onClick={onAdd}>+ สร้างคำขอตรวจยอด</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" onClick={exportExcel}>ส่งออกข้อมูล</button>
+          <button className="btn btn-primary" onClick={onAdd}>+ สร้างคำขอตรวจยอด</button>
+        </div>
       </div>
       <div className="filter-bar">
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
@@ -56,23 +65,22 @@ export default function PaymentRequests({ reloadKey, onAdd, onEdit, onSubmit, on
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>เลขคำขอ</th><th>ลูกค้า</th><th>ยอดที่ต้องชำระ</th><th>ยอดโอน</th><th>ผลต่าง</th><th>สถานะ</th><th>ผู้ขอ</th><th>วันที่โอน</th><th>การจัดการ</th></tr></thead>
+              <thead><tr><th>เลขคำขอ</th><th>วันที่</th><th>ลูกค้า</th><th>ประเภทลูกค้า</th><th>ยอดรวม</th><th>สถานะ</th><th>ผู้ขอ</th><th>การจัดการ</th></tr></thead>
               <tbody>
                 {rows.map(pr => {
                   const editable = EDITABLE.includes(pr.status)
                   return (
                     <tr key={pr.id}>
                       <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{pr.pr_no}{pr.approval_ref_no && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>{pr.approval_ref_no}</div>}{pr.order_no && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>ออเดอร์: {pr.order_no}</div>}</td>
+                      <td style={{ fontSize: 12 }}>{fmtDate(pr.request_date || pr.created_at)}</td>
                       <td>{pr.customer_name || pr.company?.name || '-'}</td>
-                      <td style={{ fontWeight: 600 }}>{fmtCurrency(pr.expected_amount)}</td>
-                      <td style={{ fontWeight: 600 }}>{fmtCurrency(pr.paid_amount)}</td>
-                      <td style={{ color: (Number(pr.difference_amount) || 0) === 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }}>{fmtCurrency(pr.difference_amount)}</td>
+                      <td style={{ fontSize: 12 }}>{pr.credit_type ? <span className={`badge ${pr.credit_type.startsWith('ลูกค้าเครดิต') ? 'badge-orange' : 'badge-green'}`}>{pr.credit_type}</span> : '-'}</td>
+                      <td style={{ fontWeight: 600 }}>{fmtCurrency(pr.total_amount)}</td>
                       <td>
                         <span className={`badge ${paymentBadgeClass(pr.status)}`}>{paymentStatusLabel(pr.status)}</span>
                         {pr.finance_remark && <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 2 }}>บัญชี: {pr.finance_remark}</div>}
                       </td>
                       <td style={{ fontSize: 12 }}>{pr.requested_by_name || '-'}</td>
-                      <td style={{ fontSize: 12 }}>{fmtDate(pr.transfer_date)}</td>
                       <td className="td-actions">
                         {pr.slip_file_url && <button className="btn btn-outline btn-xs" onClick={() => viewSlip(pr)}>สลิป</button>}
                         {editable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(pr)}>แก้ไข</button>}

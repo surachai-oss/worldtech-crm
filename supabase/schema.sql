@@ -215,6 +215,16 @@ create table if not exists payment_requests (
   updated_at           timestamptz default now()
 );
 
+-- migration: ฟิลด์เพิ่มเติมของคำขอตรวจยอด (รันซ้ำได้ ปลอดภัย)
+-- request_date   = วันที่ในเอกสารคำขอ (เซลล์เลือกได้ ไม่ผูกกับ created_at)
+-- credit_type    = ประเภทลูกค้า ณ ตอนสร้าง ('ลูกค้าเครดิต ...' / 'ลูกค้าเงินสด') ดึงจากบริษัท/ใบเสนอราคา
+-- total_amount   = ยอดรวมจากรายการสินค้า (รวม VAT แล้ว) — บัญชีเทียบกับสลิปจริงเอง จึงไม่เก็บยอดโอน/ผลต่าง
+-- finance_ref_no = เลขอ้างอิงที่บัญชีกรอกเองตอนอนุมัติ ไว้แมทช์กับระบบบัญชีภายหลัง
+alter table payment_requests add column if not exists request_date date default current_date;
+alter table payment_requests add column if not exists credit_type text;
+alter table payment_requests add column if not exists total_amount numeric default 0;
+alter table payment_requests add column if not exists finance_ref_no text;
+
 -- ===== PAYMENT ITEMS (รายการสินค้าในคำขอตรวจยอด) =====
 create table if not exists payment_items (
   id                 uuid primary key default uuid_generate_v4(),

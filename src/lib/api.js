@@ -614,6 +614,11 @@ export const fetchPaymentRequestById = (id) =>
 export const listPaymentItems = (paymentRequestId) =>
   supabase.from('payment_items').select('*').eq('payment_request_id', paymentRequestId).order('sort_order', { ascending: true }).then(handle)
 
+// ยอดรวมของคำขอ = ผลรวม (จำนวน×ราคาต่อหน่วย − ส่วนลด) โดยราคาต่อหน่วยรวม VAT แล้ว (สูตรเดียวกับดีล/ใบเสนอราคา)
+function paymentTotal(items) {
+  return round2((items || []).reduce((s, it) => s + ((Number(it.quantity) || 0) * (Number(it.unit_price) || 0) - (Number(it.discount) || 0)), 0))
+}
+
 function paymentItemRows(paymentRequestId, items) {
   return items.map((it, i) => ({
     payment_request_id: paymentRequestId,
@@ -633,7 +638,7 @@ function paymentItemRows(paymentRequestId, items) {
 export async function addPaymentRequestWithItems(fields, items) {
   const { _actorName, ...rest } = fields   // _actorName ใช้แค่เขียน audit log ไม่ใช่คอลัมน์จริง ต้องตัดออกก่อน insert
   const pr_no = await genPrNo()
-  const pr = await supabase.from('payment_requests').insert({ ...rest, pr_no }).select().single().then(handle)
+  const pr = await supabase.from('payment_requests').insert({ ...rest, pr_no, total_amount: paymentTotal(items) }).select().single().then(handle)
   if (items?.length) await supabase.from('payment_items').insert(paymentItemRows(pr.id, items)).then(handle)
   await writeAuditLog({ entity_type: 'payment_request', entity_id: pr.id, action: 'create', actor_name: _actorName, detail: `สร้างคำขอ ${pr_no}` })
   return pr
@@ -642,7 +647,7 @@ export async function addPaymentRequestWithItems(fields, items) {
 // แก้ไข — ลบรายการเดิมทั้งหมดแล้วใส่ชุดใหม่ (แบบเดียวกับดีล/ใบเสนอราคา)
 export async function updatePaymentRequestWithItems(id, fields, items) {
   const { _actorName, ...rest } = fields
-  const pr = await supabase.from('payment_requests').update(rest).eq('id', id).select().single().then(handle)
+  const pr = await supabase.from('payment_requests').update({ ...rest, total_amount: paymentTotal(items) }).eq('id', id).select().single().then(handle)
   await supabase.from('payment_items').delete().eq('payment_request_id', id).then(handle)
   if (items?.length) await supabase.from('payment_items').insert(paymentItemRows(id, items)).then(handle)
   return pr
@@ -662,13 +667,15 @@ export async function submitPaymentRequest(id, actorName) {
 }
 
 // ===== Finance actions =====
-export async function approvePaymentRequest(id, { remark = '', reviewerName } = {}) {
+// reviewerName = ชื่อผู้อนุมัติ (บัญชีระบุเอง เป็นลายเซ็นว่าท่านไหนอนุมัติ), financeRefNo = เลขอ้างอิงที่บัญชีกรอกไว้แมทช์ภายหลัง (ไม่บังคับ)
+export async function approvePaymentRequest(id, { remark = '', reviewerName, financeRefNo = '' } = {}) {
   const approval_ref_no = await genApprovalRefNo()
   const pr = await updatePaymentRequest(id, {
     status: PAYMENT_STATUS.APPROVED, approval_ref_no,
     finance_reviewer_name: reviewerName, finance_reviewed_at: new Date().toISOString(), finance_remark: remark || null,
+    finance_ref_no: financeRefNo || null,
   })
-  await writeAuditLog({ entity_type: 'payment_request', entity_id: id, action: 'approve', actor_name: reviewerName, detail: `อนุมัติ ${approval_ref_no}` })
+  await writeAuditLog({ entity_type: 'payment_request', entity_id: id, action: 'approve', actor_name: reviewerName, detail: `อนุมัติ ${approval_ref_no}${financeRefNo ? ` (ref ${financeRefNo})` : ''}` })
   return pr
 }
 
@@ -705,23 +712,22 @@ export async function uploadPaymentSlip(paymentRequestId, file) {
 }
 export const getPaymentSlipUrl = (filePath) => getAttachmentUrl(filePath)
 
-// สรุปหน้า Payment Dashboard — นับตามสถานะ + ยอด/ตัวเลขวันนี้ (คำนวณฝั่ง client จากทุกคำขอที่ผู้ใช้มีสิทธิ์เห็น)
-export async function fetchPaymentDashboard() {
-  const { data, error } = await supabase.from('payment_requests').select('status, paid_amount, approval_ref_no, order_no, created_at, finance_reviewed_at')
-  if (error) throw error
-  const byStatus = {}
-  PAYMENT_STATUS_LIST.forEach(s => { byStatus[s] = 0 })
-  let totalApproved = 0, createdToday = 0, approvedToday = 0, approvedNoOrder = 0
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const isToday = (ts) => ts && new Date(ts) >= today
-  data.forEach(r => {
-    byStatus[r.status] = (byStatus[r.status] || 0) + 1
-    if (r.status === PAYMENT_STATUS.APPROVED || r.status === PAYMENT_STATUS.ORDER_CREATED) totalApproved += Number(r.paid_amount) || 0
-    if (isToday(r.created_at)) createdToday++
-    if (r.approval_ref_no && isToday(r.finance_reviewed_at)) approvedToday++
-    if (r.status === PAYMENT_STATUS.APPROVED) approvedNoOrder++
-  })
-  return { byStatus, totalApproved, createdToday, approvedToday, approvedNoOrder, total: data.length }
+// แจ้งเตือนฝ่ายบัญชีทางอีเมลว่ามีคำขอตรวจยอดใหม่รอตรวจ — เรียก Netlify Function ที่ค้นหาอีเมลบัญชี (service role) แล้วส่งเมล
+// best-effort: ถ้าเซิร์ฟเวอร์ยังไม่ตั้งค่าอีเมล (ไม่มี RESEND_API_KEY) หรือส่งพลาด จะไม่ทำให้การ submit ล้มเหลว
+export async function notifyFinancePaymentSubmitted(prId) {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData?.session?.access_token
+    if (!accessToken) return { skipped: true }
+    const res = await fetch('/.netlify/functions/notify-finance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ paymentRequestId: prId })
+    })
+    return await res.json().catch(() => ({}))
+  } catch {
+    return { skipped: true }
+  }
 }
 
 // ===== มิเรอร์ไฟล์ใบเสนอราคาขึ้น Google Drive (โฟลเดอร์ปี > เดือน) — คู่กับ Supabase Storage ไม่ได้แทนที่ =====

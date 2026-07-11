@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs'
 import { POSITION_OPTIONS, BUSINESS_TYPE_OPTIONS, PURCHASE_REASON_OPTIONS } from './leadOptions'
+import { paymentStatusLabel } from './format'
 
 // ===== เครื่องมือกลางสำหรับอ่าน/สร้างไฟล์ Excel (.xlsx) — ใช้ร่วมกันทุกฟีเจอร์ import ในระบบ =====
 // ใช้ exceljs แทน xlsx บน npm เพราะเวอร์ชันที่ติดตั้งผ่าน npm มีช่องโหว่ความปลอดภัยที่ยังไม่มีแพตช์
@@ -251,6 +252,36 @@ export const exportLeadsToExcel = (rows) =>
     created_at: (r.created_at || '').slice(0, 10),
     appliance_interest: r.appliance_interest?.length ? r.appliance_interest.join(', ') : (r.interested_product || '')
   })), 'ผู้ติดต่อ.xlsx')
+
+// ===== ส่งออกคำขอตรวจยอดเป็นไฟล์ Excel (ใช้ทั้งหน้าคำขอตรวจยอดของเซลล์ และหน้าตรวจสอบยอดโอนของบัญชี) =====
+// บัญชีเอาไฟล์นี้ไปแมทช์กับระบบบัญชีภายหลังได้ — มีทั้งเลขคำขอ/เลขอนุมัติ/เลขอ้างอิงบัญชี/เลขออเดอร์
+const PAYMENT_EXPORT_COLUMNS = [
+  { key: 'pr_no', label: 'เลขคำขอ' },
+  { key: 'request_date', label: 'วันที่คำขอ' },
+  { key: 'customer_name', label: 'ลูกค้า' },
+  { key: 'credit_type', label: 'ประเภทลูกค้า' },
+  { key: 'payment_type', label: 'ประเภทการชำระ' },
+  { key: 'po_reference', label: 'เลขที่ PO' },
+  { key: 'total_amount', label: 'ยอดรวม (รวม VAT)' },
+  { key: 'status_label', label: 'สถานะ' },
+  { key: 'requested_by_name', label: 'ผู้ส่งคำขอ' },
+  { key: 'finance_reviewer_name', label: 'ผู้อนุมัติ' },
+  { key: 'finance_ref_no', label: 'เลขอ้างอิงบัญชี' },
+  { key: 'approval_ref_no', label: 'เลขอนุมัติระบบ' },
+  { key: 'finance_remark', label: 'หมายเหตุบัญชี' },
+  { key: 'order_no', label: 'เลขออเดอร์' },
+  { key: 'created_at', label: 'สร้างเมื่อ' },
+]
+
+export const exportPaymentRequestsToExcel = (rows, filename = 'คำขอตรวจยอด.xlsx') =>
+  exportRowsToExcel(PAYMENT_EXPORT_COLUMNS, rows.map(r => ({
+    ...r,
+    customer_name: r.customer_name || r.company?.name || '',
+    request_date: (r.request_date || '').slice(0, 10),
+    total_amount: Number(r.total_amount || 0),
+    status_label: paymentStatusLabel(r.status),
+    created_at: (r.created_at || '').slice(0, 10),
+  })), filename)
 
 // ===== นำเข้าผู้ติดต่อ/ลีดจากไฟล์ Excel =====
 export const LEAD_IMPORT_COLUMNS = [

@@ -16,7 +16,6 @@ import Products from './components/Products'
 import Leads from './components/Leads'
 import PaymentRequests from './components/PaymentRequests'
 import FinanceReview from './components/FinanceReview'
-import PaymentDashboard from './components/PaymentDashboard'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal, LeadModal } from './components/Modals'
 import PaymentRequestModal, { PaymentOrderModal } from './components/PaymentRequestModal'
@@ -27,7 +26,7 @@ const TITLES = {
   dashboard: 'แดชบอร์ด', companies: 'บริษัทลูกค้า', 'company-detail': 'รายละเอียดบริษัท',
   deals: 'ดีลการขาย', activities: 'ประวัติการติดต่อ', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา',
   users: 'ผู้ใช้งาน', products: 'สินค้า', leads: 'ผู้ติดต่อ',
-  'payment-requests': 'คำขอตรวจยอด', 'finance-review': 'ตรวจสอบยอดโอน', 'payment-dashboard': 'แดชบอร์ดการชำระเงิน'
+  'payment-requests': 'คำขอตรวจยอด', 'finance-review': 'ตรวจสอบยอดโอน'
 }
 
 function AppInner({ session }) {
@@ -188,20 +187,19 @@ function AppInner({ session }) {
     // ===== Payment Verification (คำขอตรวจยอด) =====
     addPaymentRequest: () => setModal({ type: 'payment', payload: {} }),
     editPaymentRequest: (pr) => setModal({ type: 'payment', payload: { initial: pr } }),
-    // ส่งให้บัญชีตรวจ — เช็คข้อมูลสำคัญครบก่อน (ตาม requirement 4.2) แล้วล็อกไม่ให้ sale แก้ต่อจนกว่าจะถูกตีกลับ
+    // ส่งให้บัญชีตรวจ — เช็คข้อมูลสำคัญครบก่อน แล้วล็อกไม่ให้ sale แก้ต่อจนกว่าจะถูกตีกลับ (บัญชีเทียบยอด/ธนาคาร/วันเวลาจากสลิปจริงเอง)
     submitPayment: async (pr) => {
       const problems = []
       if (!pr.company_id) problems.push('ลูกค้า')
-      if (!(Number(pr.expected_amount) > 0)) problems.push('ยอดที่ต้องชำระ')
-      if (!(Number(pr.paid_amount) > 0)) problems.push('ยอดที่ลูกค้าโอนจริง')
-      if (!pr.transfer_date) problems.push('วันที่โอน')
-      if (!pr.bank_account) problems.push('ธนาคารที่รับโอน')
       if (!pr.slip_file_url) problems.push('สลิปการโอน')
       if (problems.length) { toast('กรอกไม่ครบก่อนส่ง: ' + problems.join(', '), 'error'); return }
       const items = await api.listPaymentItems(pr.id).catch(() => [])
       if (!items.length) { toast('ต้องมีรายการสินค้าอย่างน้อย 1 รายการก่อนส่ง', 'error'); return }
       if (!(await confirm(`ส่งคำขอ ${pr.pr_no} ให้บัญชีตรวจ? หลังส่งแล้วจะแก้ไขไม่ได้จนกว่าบัญชีจะตีกลับ`))) return
-      await run(() => api.submitPaymentRequest(pr.id, currentUser.name), 'ส่งให้บัญชีตรวจแล้ว')
+      const ok = await run(() => api.submitPaymentRequest(pr.id, currentUser.name), 'ส่งให้บัญชีตรวจแล้ว')
+      if (ok) api.notifyFinancePaymentSubmitted(pr.id).then(res => {
+        if (res?.sent) toast('แจ้งเตือนฝ่ายบัญชีทางอีเมลแล้ว', 'success')
+      }).catch(() => {})
     },
     deletePaymentRequest: async (pr) => {
       if (!(await confirm(`ลบคำขอ ${pr.pr_no}?`))) return
@@ -209,7 +207,8 @@ function AppInner({ session }) {
     },
     markPaymentOrder: (pr) => setModal({ type: 'payment-order', payload: { initial: pr } }),
     // ฝ่ายบัญชีตัดสินผลตรวจ (ส่ง reviewerName ไปเก็บ + เขียน audit log)
-    approvePayment: async (pr, remark) => { await run(() => api.approvePaymentRequest(pr.id, { remark, reviewerName: currentUser.name }), 'อนุมัติแล้ว') },
+    // อนุมัติ: บัญชีระบุชื่อผู้อนุมัติ (ลายเซ็น) + เลขอ้างอิงบัญชีได้เอง (ดู ReviewModal)
+    approvePayment: async (pr, { remark, approverName, financeRefNo } = {}) => { await run(() => api.approvePaymentRequest(pr.id, { remark, reviewerName: approverName || currentUser.name, financeRefNo }), 'อนุมัติแล้ว') },
     needInfoPayment: async (pr, remark) => { await run(() => api.requestMorePaymentInfo(pr.id, { remark, reviewerName: currentUser.name }), 'ส่งกลับให้แก้ไขแล้ว') },
     mismatchPayment: async (pr, remark) => { await run(() => api.markPaymentMismatch(pr.id, { remark, reviewerName: currentUser.name }), 'ทำเครื่องหมายยอดไม่ตรงแล้ว') },
     rejectPayment: async (pr, remark) => { await run(() => api.rejectPaymentRequest(pr.id, { remark, reviewerName: currentUser.name }), 'ปฏิเสธคำขอแล้ว') },
@@ -414,9 +413,8 @@ function AppInner({ session }) {
             <PaymentRequests reloadKey={reloadKey} onAdd={actions.addPaymentRequest} onEdit={actions.editPaymentRequest} onSubmit={actions.submitPayment} onDelete={actions.deletePaymentRequest} onMarkOrder={actions.markPaymentOrder} />
           )}
           {view === 'finance-review' && (isFinance || isAdmin) && (
-            <FinanceReview reloadKey={reloadKey} onApprove={actions.approvePayment} onNeedInfo={actions.needInfoPayment} onMismatch={actions.mismatchPayment} onReject={actions.rejectPayment} />
+            <FinanceReview reloadKey={reloadKey} currentUserName={currentUser.name} onApprove={actions.approvePayment} onNeedInfo={actions.needInfoPayment} onMismatch={actions.mismatchPayment} onReject={actions.rejectPayment} />
           )}
-          {view === 'payment-dashboard' && <PaymentDashboard reloadKey={reloadKey} />}
         </div>
       </div>
 

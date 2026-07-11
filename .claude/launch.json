@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "/private/tmp/claude-501/-Users-surachai-Project-worldtech-crm/537bd254-9273-4df1-8d7d-88e819aa944c/scratchpad/node-v24.18.0-darwin-arm64/bin/node",
+      "runtimeArgs": [
+        "node_modules/vite/bin/vite.js"
+      ],
+      "port": 5173
+    }
+  ]
+}
