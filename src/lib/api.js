@@ -805,7 +805,8 @@ export async function markAllNotificationsRead() {
 }
 
 // ===== ORDERS (รันเลขออเดอร์จากใบเสนอราคา เพื่อเอาไปเปิดบิลต่อในระบบบัญชีอื่น) =====
-async function genOrderNo() {
+// เรียกตอนเปิดฟอร์มสร้างออเดอร์เลย (ไม่รอบันทึก) ให้เซลล์เห็นเลขทันที — เลขที่รันไปแล้วแต่ปิดฟอร์มไม่บันทึกจะถูกข้ามไป ไม่ใช้ซ้ำ (เหมือนเลขบิลที่ฉีกทิ้งได้)
+export async function genOrderNo() {
   const { data, error } = await supabase.rpc('gen_order_no')
   if (error) throw error
   return data
@@ -837,14 +838,13 @@ export async function fetchActiveOrderQuotationIds() {
   return new Set(data.map(o => o.quotation_id).filter(Boolean))
 }
 
-// สร้างออเดอร์ + snapshot รายการสินค้า — เลขออเดอร์รันจาก DB (gen_order_no), sales_id/sales_name มาจากผู้ใช้ที่ล็อกอินอยู่เสมอ (ตั้งจากฝั่งแอป ไม่ให้แก้เอง)
+// สร้างออเดอร์ + snapshot รายการสินค้า — fields.order_no ต้องรันมาจาก genOrderNo() แล้วตอนเปิดฟอร์ม, sales_id/sales_name มาจากผู้ใช้ที่ล็อกอินอยู่เสมอ (ตั้งจากฝั่งแอป ไม่ให้แก้เอง)
 // ถ้าใบเสนอราคานี้ถูกใช้เปิดออเดอร์ Active ไปแล้ว unique index ฝั่ง DB จะ reject การ insert — ดักจับแล้วแปลงเป็นข้อความที่เข้าใจง่าย
 export async function addOrderWithItems(fields, items) {
-  const order_no = await genOrderNo()
   const totals = computeDealTotals(items)
   let order
   try {
-    order = await supabase.from('orders').insert({ ...fields, order_no, value: totals.subtotalIncVat, status: ORDER_STATUS.ACTIVE }).select().single().then(handle)
+    order = await supabase.from('orders').insert({ ...fields, value: totals.subtotalIncVat, status: ORDER_STATUS.ACTIVE }).select().single().then(handle)
   } catch (e) {
     if (e.code === '23505') throw new Error('ใบเสนอราคานี้ถูกใช้เปิดออเดอร์ไปแล้ว กรุณาเลือกใบอื่น หรือรีเฟรชแล้วลองใหม่')
     throw e

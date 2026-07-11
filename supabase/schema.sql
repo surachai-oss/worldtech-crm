@@ -277,6 +277,13 @@ create table if not exists orders (
   cancelled_at            timestamptz
 );
 
+-- migration: snapshot ข้อมูลบริษัท (เลขผู้เสียภาษี/ที่อยู่/เบอร์/อีเมล) ไว้ในออเดอร์ ให้บัญชีเอาไปออกใบแจ้งหนี้/ใบกำกับภาษีทีหลังได้โดยไม่ต้องย้อนไปดูที่ใบเสนอราคา + หมายเหตุ
+alter table orders add column if not exists company_tax_id text;
+alter table orders add column if not exists company_address text;
+alter table orders add column if not exists company_phone text;
+alter table orders add column if not exists company_email text;
+alter table orders add column if not exists remark text;
+
 -- ===== ORDER ITEMS (snapshot รายการสินค้าจากใบเสนอราคา ณ ตอนเปิดออเดอร์ — ไม่ผูกสดกับ quotation_items เพราะใบเสนอราคาแก้ไขทีหลังได้ แต่ออเดอร์ต้องคงข้อมูล ณ วันที่เปิดไว้) =====
 create table if not exists order_items (
   id           uuid primary key default uuid_generate_v4(),
@@ -324,7 +331,12 @@ begin
     new.company_id is distinct from old.company_id or
     new.sales_id is distinct from old.sales_id or
     new.shipping_address is distinct from old.shipping_address or
-    new.value is distinct from old.value
+    new.value is distinct from old.value or
+    new.company_tax_id is distinct from old.company_tax_id or
+    new.company_address is distinct from old.company_address or
+    new.company_phone is distinct from old.company_phone or
+    new.company_email is distinct from old.company_email or
+    new.remark is distinct from old.remark
   ) then
     raise exception 'ออเดอร์ที่บันทึกแล้วแก้ไขไม่ได้ ถ้าลงข้อมูลผิดต้องยกเลิกแล้วเปิดออเดอร์ใหม่';
   end if;

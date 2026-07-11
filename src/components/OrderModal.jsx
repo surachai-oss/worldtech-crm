@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { listQuotationItems, computeDealTotals, fetchActiveOrderQuotationIds, listProducts } from '../lib/api'
+import { listQuotationItems, computeDealTotals, fetchActiveOrderQuotationIds, listProducts, genOrderNo } from '../lib/api'
 import { fmtCurrency } from '../lib/format'
 import { useUi } from './UiContext'
 import SearchableSelect from './SearchableSelect'
@@ -14,25 +14,29 @@ function mapCopiedItems(rows) {
   }))
 }
 
-// ฟอร์มสร้างออเดอร์ใหม่ — เลือกใบเสนอราคา -> คัดลอกบริษัท/รายการสินค้าทั้งหมดมาให้อัตโนมัติ -> กรอกที่อยู่จัดส่งเพิ่ม
-// เลขออเดอร์ (WTE{ปี}WT{เลขรัน}) รันจาก DB ตอนบันทึกจริง (ไม่ได้รันไว้ล่วงหน้าตอนเปิดฟอร์ม กันเลขขาดหายจากฟอร์มที่เปิดค้างไว้แล้วไม่บันทึก)
+// ฟอร์มสร้างออเดอร์ใหม่ — เลือกใบเสนอราคา -> คัดลอกบริษัท (ชื่อ/เลขผู้เสียภาษี/ที่อยู่/เบอร์/อีเมล) + รายการสินค้าทั้งหมดมาให้อัตโนมัติ -> กรอกที่อยู่จัดส่งเพิ่ม
+// เลขออเดอร์ (WTE{ปี}WT{เลขรัน}) รันทันทีตอนเปิดฟอร์ม (ไม่รอบันทึก) ให้เซลล์เห็นเลขล่วงหน้าได้
 // onSave(fields, items) — บันทึกแล้วแก้ไขไม่ได้อีก (ยกเลิกได้อย่างเดียว) จึงไม่มีโหมดแก้ไขในคอมโพเนนต์นี้
 export default function OrderModal({ companies, quotations, currentUser, onClose, onSave }) {
-  const { toast } = useUi()
+  const { toast, confirm } = useUi()
+  const [orderNo, setOrderNo] = useState(null)
   const [quotationId, setQuotationId] = useState('')
   const [companyId, setCompanyId] = useState('')
   const [customerName, setCustomerName] = useState('')
+  const [companyInfo, setCompanyInfo] = useState({ tax_id: '', address: '', phone: '', email: '' })
   const [quotNo, setQuotNo] = useState('')
   const [items, setItems] = useState([{ ...EMPTY_ITEM }])
   const [shippingAddress, setShippingAddress] = useState('')
   const [shippingContactName, setShippingContactName] = useState('')
   const [shippingContactPhone, setShippingContactPhone] = useState('')
+  const [remark, setRemark] = useState('')
   const [usedQuotationIds, setUsedQuotationIds] = useState(null)
   const [products, setProducts] = useState(null)
 
   useEffect(() => {
     fetchActiveOrderQuotationIds().then(setUsedQuotationIds).catch(() => setUsedQuotationIds(new Set()))
     listProducts().then(setProducts).catch(() => setProducts([]))
+    genOrderNo().then(setOrderNo).catch(e => toast('รันเลขออเดอร์ไม่สำเร็จ: ' + e.message, 'error'))
   }, [])
 
   const companyById = new Map(companies.map(c => [c.id, c]))
@@ -41,15 +45,20 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
 
   const onQuotationChange = async (quotId) => {
     setQuotationId(quotId)
-    if (!quotId) { setCompanyId(''); setCustomerName(''); setQuotNo(''); return }
+    if (!quotId) {
+      setCompanyId(''); setCustomerName(''); setQuotNo('')
+      setCompanyInfo({ tax_id: '', address: '', phone: '', email: '' })
+      return
+    }
     const quot = quotations.find(q => q.id === quotId)
+    const company = companyById.get(quot?.company_id)
     setCompanyId(quot?.company_id || '')
-    setCustomerName(companyById.get(quot?.company_id)?.name || '')
+    setCustomerName(company?.name || '')
     setQuotNo(quot?.quot_no || '')
+    setCompanyInfo({ tax_id: company?.tax_id || '', address: company?.address || '', phone: company?.phone || '', email: company?.email || '' })
     try {
       const rows = await listQuotationItems(quotId)
       if (rows.length) setItems(mapCopiedItems(rows))
-      toast('คัดลอกข้อมูลจากใบเสนอราคาแล้ว', 'success')
     } catch (e) { toast('ดึงข้อมูลจากใบเสนอราคาไม่สำเร็จ: ' + e.message, 'error') }
   }
 
@@ -64,15 +73,18 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
   const totals = computeDealTotals(items)
   const cleanItems = items.filter(it => it.description?.trim())
 
-  // onSave (App.jsx) ปิดมอดัลทันทีแล้วค่อย run() ในพื้นหลัง — เหมือนมอดัลอื่นในระบบ (ไม่รอผลลัพธ์/ไม่มี spinner ค้าง)
-  const submit = () => {
+  const submit = async () => {
+    if (!orderNo) { toast('กำลังรันเลขออเดอร์ กรุณารอสักครู่', 'error'); return }
     if (!quotationId) { toast('กรุณาเลือกใบเสนอราคา', 'error'); return }
     if (!cleanItems.length) { toast('กรุณาใส่รายการสินค้าอย่างน้อย 1 รายการ', 'error'); return }
     if (!shippingAddress.trim()) { toast('กรุณากรอกที่อยู่จัดส่ง', 'error'); return }
+    if (!(await confirm(`ยืนยันบันทึกออเดอร์เลขที่ ${orderNo}?\n\nหลังบันทึกแล้วจะแก้ไขข้อมูลไม่ได้อีก หากลงข้อมูลผิดต้องยกเลิกออเดอร์นี้แล้วเปิดออเดอร์ใหม่เท่านั้น`))) return
     onSave({
-      quotation_id: quotationId, quot_no: quotNo, company_id: companyId || null, customer_name: customerName,
+      order_no: orderNo, quotation_id: quotationId, quot_no: quotNo, company_id: companyId || null, customer_name: customerName,
+      company_tax_id: companyInfo.tax_id || null, company_address: companyInfo.address || null,
+      company_phone: companyInfo.phone || null, company_email: companyInfo.email || null,
       shipping_address: shippingAddress.trim(), shipping_contact_name: shippingContactName.trim() || null,
-      shipping_contact_phone: shippingContactPhone.trim() || null,
+      shipping_contact_phone: shippingContactPhone.trim() || null, remark: remark.trim() || null,
       sales_id: currentUser.id, sales_name: currentUser.name,
     }, cleanItems)
   }
@@ -85,6 +97,13 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 13, color: 'var(--text-light)' }}>เลขที่ออเดอร์</span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--navy)' }}>{orderNo || 'กำลังรันเลข...'}</span>
+            </div>
+          </div>
+
           <div className="form-group">
             <label className="form-label required">เลขที่ใบเสนอราคา</label>
             <SearchableSelect
@@ -96,9 +115,19 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
             <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>แสดงเฉพาะใบเสนอราคาที่ยังไม่ถูกใช้เปิดออเดอร์อื่น</div>
           </div>
 
-          {companyId && <div style={{ marginBottom: 12, fontSize: 13 }}>บริษัท: <b>{customerName}</b></div>}
+          {companyId && (
+            <div className="card" style={{ marginBottom: 14 }}>
+              <div className="card-body" style={{ fontSize: 13, lineHeight: 1.7 }}>
+                <div><b>{customerName}</b></div>
+                {companyInfo.tax_id && <div>เลขประจำตัวผู้เสียภาษี: {companyInfo.tax_id}</div>}
+                {companyInfo.address && <div>ที่อยู่: {companyInfo.address}</div>}
+                {companyInfo.phone && <div>โทร: {companyInfo.phone}</div>}
+                {companyInfo.email && <div>อีเมล: {companyInfo.email}</div>}
+              </div>
+            </div>
+          )}
 
-          <label className="form-label" style={{ marginTop: 4 }}>รายการสินค้า (คัดลอกจากใบเสนอราคาให้อัตโนมัติ แก้ไขได้ก่อนบันทึก)</label>
+          <label className="form-label" style={{ marginTop: 4 }}>รายการสินค้า</label>
           <div className="table-wrap" style={{ marginBottom: 4 }}>
             <table>
               <thead>
@@ -151,11 +180,14 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
           </div>
 
           <div className="form-group">
+            <label className="form-label">หมายเหตุ</label>
+            <textarea className="form-control" rows={2} value={remark} onChange={e => setRemark(e.target.value)} />
+          </div>
+
+          <div className="form-group">
             <label className="form-label">เซลล์ผู้เปิดออเดอร์</label>
             <input className="form-control" value={currentUser.name} disabled />
           </div>
-
-          <div style={{ fontSize: 11, color: 'var(--text-light)' }}>เลขที่ออเดอร์จะรันอัตโนมัติหลังกดบันทึก — ออเดอร์ที่บันทึกแล้วแก้ไขไม่ได้ ถ้าลงข้อมูลผิดต้องยกเลิกแล้วเปิดใหม่</div>
         </div>
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onClose}>ยกเลิก</button>
@@ -197,8 +229,13 @@ export function OrderDetailModal({ order, items, onClose, onCancel }) {
         <div className="modal-body">
           <Row label="เลขที่ใบเสนอราคา" value={order.quot_no || '-'} />
           <Row label="บริษัท" value={order.customer_name || order.company?.name || '-'} />
+          {order.company_tax_id && <Row label="เลขประจำตัวผู้เสียภาษี" value={order.company_tax_id} />}
+          {order.company_address && <Row label="ที่อยู่บริษัท" value={order.company_address} />}
+          {order.company_phone && <Row label="โทรศัพท์บริษัท" value={order.company_phone} />}
+          {order.company_email && <Row label="อีเมลบริษัท" value={order.company_email} />}
           <Row label="ที่อยู่จัดส่ง" value={order.shipping_address} />
           {order.shipping_contact_name && <Row label="ผู้รับ" value={`${order.shipping_contact_name}${order.shipping_contact_phone ? ` (${order.shipping_contact_phone})` : ''}`} />}
+          {order.remark && <Row label="หมายเหตุ" value={order.remark} />}
           <Row label="เซลล์ผู้เปิดออเดอร์" value={order.sales_name || '-'} />
           <Row label="สถานะ" value={<span className={`badge ${order.status === 'Active' ? 'badge-green' : 'badge-gray'}`}>{order.status === 'Active' ? 'ใช้งานอยู่' : 'ยกเลิกแล้ว'}</span>} />
           {order.status === 'Cancelled' && order.cancel_reason && <Row label="เหตุผลที่ยกเลิก" value={order.cancel_reason} />}
