@@ -130,9 +130,9 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
       <div style="margin-top:16px">
         <div class="section-label">หลักฐานการโอน (สลิป)</div>
         ${slip.kind === 'image'
-          ? `<img src="${slip.url}" style="max-width:100%;max-height:500px;border:1px solid #e0e4ea;border-radius:4px" onerror="this.replaceWith(document.createTextNode('ไม่พบไฟล์สลิป'))" />`
+          ? `<img src="${slip.url}" style="max-width:220px;max-height:280px;border:1px solid #e0e4ea;border-radius:4px" onerror="this.replaceWith(document.createTextNode('ไม่พบไฟล์สลิป'))" />`
           : slip.kind === 'pdf'
-            ? `<iframe src="${slip.url}" style="width:100%;height:500px;border:1px solid #e0e4ea;border-radius:4px"></iframe>
+            ? `<iframe src="${slip.url}" style="width:220px;height:280px;border:1px solid #e0e4ea;border-radius:4px"></iframe>
                <div style="font-size:11px;color:#718096;margin-top:4px">หากไฟล์ไม่แสดง <a href="${slip.url}" target="_blank">เปิดไฟล์สลิปที่นี่</a></div>`
             : `<a href="${slip.url}" target="_blank">เปิดไฟล์สลิปที่แนบไว้</a>`}
       </div>` : ''}
