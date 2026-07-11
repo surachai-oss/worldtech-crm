@@ -305,6 +305,7 @@ create table if not exists order_no_counters (
   counter  int not null default 0
 );
 
+-- security definer: bypass RLS บนตาราง counter นี้ (ไม่มีใครควรเขียนตรงๆ นอกจากผ่านฟังก์ชันนี้) — ต่างจาก gen_pr_no/gen_quot_no ที่ใช้ sequence ซึ่งไม่ผ่าน RLS อยู่แล้ว
 create or replace function gen_order_no() returns text as $$
 declare
   yr int := extract(year from now())::int;
@@ -316,7 +317,8 @@ begin
   returning counter into n;
   return 'WTE' || yy || 'WT' || lpad(n::text, 4, '0');
 end;
-$$ language plpgsql;
+$$ language plpgsql security definer set search_path = public;
+grant execute on function gen_order_no() to authenticated;
 
 -- บังคับกฎ "แก้ไขไม่ได้หลังบันทึก ต้องยกเลิกเท่านั้น" ที่ระดับฐานข้อมูล (กันเผลอแก้ผ่านทางอื่นนอกแอป) —
 -- อนุญาตแค่เปลี่ยนสถานะเป็น Cancelled พร้อม cancel_reason/cancelled_at เท่านั้น ห้ามแก้ฟิลด์อื่นหรือแก้ออเดอร์ที่ยกเลิกไปแล้ว
@@ -810,6 +812,7 @@ alter table accounting_document_requests enable row level security;
 alter table accounting_document_files enable row level security;
 alter table orders       enable row level security;
 alter table order_items  enable row level security;
+alter table order_no_counters enable row level security; -- ไม่มี policy เลย = ปิดกั้นเข้าถึงตรงๆ ทุกทาง เข้าได้แค่ผ่าน gen_order_no() (security definer)
 
 -- ลบ policy แบบเก่า "authenticated ทำได้ทุกอย่าง" (ถ้ามีจากเวอร์ชันก่อนหน้า)
 drop policy if exists "allow all for authenticated" on companies;
