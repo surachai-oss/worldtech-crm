@@ -16,6 +16,7 @@ import Products from './components/Products'
 import Leads from './components/Leads'
 import PaymentRequests from './components/PaymentRequests'
 import FinanceReview from './components/FinanceReview'
+import AccountingDocuments from './components/AccountingDocuments'
 import NotificationBell from './components/NotificationBell'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal, LeadModal } from './components/Modals'
@@ -27,7 +28,7 @@ const TITLES = {
   dashboard: 'แดชบอร์ด', companies: 'บริษัทลูกค้า', 'company-detail': 'รายละเอียดบริษัท',
   deals: 'ดีลการขาย', activities: 'ประวัติการติดต่อ', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา',
   users: 'ผู้ใช้งาน', products: 'สินค้า', leads: 'ผู้ติดต่อ',
-  'payment-requests': 'คำขอตรวจยอด', 'finance-review': 'ตรวจสอบยอดโอน'
+  'payment-requests': 'คำขอตรวจยอด', 'finance-review': 'ตรวจสอบยอดโอน', 'accounting-documents': 'เอกสารบัญชี'
 }
 
 function AppInner({ session }) {
@@ -74,7 +75,7 @@ function AppInner({ session }) {
     if (v === 'company-detail') setCurrentCompanyId(companyId)
   }
 
-  const currentUser = { name: session.user.user_metadata?.name || session.user.email?.split('@')[0], email: session.user.email }
+  const currentUser = { id: session.user.id, name: session.user.user_metadata?.name || session.user.email?.split('@')[0], email: session.user.email }
 
   const searchResults = useMemo(() => api.searchAll(data, searchQ), [data, searchQ])
 
@@ -412,10 +413,13 @@ function AppInner({ session }) {
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products />}
           {view === 'payment-requests' && (
-            <PaymentRequests reloadKey={reloadKey} settings={settings} perm={perm} onAdd={actions.addPaymentRequest} onEdit={actions.editPaymentRequest} onSubmit={actions.submitPayment} onDelete={actions.deletePaymentRequest} onMarkOrder={actions.markPaymentOrder} />
+            <PaymentRequests reloadKey={reloadKey} settings={settings} perm={perm} currentUser={currentUser} onAdd={actions.addPaymentRequest} onEdit={actions.editPaymentRequest} onSubmit={actions.submitPayment} onDelete={actions.deletePaymentRequest} onMarkOrder={actions.markPaymentOrder} />
           )}
           {view === 'finance-review' && (isFinance || isAdmin) && (
             <FinanceReview reloadKey={reloadKey} currentUserName={currentUser.name} onApprove={actions.approvePayment} onNeedInfo={actions.needInfoPayment} onMismatch={actions.mismatchPayment} onReject={actions.rejectPayment} />
+          )}
+          {view === 'accounting-documents' && (isFinance || isAdmin) && (
+            <AccountingDocuments reloadKey={reloadKey} currentUserName={currentUser.name} />
           )}
         </div>
       </div>

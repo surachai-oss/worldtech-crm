@@ -11,11 +11,11 @@ const ADMIN_SECTION = { section: 'ผู้ดูแลระบบ', items: [
 
 export default function Sidebar({ activeView, onNav, user, isAdmin, isFinance, onLogout }) {
   const name = user?.name || 'ผู้ใช้งาน'
-  // เมนู "ตรวจสอบยอดโอน" ให้เห็นเฉพาะฝ่ายบัญชี/แอดมิน ส่วนคำขอตรวจยอด เห็นได้ทุกคน
+  // เมนู "ตรวจสอบยอดโอน"/"เอกสารบัญชี" ให้เห็นเฉพาะฝ่ายบัญชี/แอดมิน ส่วนคำขอตรวจยอด เห็นได้ทุกคน
   const financeSection = {
     section: 'การเงิน', items: [
       { id: 'payment-requests', label: 'คำขอตรวจยอด' },
-      ...((isFinance || isAdmin) ? [{ id: 'finance-review', label: 'ตรวจสอบยอดโอน' }] : []),
+      ...((isFinance || isAdmin) ? [{ id: 'finance-review', label: 'ตรวจสอบยอดโอน' }, { id: 'accounting-documents', label: 'เอกสารบัญชี' }] : []),
     ]
   }
   const sections = [...NAV.slice(0, 3), financeSection, ...NAV.slice(3), ...(isAdmin ? [ADMIN_SECTION] : [])]

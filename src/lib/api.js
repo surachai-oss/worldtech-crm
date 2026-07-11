@@ -18,6 +18,31 @@ export const PAYMENT_STATUS = {
 }
 export const PAYMENT_STATUS_LIST = Object.values(PAYMENT_STATUS)
 
+// สถานะของคำขอเอกสารบัญชี (accounting_document_requests.document_status) — workflow คงที่ ไม่ใช่ picklist ที่แก้เองได้
+export const ACCOUNTING_DOC_STATUS = {
+  WAITING_SALES_INFO: 'รอข้อมูลจากเซลล์',
+  PENDING_REVIEW: 'รอบัญชีตรวจสอบ',
+  PENDING_ISSUE: 'รอออกเอกสาร',
+  PENDING_UPLOAD: 'รออัปโหลดเอกสาร',
+  READY: 'เอกสารพร้อมดาวน์โหลด',
+  SENT_TO_CUSTOMER: 'ส่งให้ลูกค้าแล้ว',
+  PENDING_ORIGINAL: 'รอส่งตัวจริง',
+  ORIGINAL_SENT: 'ส่งตัวจริงแล้ว',
+  COMPLETED: 'เสร็จสิ้น',
+  CANCELLED: 'ยกเลิก',
+}
+export const ACCOUNTING_DOC_STATUS_LIST = Object.values(ACCOUNTING_DOC_STATUS)
+// สถานะที่ยังไม่จบงาน ใช้คำนวณ "งานเกินกำหนด" ในสรุปหน้าเอกสารบัญชี
+const ACCOUNTING_DOC_OPEN_STATUSES = [ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO, ACCOUNTING_DOC_STATUS.PENDING_REVIEW, ACCOUNTING_DOC_STATUS.PENDING_ISSUE, ACCOUNTING_DOC_STATUS.PENDING_UPLOAD]
+
+export const DOC_TYPES = ['ใบแจ้งหนี้', 'ใบกำกับภาษี + ใบเสร็จรับเงิน', 'ใบเสร็จรับเงิน', 'เอกสารอื่นๆ']
+export const DOC_DELIVERY_METHODS = ['ส่งสำเนาทางอีเมล', 'ส่งตัวจริง', 'ส่งทั้งอีเมลและตัวจริง']
+export const DOC_PRIORITIES = ['ปกติ', 'ด่วน', 'ด่วนมาก / ลูกค้ารอใช้เอกสาร']
+export const DOC_FILE_TYPES = { INVOICE: 'invoice', TAX_INVOICE: 'tax_invoice', RECEIPT: 'receipt', TAX_INVOICE_RECEIPT: 'tax_invoice_receipt', OTHER: 'other' }
+export const DOC_FILE_TYPE_LABEL = { invoice: 'ใบแจ้งหนี้', tax_invoice: 'ใบกำกับภาษี', receipt: 'ใบเสร็จรับเงิน', tax_invoice_receipt: 'ใบกำกับภาษี/ใบเสร็จ', other: 'อื่นๆ' }
+export const DOC_SENT_CHANNELS = ['email', 'line', 'whatsapp', 'manual', 'other']
+export const DOC_SENT_CHANNEL_LABEL = { email: 'อีเมล', line: 'Line', whatsapp: 'WhatsApp', manual: 'ส่งเอง/รับเอง', other: 'อื่นๆ' }
+
 function handle(res) {
   if (res.error) throw res.error
   return res.data
@@ -774,6 +799,162 @@ export async function markAllNotificationsRead() {
   if (!s?.user) return
   await supabase.from('notifications').update({ read_at: new Date().toISOString() })
     .eq('user_id', s.user.id).is('read_at', null).then(handle)
+}
+
+// ===== ACCOUNTING DOCUMENT REQUESTS (คำขอเอกสารบัญชี — ใบแจ้งหนี้/ใบกำกับภาษี/ใบเสร็จ) =====
+// order_id ผูกกับ quotations เพราะระบบนี้ไม่มีตาราง "ออเดอร์" แยก — ใบเสนอราคาที่ปิดขายแล้วถือเป็นออเดอร์ในทางธุรกิจ
+
+// เช็คว่าข้อมูลที่กรอกครบพอส่งเข้าคิวบัญชีตรวจสอบหรือยัง — ไม่ครบจะค้างที่สถานะ "รอข้อมูลจากเซลล์" แทน
+export function accountingDocInfoComplete(f) {
+  const needsTax = f.document_type === 'ใบกำกับภาษี + ใบเสร็จรับเงิน'
+  if (needsTax && !(f.tax_name && f.tax_id && f.branch_type && f.tax_address)) return false
+  const needsEmail = f.delivery_method === 'ส่งสำเนาทางอีเมล' || f.delivery_method === 'ส่งทั้งอีเมลและตัวจริง'
+  if (needsEmail && !f.email_to) return false
+  const needsOriginal = f.delivery_method === 'ส่งตัวจริง' || f.delivery_method === 'ส่งทั้งอีเมลและตัวจริง'
+  if (needsOriginal && !(f.original_recipient_name && f.original_recipient_phone && f.original_shipping_address)) return false
+  return true
+}
+
+export async function fetchAccountingDocRequests({ status = '', priority = '', q = '', dateFrom = '', dateTo = '' } = {}) {
+  let query = supabase.from('accounting_document_requests')
+    .select('*, order:quotations(id, quot_no, quot_date, value, company:companies(id,name))')
+    .order('created_at', { ascending: false })
+  if (status) query = query.eq('document_status', status)
+  if (priority) query = query.eq('priority', priority)
+  const sq = safeLike(q)
+  if (sq) query = query.or(`customer_name.ilike.%${sq}%,sales_name.ilike.%${sq}%,invoice_no.ilike.%${sq}%,tax_invoice_no.ilike.%${sq}%,receipt_no.ilike.%${sq}%`)
+  const { fromIso, toIso } = dateRangeToIso(dateFrom, dateTo)
+  if (fromIso) query = query.gte('created_at', fromIso)
+  if (toIso) query = query.lte('created_at', toIso)
+  const { data, error } = await query
+  if (error) throw error
+  return data
+}
+
+// คำขอเอกสารทั้งหมดของออเดอร์ (ใบเสนอราคา) หนึ่งใบ — ใบเดียวขอเอกสารได้หลายรอบ (เช่น ขอใบแจ้งหนี้ก่อน แล้วขอใบกำกับภาษีทีหลัง)
+export const fetchAccountingDocRequestsByOrder = (orderId) =>
+  supabase.from('accounting_document_requests').select('*').eq('order_id', orderId)
+    .order('created_at', { ascending: false }).then(handle)
+
+export async function addAccountingDocRequest(fields) {
+  const complete = accountingDocInfoComplete(fields)
+  const now = new Date().toISOString()
+  const row = {
+    ...fields,
+    document_status: complete ? ACCOUNTING_DOC_STATUS.PENDING_REVIEW : ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO,
+    submitted_at: complete ? now : null,
+  }
+  const req = await supabase.from('accounting_document_requests').insert(row).select().single().then(handle)
+  await writeAuditLog({ entity_type: 'accounting_document_request', entity_id: req.id, action: 'create', actor_name: fields.sales_name, detail: `สร้างคำขอเอกสาร ${fields.document_type}` })
+  return req
+}
+
+export const updateAccountingDocRequest = (id, d) =>
+  supabase.from('accounting_document_requests').update(d).eq('id', id).select().single().then(handle)
+
+export const deleteAccountingDocRequest = (id) =>
+  supabase.from('accounting_document_requests').delete().eq('id', id).then(handle)
+
+// ===== Accounting actions (ฝ่ายบัญชี) =====
+export const markDocMissingInfo = (id, reason) =>
+  updateAccountingDocRequest(id, { document_status: ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO, missing_info_reason: reason, reviewed_at: new Date().toISOString() })
+
+export const markDocPendingIssue = (id) =>
+  updateAccountingDocRequest(id, { document_status: ACCOUNTING_DOC_STATUS.PENDING_ISSUE, reviewed_at: new Date().toISOString() })
+
+// บันทึกเลขที่เอกสาร (ใบแจ้งหนี้/ใบกำกับภาษี/ใบเสร็จ) + วันที่ออก แล้วเข้าสถานะ "รออัปโหลดเอกสาร"
+export const saveAccountingDocNumbers = (id, { invoice_no, tax_invoice_no, receipt_no, issued_date }) =>
+  updateAccountingDocRequest(id, { invoice_no, tax_invoice_no, receipt_no, issued_date, document_status: ACCOUNTING_DOC_STATUS.PENDING_UPLOAD })
+
+export const markDocEmailSent = (id) =>
+  updateAccountingDocRequest(id, { email_sent_at: new Date().toISOString() })
+
+export const markDocOriginalSent = (id, trackingNo) =>
+  updateAccountingDocRequest(id, { original_tracking_no: trackingNo, original_sent_at: new Date().toISOString(), document_status: ACCOUNTING_DOC_STATUS.ORIGINAL_SENT })
+
+export const markDocCompleted = (id) =>
+  updateAccountingDocRequest(id, { document_status: ACCOUNTING_DOC_STATUS.COMPLETED, completed_at: new Date().toISOString() })
+
+export const markDocCancelled = (id) =>
+  updateAccountingDocRequest(id, { document_status: ACCOUNTING_DOC_STATUS.CANCELLED, cancelled_at: new Date().toISOString() })
+
+// ===== Sales action: mark ว่าส่งให้ลูกค้าแล้ว — ถ้าต้องส่งตัวจริงด้วยจะไปรอที่ "รอส่งตัวจริง" ก่อน ไม่ปิดงานทันที =====
+export function nextStatusAfterSentToCustomer(deliveryMethod) {
+  const needsOriginal = deliveryMethod === 'ส่งตัวจริง' || deliveryMethod === 'ส่งทั้งอีเมลและตัวจริง'
+  return needsOriginal ? ACCOUNTING_DOC_STATUS.PENDING_ORIGINAL : ACCOUNTING_DOC_STATUS.COMPLETED
+}
+export const markDocSentToCustomer = (id, deliveryMethod) => {
+  const nextStatus = nextStatusAfterSentToCustomer(deliveryMethod)
+  return updateAccountingDocRequest(id, {
+    document_status: nextStatus,
+    ...(nextStatus === ACCOUNTING_DOC_STATUS.COMPLETED ? { completed_at: new Date().toISOString() } : {})
+  })
+}
+
+// สรุปหน้าเอกสารบัญชี — นับตามสถานะ + งานด่วน + งานเกินกำหนด (ค้างเกิน 2 วันในสถานะที่ยังไม่จบงาน — เกณฑ์ตายตัว ปรับได้ตามจริง) + เสร็จวันนี้
+export async function fetchAccountingDocSummary() {
+  const { data, error } = await supabase.from('accounting_document_requests').select('document_status, priority, created_at, completed_at')
+  if (error) throw error
+  const byStatus = {}
+  ACCOUNTING_DOC_STATUS_LIST.forEach(s => { byStatus[s] = 0 })
+  let urgent = 0, overdue = 0, completedToday = 0
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  data.forEach(r => {
+    byStatus[r.document_status] = (byStatus[r.document_status] || 0) + 1
+    if (r.priority !== 'ปกติ' && ACCOUNTING_DOC_OPEN_STATUSES.includes(r.document_status)) urgent++
+    if (ACCOUNTING_DOC_OPEN_STATUSES.includes(r.document_status) && (Date.now() - new Date(r.created_at).getTime()) / 86400000 > 2) overdue++
+    if (r.document_status === ACCOUNTING_DOC_STATUS.COMPLETED && r.completed_at && new Date(r.completed_at) >= today) completedToday++
+  })
+  return { byStatus, urgent, overdue, completedToday, total: data.length }
+}
+
+// ===== ACCOUNTING DOCUMENT FILES (ไฟล์เอกสารที่บัญชีอัปโหลด — เก็บทุกเวอร์ชัน) =====
+export const ACCOUNTING_DOCS_BUCKET = 'accounting-documents'
+
+export const listAccountingDocFiles = (requestId) =>
+  supabase.from('accounting_document_files').select('*').eq('request_id', requestId)
+    .order('file_type', { ascending: true }).order('version_no', { ascending: false }).then(handle)
+
+// อัปโหลดเอกสารเวอร์ชันใหม่ — ไฟล์เก่าประเภทเดียวกันเปลี่ยนเป็น is_current=false ไม่ลบทิ้ง (เก็บ version history ให้ finance/admin ดูย้อนหลังได้)
+export async function uploadAccountingDocFile(request, file, { file_type, document_no, document_date, note, uploaderName }) {
+  if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('ไฟล์ใหญ่เกิน 20MB')
+  const { data: existing } = await supabase.from('accounting_document_files')
+    .select('version_no').eq('request_id', request.id).eq('file_type', file_type)
+    .order('version_no', { ascending: false }).limit(1)
+  const version_no = (existing?.[0]?.version_no || 0) + 1
+
+  const ext = (file.name.match(/\.[^.]+$/) || [''])[0]
+  const path = `orders/${request.order_id}/${file_type}_${document_no || version_no}_v${version_no}${ext}`
+  const { error: upErr } = await supabase.storage.from(ACCOUNTING_DOCS_BUCKET).upload(path, file)
+  if (upErr) throw upErr
+
+  await supabase.from('accounting_document_files').update({ is_current: false })
+    .eq('request_id', request.id).eq('file_type', file_type).then(handle)
+
+  const { data: s } = await supabase.auth.getUser()
+  const row = await supabase.from('accounting_document_files').insert({
+    request_id: request.id, order_id: request.order_id, file_type, file_name: file.name, file_url: path,
+    document_no: document_no || null, document_date: document_date || null, version_no, is_current: true,
+    uploaded_by: s?.user?.id || null, uploaded_by_name: uploaderName, note: note || null,
+  }).select().single().then(handle)
+
+  await updateAccountingDocRequest(request.id, { document_status: ACCOUNTING_DOC_STATUS.READY, issued_at: new Date().toISOString() })
+  await writeAuditLog({ entity_type: 'accounting_document_request', entity_id: request.id, action: 'upload_file', actor_name: uploaderName, detail: `อัปโหลด ${file_type} v${version_no}` })
+  return row
+}
+
+// เปิดไฟล์ + ปั๊ม timestamp ว่า Sale โหลดแล้ว (best-effort ผ่าน RPC security definer — Sale ไม่มีสิทธิ์ UPDATE แถวไฟล์ตรงๆ)
+export async function getAccountingDocFileUrl(filePath, fileId) {
+  const { data, error } = await supabase.storage.from(ACCOUNTING_DOCS_BUCKET).createSignedUrl(filePath, 60)
+  if (error) throw error
+  if (fileId) supabase.rpc('mark_doc_file_downloaded', { p_file_id: fileId }).then(() => {}, () => {})
+  return data.signedUrl
+}
+
+// Sale mark ว่าส่งไฟล์นี้ให้ลูกค้าแล้ว ผ่านช่องทางไหน — ผ่าน RPC security definer เช่นกัน (ไม่มีสิทธิ์ UPDATE ตรงๆ)
+export async function markAccountingDocFileSent(fileId, channel, actorName) {
+  const { error } = await supabase.rpc('mark_doc_file_sent_to_customer', { p_file_id: fileId, p_channel: channel, p_actor_name: actorName })
+  if (error) throw error
 }
 
 // ===== มิเรอร์ไฟล์ใบเสนอราคาขึ้น Google Drive (โฟลเดอร์ปี > เดือน) — คู่กับ Supabase Storage ไม่ได้แทนที่ =====

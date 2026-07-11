@@ -255,6 +255,98 @@ create table if not exists audit_logs (
   created_at   timestamptz default now()
 );
 
+-- ===== ACCOUNTING DOCUMENT REQUESTS (คำขอเอกสารบัญชี — ใบแจ้งหนี้/ใบกำกับภาษี/ใบเสร็จ) =====
+-- ระบบนี้ไม่มีตาราง "ออเดอร์" แยก — order_id จึงผูกกับ quotations (ใบเสนอราคาที่ปิดขายแล้วถือเป็น "ออเดอร์" ในทางธุรกิจของระบบนี้)
+-- document_status ขับด้วย workflow ในโค้ด (ไม่ใช่ picklist ที่แก้เองได้) เหมือน payment_requests.status
+create table if not exists accounting_document_requests (
+  id                        uuid primary key default uuid_generate_v4(),
+  order_id                  uuid references quotations(id) on delete cascade,
+  company_id                uuid references companies(id) on delete set null,
+  customer_name             text,
+  sales_id                  uuid references auth.users(id),
+  sales_name                text,
+  document_type             text not null,   -- 'ใบแจ้งหนี้' | 'ใบกำกับภาษี + ใบเสร็จรับเงิน' | 'ใบเสร็จรับเงิน' | 'เอกสารอื่นๆ'
+  delivery_method           text not null,   -- 'ส่งสำเนาทางอีเมล' | 'ส่งตัวจริง' | 'ส่งทั้งอีเมลและตัวจริง'
+  priority                  text not null default 'ปกติ', -- 'ปกติ' | 'ด่วน' | 'ด่วนมาก / ลูกค้ารอใช้เอกสาร'
+  tax_name                  text,
+  tax_id                    text,
+  branch_type               text,            -- 'สำนักงานใหญ่' | 'สาขา'
+  branch_no                 text,
+  tax_address               text,
+  email_to                  text,
+  original_recipient_name   text,
+  original_recipient_phone  text,
+  original_shipping_address text,
+  document_status           text not null default 'รอบัญชีตรวจสอบ',
+  missing_info_reason       text,
+  invoice_no                text,
+  tax_invoice_no            text,
+  receipt_no                text,
+  issued_date               date,
+  email_sent_at             timestamptz,
+  original_tracking_no      text,
+  original_sent_at          timestamptz,
+  accounting_note           text,
+  sales_note                text,
+  created_at                timestamptz default now(),
+  updated_at                timestamptz default now(),
+  submitted_at              timestamptz,
+  reviewed_at               timestamptz,
+  issued_at                 timestamptz,
+  completed_at              timestamptz,
+  cancelled_at              timestamptz
+);
+
+drop trigger if exists trg_accounting_document_requests_updated on accounting_document_requests;
+create trigger trg_accounting_document_requests_updated before update on accounting_document_requests
+  for each row execute function set_updated_at();
+
+-- ===== ACCOUNTING DOCUMENT FILES (ไฟล์เอกสารที่บัญชีอัปโหลด — เก็บทุกเวอร์ชัน ไม่ลบของเก่า) =====
+create table if not exists accounting_document_files (
+  id                     uuid primary key default uuid_generate_v4(),
+  request_id             uuid references accounting_document_requests(id) on delete cascade,
+  order_id               uuid references quotations(id) on delete set null,
+  file_type              text not null,   -- 'invoice' | 'tax_invoice' | 'receipt' | 'tax_invoice_receipt' | 'other'
+  file_name              text,
+  file_url               text not null,   -- path ใน storage bucket "accounting-documents"
+  document_no            text,
+  document_date          date,
+  version_no             int not null default 1,
+  is_current             boolean not null default true,
+  uploaded_by            uuid references auth.users(id),
+  uploaded_by_name       text,
+  uploaded_at            timestamptz default now(),
+  note                   text,
+  downloaded_by_sales_at timestamptz,
+  sent_to_customer_at    timestamptz,
+  sent_to_customer_by    text,
+  customer_sent_channel  text,   -- 'email' | 'line' | 'whatsapp' | 'manual' | 'other'
+  created_at             timestamptz default now(),
+  updated_at             timestamptz default now()
+);
+
+drop trigger if exists trg_accounting_document_files_updated on accounting_document_files;
+create trigger trg_accounting_document_files_updated before update on accounting_document_files
+  for each row execute function set_updated_at();
+
+-- ฟังก์ชัน SECURITY DEFINER ให้ Sale ทำ 2 อย่างนี้ได้โดยไม่ต้องมีสิทธิ์ UPDATE เต็มแถวไฟล์เอกสารบัญชี (ซึ่งห้าม Sale แก้ตาม requirement)
+-- จำกัดผลเฉพาะคอลัมน์ log การดาวน์โหลด/การส่งให้ลูกค้าเท่านั้น แก้ file_url/document_no ผ่านทางนี้ไม่ได้
+create or replace function mark_doc_file_downloaded(p_file_id uuid) returns void as $$
+begin
+  update accounting_document_files set downloaded_by_sales_at = now() where id = p_file_id;
+end;
+$$ language plpgsql security definer set search_path = public;
+grant execute on function mark_doc_file_downloaded(uuid) to authenticated;
+
+create or replace function mark_doc_file_sent_to_customer(p_file_id uuid, p_channel text, p_actor_name text) returns void as $$
+begin
+  update accounting_document_files
+  set sent_to_customer_at = now(), sent_to_customer_by = p_actor_name, customer_sent_channel = p_channel
+  where id = p_file_id;
+end;
+$$ language plpgsql security definer set search_path = public;
+grant execute on function mark_doc_file_sent_to_customer(uuid, text, text) to authenticated;
+
 -- ===== NOTIFICATIONS (แจ้งเตือนในระบบ — กระดิ่งมุมบน) =====
 -- link_view = ชื่อ view ในแอปที่จะพาไปเมื่อกด (เช่น 'finance-review') — เขียนโดย Netlify Function ด้วย service role เท่านั้น (ข้าม RLS)
 create table if not exists notifications (
@@ -582,6 +674,25 @@ drop policy if exists "product-images: authenticated delete" on storage.objects;
 create policy "product-images: authenticated delete" on storage.objects
   for delete using (bucket_id = 'product-images' and auth.role() = 'authenticated');
 
+-- ===== Storage bucket สำหรับเอกสารบัญชี (private เพราะมีข้อมูลภาษี/ลูกค้า — ต่างจาก product-images) =====
+insert into storage.buckets (id, name, public)
+values ('accounting-documents', 'accounting-documents', false)
+on conflict (id) do nothing;
+
+-- อ่านได้ทุกคนที่ login (ต้องใช้ signed URL อยู่ดี เพราะ bucket ไม่ public) — Sale ต้องดาวน์โหลดไฟล์ที่บัญชีอัปโหลดได้
+drop policy if exists "accounting-documents: authenticated read" on storage.objects;
+create policy "accounting-documents: authenticated read" on storage.objects
+  for select using (bucket_id = 'accounting-documents' and auth.role() = 'authenticated');
+
+-- อัปโหลด/ลบทำได้เฉพาะฝ่ายบัญชี/แอดมิน เท่านั้น (ตาม requirement ห้าม Sale Upload/Replace/Delete เอกสารบัญชี)
+drop policy if exists "accounting-documents: finance upload" on storage.objects;
+create policy "accounting-documents: finance upload" on storage.objects
+  for insert with check (bucket_id = 'accounting-documents' and (is_admin() or is_finance()));
+
+drop policy if exists "accounting-documents: finance delete" on storage.objects;
+create policy "accounting-documents: finance delete" on storage.objects
+  for delete using (bucket_id = 'accounting-documents' and (is_admin() or is_finance()));
+
 -- ===== Row Level Security =====
 alter table companies   enable row level security;
 alter table contacts    enable row level security;
@@ -602,6 +713,8 @@ alter table payment_requests enable row level security;
 alter table payment_items enable row level security;
 alter table audit_logs   enable row level security;
 alter table notifications enable row level security;
+alter table accounting_document_requests enable row level security;
+alter table accounting_document_files enable row level security;
 
 -- ลบ policy แบบเก่า "authenticated ทำได้ทุกอย่าง" (ถ้ามีจากเวอร์ชันก่อนหน้า)
 drop policy if exists "allow all for authenticated" on companies;
@@ -819,3 +932,30 @@ drop policy if exists "notifications insert" on notifications;
 create policy "notifications insert" on notifications for insert with check (auth.role() = 'authenticated');
 drop policy if exists "notifications update" on notifications;
 create policy "notifications update" on notifications for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- ----- accounting_document_requests: ทุกคนที่ login เห็นได้ทุกคำขอ (เหมือน payment_requests) — แก้ไข/ลบจำกัดแค่เจ้าของ(เซลล์ผู้สร้าง — คอลัมน์ sales_id)/finance/admin -----
+-- ใช้ sales_id แทน created_by เพราะตารางนี้ไม่มี trigger set_created_by (แอปเซ็ต sales_id เองตอน insert จาก currentUser.id) — ต่างจาก companies/deals/tasks/payment_requests ที่ใช้ created_by
+drop policy if exists "accounting_document_requests select" on accounting_document_requests;
+create policy "accounting_document_requests select" on accounting_document_requests for select using (auth.role() = 'authenticated');
+drop policy if exists "accounting_document_requests insert" on accounting_document_requests;
+create policy "accounting_document_requests insert" on accounting_document_requests for insert with check (auth.role() = 'authenticated');
+drop policy if exists "accounting_document_requests update" on accounting_document_requests;
+create policy "accounting_document_requests update" on accounting_document_requests for update using (
+  is_admin() or is_finance() or sales_id = auth.uid() or sales_id is null
+) with check (
+  is_admin() or is_finance() or sales_id = auth.uid() or sales_id is null
+);
+drop policy if exists "accounting_document_requests delete" on accounting_document_requests;
+create policy "accounting_document_requests delete" on accounting_document_requests for delete using (
+  is_admin() or sales_id = auth.uid()
+);
+
+-- ----- accounting_document_files: select เปิดให้ทุกคน (Sale ต้องเห็น/ดาวน์โหลดไฟล์ได้) — insert/update/delete เฉพาะ finance/admin เท่านั้น (Sale ห้าม Upload/Replace/Delete) -----
+drop policy if exists "accounting_document_files select" on accounting_document_files;
+create policy "accounting_document_files select" on accounting_document_files for select using (auth.role() = 'authenticated');
+drop policy if exists "accounting_document_files write" on accounting_document_files;
+create policy "accounting_document_files write" on accounting_document_files for all using (
+  is_admin() or is_finance()
+) with check (
+  is_admin() or is_finance()
+);

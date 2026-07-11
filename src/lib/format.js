@@ -57,6 +57,26 @@ const PAYMENT_STATUS_META = {
 export function paymentStatusLabel(s) { return PAYMENT_STATUS_META[s]?.label || s }
 export function paymentBadgeClass(s) { return PAYMENT_STATUS_META[s]?.cls || 'badge-gray' }
 
+// สถานะคำขอเอกสารบัญชี (accounting_document_requests.document_status) — คู่สี badge (label ใช้ค่า status ตรงๆ อยู่แล้วเป็นภาษาไทย)
+const ACCOUNTING_DOC_STATUS_CLS = {
+  'รอข้อมูลจากเซลล์': 'badge-orange',
+  'รอบัญชีตรวจสอบ': 'badge-yellow',
+  'รอออกเอกสาร': 'badge-yellow',
+  'รออัปโหลดเอกสาร': 'badge-yellow',
+  'เอกสารพร้อมดาวน์โหลด': 'badge-green',
+  'ส่งให้ลูกค้าแล้ว': 'badge-navy',
+  'รอส่งตัวจริง': 'badge-orange',
+  'ส่งตัวจริงแล้ว': 'badge-navy',
+  'เสร็จสิ้น': 'badge-green',
+  'ยกเลิก': 'badge-red',
+}
+export function docStatusBadgeClass(s) { return ACCOUNTING_DOC_STATUS_CLS[s] || 'badge-gray' }
+export function docPriorityBadgeClass(p) {
+  if (p === 'ด่วนมาก / ลูกค้ารอใช้เอกสาร') return 'badge-red'
+  if (p === 'ด่วน') return 'badge-orange'
+  return 'badge-gray'
+}
+
 export function activityColor(t) {
   return { 'โทรศัพท์': '#e6f4fd', 'อีเมล': '#e6f7f0', 'ประชุม': '#fff3cd', 'Line': '#f0faf0', 'เยี่ยมชมลูกค้า': '#f3e6ff', 'สาธิตสินค้า': '#ebf0fa', 'อื่นๆ': '#f7fafc' }[t] || '#f7fafc'
 }

@@ -4,13 +4,14 @@ import { exportPaymentRequestsToExcel } from '../lib/importExport'
 import { printPaymentApproval } from '../lib/printPaymentApproval'
 import { fmtCurrency, fmtDate, paymentStatusLabel, paymentBadgeClass } from '../lib/format'
 import { useUi } from './UiContext'
+import AccountingDocModal from './AccountingDocModal'
 
 // สถานะที่ Sale ยังกลับมาแก้ไข/ส่งใหม่ได้ (นอกเหนือจากนี้ล็อกหลังส่งให้บัญชี)
 const EDITABLE = [PAYMENT_STATUS.DRAFT, PAYMENT_STATUS.NEED_INFO, PAYMENT_STATUS.MISMATCH]
 // สถานะที่อนุมัติแล้ว — โหลด PDF ใบอนุมัติไปแนบตอนเปิดออเดอร์ได้
 const APPROVED_STATES = [PAYMENT_STATUS.APPROVED, PAYMENT_STATUS.ORDER_CREATED]
 
-export default function PaymentRequests({ reloadKey, settings, perm, onAdd, onEdit, onSubmit, onDelete, onMarkOrder }) {
+export default function PaymentRequests({ reloadKey, settings, perm, currentUser, onAdd, onEdit, onSubmit, onDelete, onMarkOrder }) {
   const { toast } = useUi()
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
@@ -18,6 +19,7 @@ export default function PaymentRequests({ reloadKey, settings, perm, onAdd, onEd
   const [toDate, setToDate] = useState('')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
+  const [docModalPr, setDocModalPr] = useState(null)
 
   useEffect(() => {
     let alive = true
@@ -97,6 +99,7 @@ export default function PaymentRequests({ reloadKey, settings, perm, onAdd, onEd
                         {editable && <button className="btn btn-secondary btn-xs" onClick={() => onSubmit(pr)}>ส่งให้บัญชี</button>}
                         {APPROVED_STATES.includes(pr.status) && <button className="btn btn-outline btn-xs" onClick={() => printPaymentApproval(pr, settings)}>ดาวน์โหลด PDF</button>}
                         {pr.status === PAYMENT_STATUS.APPROVED && owns && <button className="btn btn-success btn-xs" onClick={() => onMarkOrder(pr)}>เปิดออเดอร์</button>}
+                        {pr.status === PAYMENT_STATUS.ORDER_CREATED && <button className="btn btn-outline btn-xs" onClick={() => setDocModalPr(pr)}>เอกสารบัญชี</button>}
                         {pr.status === PAYMENT_STATUS.DRAFT && owns && <button className="btn btn-danger btn-xs" onClick={() => onDelete(pr)}>ลบ</button>}
                       </td>
                     </tr>
@@ -107,6 +110,7 @@ export default function PaymentRequests({ reloadKey, settings, perm, onAdd, onEd
           ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีคำขอตรวจยอด'}</div></div>}
         </div>
       </div>
+      {docModalPr && <AccountingDocModal pr={docModalPr} currentUser={currentUser} onClose={() => setDocModalPr(null)} />}
     </div>
   )
 }
