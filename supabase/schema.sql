@@ -772,12 +772,11 @@ create policy "leads update" on leads for update using (auth.role() = 'authentic
 drop policy if exists "leads delete" on leads;
 create policy "leads delete" on leads for delete using (is_admin());
 
--- ----- payment_requests: sale เห็น/แก้เฉพาะของตัวเอง, finance + admin เห็น/แก้ได้ทุกใบ (สำหรับตรวจยอด) -----
+-- ----- payment_requests: ทุกคนที่ login "เห็น" ได้ทุกใบเสมอ (ไม่จำกัดแค่ของตัวเอง) — แก้ไข/ลบยังจำกัดแค่เจ้าของ/finance/admin เหมือนเดิม -----
+-- (เดิม select ก็จำกัดแค่ของตัวเองด้วย ทำให้ sale มองไม่เห็นคำขอที่ user อื่น/admin สร้างไว้ — เปลี่ยนเฉพาะ select ตามคำขอ ไม่แตะสิทธิ์แก้ไข/ลบ)
 -- ระดับ RLS คุมแค่ว่าใครแตะแถวไหนได้ ส่วนกฎ workflow (แก้ไม่ได้หลัง Submit / ต้องมี remark ฯลฯ) บังคับที่ฝั่งแอปเหมือนโมดูลอื่นในระบบ
 drop policy if exists "payment_requests select" on payment_requests;
-create policy "payment_requests select" on payment_requests for select using (
-  is_admin() or is_finance() or created_by = auth.uid() or created_by is null
-);
+create policy "payment_requests select" on payment_requests for select using (auth.role() = 'authenticated');
 drop policy if exists "payment_requests insert" on payment_requests;
 create policy "payment_requests insert" on payment_requests for insert with check (auth.role() = 'authenticated');
 drop policy if exists "payment_requests update" on payment_requests;
@@ -791,9 +790,15 @@ create policy "payment_requests delete" on payment_requests for delete using (
   is_admin() or created_by = auth.uid()
 );
 
--- ----- payment_items: สืบสิทธิ์จากคำขอตรวจยอดแม่ (payment_request_id) -----
+-- ----- payment_items: select เปิดตามพาเรนต์ (ทุกคนเห็นได้เหมือน payment_requests) — insert/update/delete ยังจำกัดแค่เจ้าของ/finance/admin เหมือนเดิม -----
+-- แยก policy select ออกจาก all เพราะ postgres รวม permissive policies ของคำสั่งเดียวกันด้วย OR — select จะเปิดกว้างแต่ insert/update/delete ยังผ่าน policy "all" ที่เข้มกว่า
 drop policy if exists "payment_items all" on payment_items;
-create policy "payment_items all" on payment_items for all using (
+drop policy if exists "payment_items select" on payment_items;
+create policy "payment_items select" on payment_items for select using (
+  exists (select 1 from payment_requests pr where pr.id = payment_items.payment_request_id)
+);
+drop policy if exists "payment_items write" on payment_items;
+create policy "payment_items write" on payment_items for all using (
   exists (select 1 from payment_requests pr where pr.id = payment_items.payment_request_id
     and (is_admin() or is_finance() or pr.created_by = auth.uid() or pr.created_by is null))
 ) with check (

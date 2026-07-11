@@ -10,7 +10,7 @@ const EDITABLE = [PAYMENT_STATUS.DRAFT, PAYMENT_STATUS.NEED_INFO, PAYMENT_STATUS
 // สถานะที่อนุมัติแล้ว — โหลด PDF ใบอนุมัติไปแนบตอนเปิดออเดอร์ได้
 const APPROVED_STATES = [PAYMENT_STATUS.APPROVED, PAYMENT_STATUS.ORDER_CREATED]
 
-export default function PaymentRequests({ reloadKey, settings, onAdd, onEdit, onSubmit, onDelete, onMarkOrder }) {
+export default function PaymentRequests({ reloadKey, settings, perm, onAdd, onEdit, onSubmit, onDelete, onMarkOrder }) {
   const { toast } = useUi()
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
@@ -71,7 +71,9 @@ export default function PaymentRequests({ reloadKey, settings, onAdd, onEdit, on
               <thead><tr><th>เลขคำขอ</th><th>วันที่</th><th>ลูกค้า</th><th>ประเภทลูกค้า</th><th>ยอดรวม</th><th>สถานะ</th><th>ผู้ขอ</th><th>การจัดการ</th></tr></thead>
               <tbody>
                 {rows.map(pr => {
-                  const editable = EDITABLE.includes(pr.status)
+                  // ตอนนี้ทุกคนเห็นคำขอของทุกคนได้ (RLS เปิด select ทั้งหมด) แต่แก้ไข/ลบ/ส่งให้บัญชียังทำได้แค่เจ้าของ/finance/admin (ตรงกับ RLS update/delete)
+                  const owns = perm.isAdmin || perm.isFinance || pr.created_by === perm.userId || pr.created_by == null
+                  const editable = EDITABLE.includes(pr.status) && owns
                   return (
                     <tr key={pr.id}>
                       <td style={{ fontWeight: 600, color: 'var(--navy)' }}>
@@ -94,8 +96,8 @@ export default function PaymentRequests({ reloadKey, settings, onAdd, onEdit, on
                         {editable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(pr)}>แก้ไข</button>}
                         {editable && <button className="btn btn-secondary btn-xs" onClick={() => onSubmit(pr)}>ส่งให้บัญชี</button>}
                         {APPROVED_STATES.includes(pr.status) && <button className="btn btn-outline btn-xs" onClick={() => printPaymentApproval(pr, settings)}>ดาวน์โหลด PDF</button>}
-                        {pr.status === PAYMENT_STATUS.APPROVED && <button className="btn btn-success btn-xs" onClick={() => onMarkOrder(pr)}>เปิดออเดอร์</button>}
-                        {pr.status === PAYMENT_STATUS.DRAFT && <button className="btn btn-danger btn-xs" onClick={() => onDelete(pr)}>ลบ</button>}
+                        {pr.status === PAYMENT_STATUS.APPROVED && owns && <button className="btn btn-success btn-xs" onClick={() => onMarkOrder(pr)}>เปิดออเดอร์</button>}
+                        {pr.status === PAYMENT_STATUS.DRAFT && owns && <button className="btn btn-danger btn-xs" onClick={() => onDelete(pr)}>ลบ</button>}
                       </td>
                     </tr>
                   )
