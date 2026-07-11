@@ -1,8 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 
-// แจ้งเตือนฝ่ายบัญชีทางอีเมลเมื่อเซลล์กด "ส่งให้บัญชี" — ค้นหาอีเมลของผู้ใช้ที่มีสิทธิ์ finance (ผ่าน service role ข้าม RLS)
-// แล้วส่งอีเมลผ่าน Resend (ตั้งค่า RESEND_API_KEY + NOTIFY_FROM_EMAIL ใน Netlify env)
-// ถ้ายังไม่ตั้งค่าอีเมล จะคืน { skipped: true } เฉยๆ ไม่ถือเป็น error เพื่อไม่ให้บล็อกการ submit ของเซลล์
+// แจ้งเตือนฝ่ายบัญชีเมื่อเซลล์กด "ส่งให้บัญชี" — ยิงพร้อมกันหลายช่องทาง (ไม่บังคับต้องตั้งครบทุกช่อง):
+//   1) แจ้งเตือนในระบบ (ตาราง notifications) — insert ให้ทุก user สิทธิ์ finance เสมอ ไม่ต้องตั้งค่าเพิ่ม
+//   2) Telegram — ตั้ง TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID ใน Netlify env ถ้าต้องการ
+//   3) อีเมล (Resend) — ตั้ง RESEND_API_KEY + NOTIFY_FROM_EMAIL ถ้าต้องการ
+// ต้องใช้ Service Role Key ข้าม RLS เพราะ Sale (ผู้เรียก) ไม่มีสิทธิ์เห็น/เขียนแถวของผู้ใช้อื่น (ตาราง profiles/notifications)
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
@@ -22,45 +24,78 @@ export default async (req) => {
   const prId = body?.paymentRequestId
   if (!prId) return json({ error: 'ไม่พบเลขคำขอ' }, 400)
 
-  // อีเมลของฝ่ายบัญชีทั้งหมด (profiles.role = 'finance')
-  const { data: financeUsers } = await admin.from('profiles').select('email, full_name').eq('role', 'finance')
-  const emails = (financeUsers || []).map(u => u.email).filter(Boolean)
-  if (!emails.length) return json({ skipped: true, reason: 'no finance users' })
+  const { data: financeUsers } = await admin.from('profiles').select('id, email, full_name').eq('role', 'finance')
+  if (!financeUsers?.length) return json({ skipped: true, reason: 'no finance users' })
 
   const { data: pr } = await admin.from('payment_requests')
     .select('pr_no, customer_name, total_amount, requested_by_name, po_reference')
     .eq('id', prId).maybeSingle()
   if (!pr) return json({ error: 'ไม่พบคำขอตรวจยอด' }, 404)
 
+  const amount = Number(pr.total_amount || 0).toLocaleString('th-TH')
+  const title = `คำขอตรวจยอดใหม่ ${pr.pr_no}`
+  const summary = `ลูกค้า ${pr.customer_name || '-'} · ยอดรวม ${amount} บาท · ผู้ส่ง ${pr.requested_by_name || '-'}`
+
+  const result = { inApp: false, telegram: false, email: false }
+
+  // 1) แจ้งเตือนในระบบ (กระดิ่งมุมบน) — ใช้งานได้เสมอ ไม่ต้องตั้งค่าเพิ่ม
+  const { error: notifErr } = await admin.from('notifications').insert(
+    financeUsers.map(u => ({
+      user_id: u.id, title, body: summary,
+      entity_type: 'payment_request', entity_id: prId, link_view: 'finance-review'
+    }))
+  )
+  result.inApp = !notifErr
+
+  // 2) Telegram (ไม่บังคับ)
+  const tgToken = process.env.TELEGRAM_BOT_TOKEN
+  const tgChatId = process.env.TELEGRAM_CHAT_ID
+  if (tgToken && tgChatId) {
+    try {
+      const tgRes = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: tgChatId,
+          text: `[Worldtech CRM] ${title}\n${summary}\nPO: ${pr.po_reference || '-'}`
+        })
+      })
+      result.telegram = tgRes.ok
+    } catch {
+      result.telegram = false
+    }
+  }
+
+  // 3) อีเมล ผ่าน Resend (ไม่บังคับ)
   const resendKey = process.env.RESEND_API_KEY
   const fromEmail = process.env.NOTIFY_FROM_EMAIL
-  if (!resendKey || !fromEmail) return json({ skipped: true, reason: 'email not configured' })
-
-  const amount = Number(pr.total_amount || 0).toLocaleString('th-TH')
-  const subject = `[Worldtech CRM] มีคำขอตรวจยอดใหม่ ${pr.pr_no} รอตรวจสอบ`
-  const html = `
-    <div style="font-family:Arial,sans-serif;font-size:14px;color:#1a202c">
-      <p>มีคำขอตรวจยอดโอนใหม่รอฝ่ายบัญชีตรวจสอบ</p>
-      <table style="border-collapse:collapse">
-        <tr><td style="padding:4px 12px 4px 0;color:#718096">เลขคำขอ</td><td style="padding:4px 0"><b>${esc(pr.pr_no)}</b></td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#718096">ลูกค้า</td><td style="padding:4px 0">${esc(pr.customer_name || '-')}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#718096">เลขที่ PO</td><td style="padding:4px 0">${esc(pr.po_reference || '-')}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#718096">ยอดรวม (รวม VAT)</td><td style="padding:4px 0"><b>${amount} บาท</b></td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#718096">ผู้ส่งคำขอ</td><td style="padding:4px 0">${esc(pr.requested_by_name || '-')}</td></tr>
-      </table>
-      <p style="margin-top:16px">กรุณาเข้าเมนู "ตรวจสอบยอดโอน" ในระบบ Worldtech CRM เพื่อตรวจสอบและอนุมัติ</p>
-    </div>`
-
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: fromEmail, to: emails, subject, html })
-  })
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '')
-    return json({ error: 'ส่งอีเมลไม่สำเร็จ', detail }, 502)
+  const emails = financeUsers.map(u => u.email).filter(Boolean)
+  if (resendKey && fromEmail && emails.length) {
+    const html = `
+      <div style="font-family:Arial,sans-serif;font-size:14px;color:#1a202c">
+        <p>มีคำขอตรวจยอดโอนใหม่รอฝ่ายบัญชีตรวจสอบ</p>
+        <table style="border-collapse:collapse">
+          <tr><td style="padding:4px 12px 4px 0;color:#718096">เลขคำขอ</td><td style="padding:4px 0"><b>${esc(pr.pr_no)}</b></td></tr>
+          <tr><td style="padding:4px 12px 4px 0;color:#718096">ลูกค้า</td><td style="padding:4px 0">${esc(pr.customer_name || '-')}</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;color:#718096">เลขที่ PO</td><td style="padding:4px 0">${esc(pr.po_reference || '-')}</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;color:#718096">ยอดรวม (รวม VAT)</td><td style="padding:4px 0"><b>${amount} บาท</b></td></tr>
+          <tr><td style="padding:4px 12px 4px 0;color:#718096">ผู้ส่งคำขอ</td><td style="padding:4px 0">${esc(pr.requested_by_name || '-')}</td></tr>
+        </table>
+        <p style="margin-top:16px">กรุณาเข้าเมนู "ตรวจสอบยอดโอน" ในระบบ Worldtech CRM เพื่อตรวจสอบและอนุมัติ</p>
+      </div>`
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: fromEmail, to: emails, subject: title, html })
+      })
+      result.email = res.ok
+    } catch {
+      result.email = false
+    }
   }
-  return json({ sent: true, recipients: emails.length })
+
+  return json(result)
 }
 
 function esc(s) {

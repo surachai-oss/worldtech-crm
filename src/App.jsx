@@ -16,6 +16,7 @@ import Products from './components/Products'
 import Leads from './components/Leads'
 import PaymentRequests from './components/PaymentRequests'
 import FinanceReview from './components/FinanceReview'
+import NotificationBell from './components/NotificationBell'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal, LeadModal } from './components/Modals'
 import PaymentRequestModal, { PaymentOrderModal } from './components/PaymentRequestModal'
@@ -198,7 +199,7 @@ function AppInner({ session }) {
       if (!(await confirm(`ส่งคำขอ ${pr.pr_no} ให้บัญชีตรวจ? หลังส่งแล้วจะแก้ไขไม่ได้จนกว่าบัญชีจะตีกลับ`))) return
       const ok = await run(() => api.submitPaymentRequest(pr.id, currentUser.name), 'ส่งให้บัญชีตรวจแล้ว')
       if (ok) api.notifyFinancePaymentSubmitted(pr.id).then(res => {
-        if (res?.sent) toast('แจ้งเตือนฝ่ายบัญชีทางอีเมลแล้ว', 'success')
+        if (res?.inApp || res?.telegram || res?.email) toast('แจ้งเตือนฝ่ายบัญชีแล้ว', 'success')
       }).catch(() => {})
     },
     deletePaymentRequest: async (pr) => {
@@ -369,6 +370,7 @@ function AppInner({ session }) {
               </div>
             )}
           </div>
+          <NotificationBell onNav={nav} />
           {addBtnMap[view] && <button className="btn btn-primary btn-sm" onClick={addBtnMap[view]}>+ เพิ่มใหม่</button>}
         </div>
 

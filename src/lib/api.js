@@ -712,8 +712,8 @@ export async function uploadPaymentSlip(paymentRequestId, file) {
 }
 export const getPaymentSlipUrl = (filePath) => getAttachmentUrl(filePath)
 
-// แจ้งเตือนฝ่ายบัญชีทางอีเมลว่ามีคำขอตรวจยอดใหม่รอตรวจ — เรียก Netlify Function ที่ค้นหาอีเมลบัญชี (service role) แล้วส่งเมล
-// best-effort: ถ้าเซิร์ฟเวอร์ยังไม่ตั้งค่าอีเมล (ไม่มี RESEND_API_KEY) หรือส่งพลาด จะไม่ทำให้การ submit ล้มเหลว
+// แจ้งเตือนฝ่ายบัญชีว่ามีคำขอตรวจยอดใหม่รอตรวจ — เรียก Netlify Function เดียว ยิงพร้อมกันหลายช่องทาง (in-app/Telegram/อีเมล)
+// best-effort: ถ้าช่องทางไหนยังไม่ตั้งค่า (Telegram/อีเมล) หรือส่งพลาด จะไม่ทำให้การ submit ล้มเหลว — in-app ใช้ได้เสมอไม่ต้องตั้งค่าเพิ่ม
 export async function notifyFinancePaymentSubmitted(prId) {
   try {
     const { data: sessionData } = await supabase.auth.getSession()
@@ -728,6 +728,33 @@ export async function notifyFinancePaymentSubmitted(prId) {
   } catch {
     return { skipped: true }
   }
+}
+
+// ===== NOTIFICATIONS (แจ้งเตือนในระบบ — กระดิ่งมุมบน) =====
+export async function fetchMyNotifications(limit = 20) {
+  const { data: s } = await supabase.auth.getUser()
+  if (!s?.user) return []
+  return supabase.from('notifications').select('*').eq('user_id', s.user.id)
+    .order('created_at', { ascending: false }).limit(limit).then(handle)
+}
+
+export async function fetchUnreadNotificationCount() {
+  const { data: s } = await supabase.auth.getUser()
+  if (!s?.user) return 0
+  const { count, error } = await supabase.from('notifications').select('id', { count: 'exact', head: true })
+    .eq('user_id', s.user.id).is('read_at', null)
+  if (error) throw error
+  return count || 0
+}
+
+export const markNotificationRead = (id) =>
+  supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', id).then(handle)
+
+export async function markAllNotificationsRead() {
+  const { data: s } = await supabase.auth.getUser()
+  if (!s?.user) return
+  await supabase.from('notifications').update({ read_at: new Date().toISOString() })
+    .eq('user_id', s.user.id).is('read_at', null).then(handle)
 }
 
 // ===== มิเรอร์ไฟล์ใบเสนอราคาขึ้น Google Drive (โฟลเดอร์ปี > เดือน) — คู่กับ Supabase Storage ไม่ได้แทนที่ =====

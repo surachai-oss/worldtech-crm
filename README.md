@@ -240,4 +240,10 @@ netlify dev
 - ทั้งหน้า **คำขอตรวจยอด** และ **ตรวจสอบยอดโอน** มีปุ่ม **"ส่งออกข้อมูล"** เป็นไฟล์ Excel (ตามตัวกรองปัจจุบัน) ให้บัญชีเอาไปแมทช์กับระบบบัญชีภายหลัง
 - ตาราง/ฟังก์ชัน: `payment_requests` (+ คอลัมน์ `request_date`/`credit_type`/`total_amount`/`finance_ref_no`), `payment_items`, `audit_logs`, `gen_pr_no()`/`gen_approval_ref_no()`, picklist `payment_types`, helper `is_finance()` — **ต้องรัน SQL migration ก่อนใช้งาน** (ดู `supabase/schema.sql`)
 - สลิปการโอนเก็บใน bucket `attachments` เดิม (โฟลเดอร์ `payment-slips/`) ใช้ signed URL เปิดดูเหมือนเอกสารแนบอื่น
-- **แจ้งเตือนอีเมลฝ่ายบัญชี (ไม่บังคับ):** เมื่อ Sale กด "ส่งให้บัญชี" ระบบเรียก Netlify Function `notify-finance` ค้นอีเมลผู้ใช้สิทธิ์ finance แล้วส่งเมลผ่าน **Resend** — ต้องตั้ง env เพิ่มที่ Netlify: `RESEND_API_KEY` (จาก resend.com) และ `NOTIFY_FROM_EMAIL` (อีเมลผู้ส่งที่ verify โดเมนกับ Resend แล้ว) ถ้าไม่ตั้งค่า ระบบจะข้ามการส่งเมลเงียบๆ ไม่กระทบการ Submit
+- **แจ้งเตือนฝ่ายบัญชีตอน Submit — ยิงพร้อมกัน 3 ช่องทาง** (เมื่อ Sale กด "ส่งให้บัญชี" เรียก Netlify Function `notify-finance` ตัวเดียว ทำครบทุกช่องในคราวเดียว):
+  1. **แจ้งเตือนในระบบ (กระดิ่งมุมบนขวา)** — ใช้งานได้ทันทีไม่ต้องตั้งค่าเพิ่ม insert แถวเข้าตาราง `notifications` ให้ทุกคนที่มีสิทธิ์ finance กดกระดิ่งจะเห็นรายการ ยังไม่อ่านมี badge ตัวเลขสีแดง กดรายการเพื่อพาไปหน้า "ตรวจสอบยอดโอน" และมาร์คอ่าน กระดิ่งโพลนับที่ยังไม่อ่านทุก 30 วินาที
+  2. **Telegram (ไม่บังคับ)** — ตั้ง env ที่ Netlify: `TELEGRAM_BOT_TOKEN` (สร้างบอทฟรีผ่านแชทกับ `@BotFather` ใน Telegram พิมพ์ `/newbot` แล้วทำตาม จะได้ token) และ `TELEGRAM_CHAT_ID` (เลขไอดีของกลุ่ม/แชทที่ฝ่ายบัญชีอยู่ — เพิ่มบอทเข้ากลุ่มแล้วเปิด `https://api.telegram.org/bot<TOKEN>/getUpdates` หลังส่งข้อความในกลุ่ม 1 ครั้ง จะเห็น `chat.id` ในผลลัพธ์)
+  3. **อีเมล (ไม่บังคับ)** — ผ่าน **Resend**: ตั้ง `RESEND_API_KEY` (จาก resend.com) และ `NOTIFY_FROM_EMAIL` (อีเมลผู้ส่งที่ verify โดเมนกับ Resend แล้ว)
+
+  ช่องทางไหนไม่ตั้งค่าไว้ ระบบจะข้ามช่องทางนั้นเงียบๆ ไม่กระทบการ Submit — อย่างน้อยช่องทางที่ 1 (in-app) ทำงานได้เสมอ
+- ตาราง `notifications` (คอลัมน์ `user_id`/`title`/`body`/`entity_type`/`entity_id`/`link_view`/`read_at`) — insert ทำผ่าน Netlify Function ด้วย Service Role Key เท่านั้น (Sale ไม่มีสิทธิ์เห็น/เขียนแถวของผู้ใช้อื่นตาม RLS ปกติ) ส่วน select/mark-read จำกัดเฉพาะเจ้าของแถว — component `src/components/NotificationBell.jsx`

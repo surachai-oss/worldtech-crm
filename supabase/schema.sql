@@ -253,6 +253,20 @@ create table if not exists audit_logs (
   created_at   timestamptz default now()
 );
 
+-- ===== NOTIFICATIONS (แจ้งเตือนในระบบ — กระดิ่งมุมบน) =====
+-- link_view = ชื่อ view ในแอปที่จะพาไปเมื่อกด (เช่น 'finance-review') — เขียนโดย Netlify Function ด้วย service role เท่านั้น (ข้าม RLS)
+create table if not exists notifications (
+  id          uuid primary key default uuid_generate_v4(),
+  user_id     uuid references auth.users(id) on delete cascade,
+  title       text not null,
+  body        text,
+  entity_type text,
+  entity_id   uuid,
+  link_view   text,
+  read_at     timestamptz,
+  created_at  timestamptz default now()
+);
+
 -- ===== helper: เลขคำขอตรวจยอด + เลขอ้างอิงการอนุมัติ =====
 create sequence if not exists pr_seq start 1;
 create or replace function gen_pr_no() returns text as $$
@@ -585,6 +599,7 @@ alter table leads       enable row level security;
 alter table payment_requests enable row level security;
 alter table payment_items enable row level security;
 alter table audit_logs   enable row level security;
+alter table notifications enable row level security;
 
 -- ลบ policy แบบเก่า "authenticated ทำได้ทุกอย่าง" (ถ้ามีจากเวอร์ชันก่อนหน้า)
 drop policy if exists "allow all for authenticated" on companies;
@@ -789,3 +804,11 @@ drop policy if exists "audit_logs select" on audit_logs;
 create policy "audit_logs select" on audit_logs for select using (auth.role() = 'authenticated');
 drop policy if exists "audit_logs insert" on audit_logs;
 create policy "audit_logs insert" on audit_logs for insert with check (auth.role() = 'authenticated');
+
+-- ----- notifications: เห็น/แก้ (มาร์คอ่าน) ได้เฉพาะของตัวเอง — insert ทำผ่าน Netlify Function (service role) เป็นหลัก เพราะต้องส่งข้ามผู้ใช้ (Sale แจ้งบัญชี) -----
+drop policy if exists "notifications select" on notifications;
+create policy "notifications select" on notifications for select using (user_id = auth.uid());
+drop policy if exists "notifications insert" on notifications;
+create policy "notifications insert" on notifications for insert with check (auth.role() = 'authenticated');
+drop policy if exists "notifications update" on notifications;
+create policy "notifications update" on notifications for update using (user_id = auth.uid()) with check (user_id = auth.uid());
