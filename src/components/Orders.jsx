@@ -34,10 +34,11 @@ function docBtnClass(status) {
   return 'btn-secondary'
 }
 
-// ปุ่ม action ต่อแถว + badge สถานะใต้ปุ่ม (ถ้ามี) จัดกึ่งกลางเป็นชุดเดียวกันเสมอ ไม่ว่าจะมีกี่บรรทัด
-function ActionStack({ button, badge }) {
+// ปุ่ม action ต่อแถว + badge สถานะใต้ปุ่ม (ถ้ามี) — ปุ่ม "ขอตรวจยอด"/"เอกสารบัญชี" ใช้ width คงที่เท่ากันเสมอ (ไม่ยึดตามความยาวข้อความ badge) ให้กล่องหน้าตาเท่ากันสวยงาม
+const ACTION_STACK_WIDTH = 148
+function ActionStack({ button, badge, fixedWidth = false }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', minWidth: 88 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', width: fixedWidth ? ACTION_STACK_WIDTH : 'auto' }}>
       {button}
       {badge}
     </div>
@@ -118,16 +119,18 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
                         <ActionStack button={<button className="btn btn-outline btn-xs" onClick={() => openDetail(o)}>ดูรายละเอียด</button>} />
                         {o.status === ORDER_STATUS.ACTIVE && (
                           <ActionStack
+                            fixedWidth
                             button={<button className={`btn ${paymentBtnClass(pr?.status)} btn-xs`} onClick={() => setPaymentModalOrder(o)} style={{ width: '100%' }}>ขอตรวจยอด</button>}
-                            badge={pr && <span className={`badge ${paymentBadgeClass(pr.status)}`} style={{ fontSize: 10 }}>{paymentStatusLabel(pr.status)}</span>}
+                            badge={pr && <span className={`badge ${paymentBadgeClass(pr.status)}`} style={{ fontSize: 10, whiteSpace: 'normal', textAlign: 'center', lineHeight: 1.3 }}>{paymentStatusLabel(pr.status)}</span>}
                           />
                         )}
                         {o.status === ORDER_STATUS.ACTIVE && (
                           <ActionStack
+                            fixedWidth
                             button={<button className={`btn ${docBtnClass(doc?.document_status)} btn-xs`} onClick={() => setDocModalOrder(o)} style={{ width: '100%' }}>เอกสารบัญชี</button>}
                             badge={doc && (
                               <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center' }}>
-                                <span className={`badge ${docStatusBadgeClass(doc.document_status)}`} style={{ fontSize: 10 }}>{doc.document_status}</span>
+                                <span className={`badge ${docStatusBadgeClass(doc.document_status)}`} style={{ fontSize: 10, whiteSpace: 'normal', textAlign: 'center', lineHeight: 1.3 }}>{doc.document_status}</span>
                                 {doc.revised_at && <span className="badge badge-orange" style={{ fontSize: 10 }}>อัพเดท</span>}
                               </div>
                             )}
