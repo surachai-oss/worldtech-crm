@@ -818,9 +818,11 @@ export async function genOrderNo() {
   return data
 }
 
+// ดึง status ล่าสุดของคำขอตรวจยอด/คำขอเอกสารบัญชีมาแนบกับแต่ละออเดอร์ด้วยเลย (embed ผ่าน FK order_id)
+// ให้หน้าออเดอร์โชว์สถานะ/สีปุ่มได้ทันทีโดยไม่ต้องเปิดป็อปอัปเข้าไปดูทีละใบ
 export async function fetchOrders({ status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
   let query = supabase.from('orders')
-    .select('*, quotation:quotations(id,quot_no), company:companies(id,name)')
+    .select('*, quotation:quotations(id,quot_no), company:companies(id,name), payment_requests(id,status,created_at), accounting_document_requests(id,document_status,revised_at,created_at)')
     .order('created_at', { ascending: false })
   if (status) query = query.eq('status', status)
   const sq = safeLike(q)
