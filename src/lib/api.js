@@ -659,6 +659,11 @@ export async function fetchPaymentRequests({ status = '', q = '', dateFrom = '',
 export const fetchPaymentRequestById = (id) =>
   supabase.from('payment_requests').select('*, company:companies(id,name)').eq('id', id).single().then(handle)
 
+// คำขอตรวจยอดทั้งหมดของออเดอร์หนึ่งใบ (ปกติมีแค่ 1 ใบที่ยังไม่ถูกปฏิเสธ แต่เก็บประวัติที่เคยถูกปฏิเสธไว้ด้วย)
+export const fetchPaymentRequestsByOrder = (orderId) =>
+  supabase.from('payment_requests').select('*').eq('order_id', orderId)
+    .order('created_at', { ascending: false }).then(handle)
+
 export const listPaymentItems = (paymentRequestId) =>
   supabase.from('payment_items').select('*').eq('payment_request_id', paymentRequestId).order('sort_order', { ascending: true }).then(handle)
 

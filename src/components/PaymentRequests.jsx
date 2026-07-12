@@ -5,12 +5,11 @@ import { printPaymentApproval } from '../lib/printPaymentApproval'
 import { fmtCurrency, fmtDate, paymentStatusLabel, paymentBadgeClass } from '../lib/format'
 import { useUi } from './UiContext'
 
-// สถานะที่ Sale ยังกลับมาแก้ไข/ส่งใหม่ได้ (นอกเหนือจากนี้ล็อกหลังส่งให้บัญชี)
-const EDITABLE = [PAYMENT_STATUS.DRAFT, PAYMENT_STATUS.NEED_INFO, PAYMENT_STATUS.MISMATCH]
 // สถานะที่อนุมัติแล้ว — โหลด PDF ใบอนุมัติไปแนบตอนเปิดออเดอร์ได้
 const APPROVED_STATES = [PAYMENT_STATUS.APPROVED, PAYMENT_STATUS.ORDER_CREATED]
 
-export default function PaymentRequests({ reloadKey, settings, perm, onAdd, onEdit, onSubmit, onDelete, onMarkOrder }) {
+// หน้านี้เป็นหน้าติดตามภาพรวมเท่านั้น — สร้าง/แก้ไข/ส่งให้บัญชี ย้ายไปทำที่ปุ่ม "ขอตรวจยอด" ในหน้า "ออเดอร์" แทนแล้ว (ดู OrderPaymentModal)
+export default function PaymentRequests({ reloadKey, settings, perm, onDelete }) {
   const { toast } = useUi()
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
@@ -48,9 +47,9 @@ export default function PaymentRequests({ reloadKey, settings, perm, onAdd, onEd
         <div className="section-title">คำขอตรวจยอด <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} รายการ)</span></div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-outline" onClick={exportExcel}>ส่งออกข้อมูล</button>
-          <button className="btn btn-primary" onClick={onAdd}>+ สร้างคำขอตรวจยอด</button>
         </div>
       </div>
+      <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 10 }}>สร้าง/แก้ไขคำขอใหม่ได้จากปุ่ม "ขอตรวจยอด" ในหน้าออเดอร์ของแต่ละรายการ — หน้านี้ใช้ติดตามภาพรวมและสถานะเท่านั้น</div>
       <div className="filter-bar">
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
           <option value="">ทุกสถานะ</option>
@@ -71,9 +70,8 @@ export default function PaymentRequests({ reloadKey, settings, perm, onAdd, onEd
               <thead><tr><th>เลขคำขอ</th><th>วันที่</th><th>ลูกค้า</th><th>ประเภทลูกค้า</th><th>ยอดรวม</th><th>สถานะ</th><th>ผู้ขอ</th><th>การจัดการ</th></tr></thead>
               <tbody>
                 {rows.map(pr => {
-                  // ตอนนี้ทุกคนเห็นคำขอของทุกคนได้ (RLS เปิด select ทั้งหมด) แต่แก้ไข/ลบ/ส่งให้บัญชียังทำได้แค่เจ้าของ/finance/admin (ตรงกับ RLS update/delete)
+                  // ตอนนี้ทุกคนเห็นคำขอของทุกคนได้ (RLS เปิด select ทั้งหมด) แต่ลบยังทำได้แค่เจ้าของ/finance/admin (ตรงกับ RLS delete) — แก้ไข/ส่งให้บัญชี ย้ายไปทำที่ปุ่ม "ขอตรวจยอด" ในหน้าออเดอร์แล้ว
                   const owns = perm.isAdmin || perm.isFinance || pr.created_by === perm.userId || pr.created_by == null
-                  const editable = EDITABLE.includes(pr.status) && owns
                   return (
                     <tr key={pr.id}>
                       <td style={{ fontWeight: 600, color: 'var(--navy)' }}>
@@ -92,10 +90,7 @@ export default function PaymentRequests({ reloadKey, settings, perm, onAdd, onEd
                       <td style={{ fontSize: 12 }}>{pr.requested_by_name || '-'}</td>
                       <td className="td-actions">
                         {pr.slip_file_url && <button className="btn btn-outline btn-xs" onClick={() => viewSlip(pr)}>สลิป</button>}
-                        {editable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(pr)}>แก้ไข</button>}
-                        {editable && <button className="btn btn-secondary btn-xs" onClick={() => onSubmit(pr)}>ส่งให้บัญชี</button>}
                         {APPROVED_STATES.includes(pr.status) && <button className="btn btn-outline btn-xs" onClick={() => printPaymentApproval(pr, settings)}>ดาวน์โหลด PDF</button>}
-                        {pr.status === PAYMENT_STATUS.APPROVED && owns && <button className="btn btn-success btn-xs" onClick={() => onMarkOrder(pr)}>เปิดออเดอร์</button>}
                         {pr.status === PAYMENT_STATUS.DRAFT && owns && <button className="btn btn-danger btn-xs" onClick={() => onDelete(pr)}>ลบ</button>}
                       </td>
                     </tr>

@@ -4,8 +4,9 @@ import { fmtCurrency, fmtDate } from '../lib/format'
 import { useUi } from './UiContext'
 import { OrderDetailModal } from './OrderModal'
 import AccountingDocModal from './AccountingDocModal'
+import OrderPaymentModal from './OrderPaymentModal'
 
-export default function Orders({ reloadKey, currentUser, onAdd, onCancel }) {
+export default function Orders({ reloadKey, companies, perm, currentUser, settings, onAdd, onCancel }) {
   const { toast } = useUi()
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
@@ -15,6 +16,7 @@ export default function Orders({ reloadKey, currentUser, onAdd, onCancel }) {
   const [loading, setLoading] = useState(true)
   const [detail, setDetail] = useState(null) // { order, items }
   const [docModalOrder, setDocModalOrder] = useState(null)
+  const [paymentModalOrder, setPaymentModalOrder] = useState(null)
 
   useEffect(() => {
     let alive = true
@@ -55,6 +57,7 @@ export default function Orders({ reloadKey, currentUser, onAdd, onCancel }) {
       </div>
       {detail && <OrderDetailModal order={detail.order} items={detail.items} onClose={() => setDetail(null)} onCancel={onCancel} />}
       {docModalOrder && <AccountingDocModal order={docModalOrder} currentUser={currentUser} onClose={() => setDocModalOrder(null)} />}
+      {paymentModalOrder && <OrderPaymentModal order={paymentModalOrder} companies={companies} perm={perm} currentUser={currentUser} settings={settings} onClose={() => setPaymentModalOrder(null)} />}
       <div className="card list-card">
         <div className="table-wrap">
           {rows.length ? (
@@ -72,6 +75,7 @@ export default function Orders({ reloadKey, currentUser, onAdd, onCancel }) {
                     <td><span className={`badge ${o.status === ORDER_STATUS.ACTIVE ? 'badge-green' : 'badge-gray'}`}>{o.status === ORDER_STATUS.ACTIVE ? 'ใช้งานอยู่' : 'ยกเลิกแล้ว'}</span></td>
                     <td className="td-actions">
                       <button className="btn btn-outline btn-xs" onClick={() => openDetail(o)}>ดูรายละเอียด</button>
+                      {o.status === ORDER_STATUS.ACTIVE && <button className="btn btn-secondary btn-xs" onClick={() => setPaymentModalOrder(o)}>ขอตรวจยอด</button>}
                       {o.status === ORDER_STATUS.ACTIVE && <button className="btn btn-secondary btn-xs" onClick={() => setDocModalOrder(o)}>เอกสารบัญชี</button>}
                     </td>
                   </tr>

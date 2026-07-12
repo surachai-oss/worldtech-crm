@@ -21,7 +21,6 @@ import AccountingDocuments from './components/AccountingDocuments'
 import NotificationBell from './components/NotificationBell'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal, LeadModal } from './components/Modals'
-import PaymentRequestModal, { PaymentOrderModal } from './components/PaymentRequestModal'
 import OrderModal from './components/OrderModal'
 import { renderQuotationPdfBlob, loadQuotationPdfItems } from './lib/printQuotation'
 import './App.css'
@@ -189,27 +188,11 @@ function AppInner({ session }) {
     refreshData: reload,
 
     // ===== Payment Verification (คำขอตรวจยอด) =====
-    addPaymentRequest: () => setModal({ type: 'payment', payload: {} }),
-    editPaymentRequest: (pr) => setModal({ type: 'payment', payload: { initial: pr } }),
-    // ส่งให้บัญชีตรวจ — เช็คข้อมูลสำคัญครบก่อน แล้วล็อกไม่ให้ sale แก้ต่อจนกว่าจะถูกตีกลับ (บัญชีเทียบยอด/ธนาคาร/วันเวลาจากสลิปจริงเอง)
-    submitPayment: async (pr) => {
-      const problems = []
-      if (!pr.company_id) problems.push('ลูกค้า')
-      if (!pr.slip_file_url) problems.push('สลิปการโอน')
-      if (problems.length) { toast('กรอกไม่ครบก่อนส่ง: ' + problems.join(', '), 'error'); return }
-      const items = await api.listPaymentItems(pr.id).catch(() => [])
-      if (!items.length) { toast('ต้องมีรายการสินค้าอย่างน้อย 1 รายการก่อนส่ง', 'error'); return }
-      if (!(await confirm(`ส่งคำขอ ${pr.pr_no} ให้บัญชีตรวจ? หลังส่งแล้วจะแก้ไขไม่ได้จนกว่าบัญชีจะตีกลับ`))) return
-      const ok = await run(() => api.submitPaymentRequest(pr.id, currentUser.name), 'ส่งให้บัญชีตรวจแล้ว')
-      if (ok) api.notifyFinancePaymentSubmitted(pr.id).then(res => {
-        if (res?.inApp || res?.email) toast('แจ้งเตือนฝ่ายบัญชีแล้ว', 'success')
-      }).catch(() => {})
-    },
+    // สร้าง/แก้ไข/ส่งให้บัญชี ทำที่ปุ่ม "ขอตรวจยอด" ในหน้าออเดอร์แล้ว (OrderPaymentModal เรียก api.js ตรงๆ ไม่ผ่าน action ตรงนี้) เหลือแค่ลบไว้ให้หน้าติดตามภาพรวม
     deletePaymentRequest: async (pr) => {
       if (!(await confirm(`ลบคำขอ ${pr.pr_no}?`))) return
       await run(() => api.deletePaymentRequest(pr.id), 'ลบสำเร็จ')
     },
-    markPaymentOrder: (pr) => setModal({ type: 'payment-order', payload: { initial: pr } }),
     // ฝ่ายบัญชีตัดสินผลตรวจ (ส่ง reviewerName ไปเก็บ + เขียน audit log)
     // อนุมัติ: บัญชีระบุชื่อผู้อนุมัติ (ลายเซ็น) + เลขอ้างอิงบัญชีได้เอง (ดู ReviewModal)
     approvePayment: async (pr, { remark, approverName, financeRefNo } = {}) => { await run(() => api.approvePaymentRequest(pr.id, { remark, reviewerName: approverName || currentUser.name, financeRefNo }), 'อนุมัติแล้ว') },
@@ -290,25 +273,6 @@ function AppInner({ session }) {
     if (!f.phone?.trim()) { toast('กรุณากรอกเบอร์โทรศัพท์', 'error'); return }
     if (f.id) await run(() => api.updateLead(f.id, f), 'อัปเดตสำเร็จ')
     else await run(() => api.addLead(f), 'เพิ่มผู้ติดต่อสำเร็จ')
-  }
-  const savePaymentRequest = async (f, items, slipFile) => {
-    closeModal()
-    if (!f.company_id) { toast('กรุณาเลือกลูกค้า', 'error'); return }
-    await run(async () => {
-      let slip_file_url = f.slip_file_url
-      if (slipFile) slip_file_url = await api.uploadPaymentSlip(f.id || null, slipFile)
-      const fields = { ...f, slip_file_url, _actorName: currentUser.name }
-      if (f.id) {
-        const { id, ...rest } = fields
-        await api.updatePaymentRequestWithItems(id, rest, items)
-      } else {
-        await api.addPaymentRequestWithItems({ ...fields, status: 'Draft', requested_by_name: currentUser.name, requested_by_email: currentUser.email }, items)
-      }
-    }, 'บันทึกคำขอตรวจยอดสำเร็จ')
-  }
-  const savePaymentOrder = async (pr, orderNo, remark) => {
-    closeModal()
-    await run(() => api.markPaymentOrderCreated(pr.id, { orderNo, remark, actorName: currentUser.name }), 'บันทึกการเปิดออเดอร์แล้ว')
   }
   const saveOrder = async (fields, items) => {
     closeModal()
@@ -424,12 +388,12 @@ function AppInner({ session }) {
             <Quotations perm={perm} reloadKey={reloadKey} settings={settings} deals={data.deals} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onCopy={actions.copyQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onCreateDeal={actions.createDealFromQuotation} />
           )}
           {view === 'orders' && (
-            <Orders reloadKey={reloadKey} currentUser={currentUser} onAdd={actions.addOrder} onCancel={actions.cancelOrder} />
+            <Orders reloadKey={reloadKey} companies={data.companies} perm={perm} currentUser={currentUser} settings={settings} onAdd={actions.addOrder} onCancel={actions.cancelOrder} />
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products />}
           {view === 'payment-requests' && (
-            <PaymentRequests reloadKey={reloadKey} settings={settings} perm={perm} onAdd={actions.addPaymentRequest} onEdit={actions.editPaymentRequest} onSubmit={actions.submitPayment} onDelete={actions.deletePaymentRequest} onMarkOrder={actions.markPaymentOrder} />
+            <PaymentRequests reloadKey={reloadKey} settings={settings} perm={perm} onDelete={actions.deletePaymentRequest} />
           )}
           {view === 'finance-review' && (isFinance || isAdmin) && (
             <FinanceReview reloadKey={reloadKey} currentUserName={currentUser.name} onApprove={actions.approvePayment} onNeedInfo={actions.needInfoPayment} onMismatch={actions.mismatchPayment} onReject={actions.rejectPayment} />
@@ -447,8 +411,6 @@ function AppInner({ session }) {
       {modal?.type === 'task' && <TaskModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveTask} />}
       {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
       {modal?.type === 'lead' && <LeadModal initial={modal.payload?.initial} isAdmin={isAdmin} onClose={closeModal} onSave={saveLead} />}
-      {modal?.type === 'payment' && <PaymentRequestModal initial={modal.payload?.initial} companies={data.companies} isAdmin={isAdmin} onClose={closeModal} onSave={savePaymentRequest} />}
-      {modal?.type === 'payment-order' && <PaymentOrderModal pr={modal.payload.initial} onClose={closeModal} onSave={savePaymentOrder} />}
       {modal?.type === 'order' && <OrderModal companies={data.companies} quotations={data.quotations} currentUser={currentUser} onClose={closeModal} onSave={saveOrder} />}
     </div>
   )
