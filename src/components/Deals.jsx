@@ -47,6 +47,10 @@ function todayStr() {
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
 }
 
+// เดิมแต่ละกลุ่มวัน/สัปดาห์/เดือนเรนเดอร์ <table> ของตัวเอง ทำให้แต่ละกลุ่มปรับความกว้างคอลัมน์ตามเนื้อหาตัวเองอิสระ
+// คอลัมน์เลยไม่ตรงกันระหว่างกลุ่ม (ดูสเปะสปะ) — ใช้ grid template เดียวกันทุกแถวทุกกลุ่มแทน การันตีคอลัมน์ตรงกันเป๊ะทั้งป็อปอัป
+const PERIOD_ROW_GRID = 'minmax(200px, 2fr) minmax(160px, 1.3fr) 100px 130px 96px'
+
 // ป็อปอัปแสดงรายละเอียดดีลตามช่วง (วัน/สัปดาห์/เดือน) ของฟิลด์วันที่ที่เลือก — แต่ละกลุ่มลิสต์ดีลที่อยู่ในนั้น
 // highlightOverdue = ไฮไลต์วันที่เป็นสีแดงถ้าเลยกำหนดแล้ว (ใช้กับยอดที่ต้องติดตาม)
 function DealPeriodModal({ title, deals, companies, mode, dateField, ascending = false, highlightOverdue = false, onEdit, onClose }) {
@@ -58,40 +62,60 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
   const openDeal = (d) => { onClose(); onEdit(d) }
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="modal" style={{ maxWidth: 920 }}>
+      <div className="modal" style={{ maxWidth: 1080 }}>
         <div className="modal-header">
           <div className="modal-title">{title} · {modeLabel} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({deals.length} ดีล · {fmtCurrency(grandTotal)})</span></div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
-        <div className="modal-body">
-          {groups.length ? groups.map(g => {
-            const total = g.rows.reduce((s, d) => s + (Number(d.value) || 0), 0)
-            return (
-              <div key={g.key} style={{ border: '1px solid var(--border)', borderRadius: 10, marginBottom: 16, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', background: 'var(--gray-bg)', fontWeight: 700, fontSize: 14 }}>
-                  <span>{g.label}</span>
-                  <span style={{ color: 'var(--navy)' }}>{g.rows.length} ดีล · {fmtCurrency(total)}</span>
-                </div>
-                <table>
-                  <tbody>
+        <div className="modal-body" style={{ padding: '0 20px 20px' }}>
+          {groups.length ? (
+            <>
+              {/* หัวคอลัมน์ค้างไว้บนสุดตอนเลื่อน (sticky) ใช้ grid template เดียวกับทุกแถวข้างล่างเป๊ะ */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: PERIOD_ROW_GRID, gap: 12,
+                position: 'sticky', top: 0, background: 'var(--white)', zIndex: 1,
+                padding: '16px 18px 10px', borderBottom: '2px solid var(--border)',
+                fontSize: 11, fontWeight: 700, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '.03em',
+              }}>
+                <span>ดีล / สินค้า</span>
+                <span>บริษัท</span>
+                <span>วันที่</span>
+                <span style={{ textAlign: 'right' }}>มูลค่า</span>
+                <span style={{ textAlign: 'center' }}>จัดการ</span>
+              </div>
+              {groups.map(g => {
+                const total = g.rows.reduce((s, d) => s + (Number(d.value) || 0), 0)
+                return (
+                  <div key={g.key} style={{ border: '1px solid var(--border)', borderRadius: 10, marginTop: 14, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 18px', background: 'var(--gray-bg)', fontWeight: 700, fontSize: 14 }}>
+                      <span>{g.label}</span>
+                      <span style={{ color: 'var(--navy)' }}>{g.rows.length} ดีล · {fmtCurrency(total)}</span>
+                    </div>
                     {g.rows.map((d, i) => {
                       const co = companies.find(c => c.id === d.company_id)
                       const ov = highlightOverdue && d[dateField] && d[dateField] < today
                       return (
-                        <tr key={d.id} style={{ borderTop: i === 0 ? 'none' : undefined }}>
-                          <td style={{ fontWeight: 500, padding: '12px 18px' }}>{d.name}</td>
-                          <td style={{ fontSize: 12, color: 'var(--text-light)', padding: '12px 14px' }}>{co ? co.name : '-'}</td>
-                          <td className={ov ? 'overdue' : ''} style={{ fontSize: 12, padding: '12px 14px', whiteSpace: 'nowrap' }}>{fmtDate(d[dateField])}</td>
-                          <td style={{ fontWeight: 600, color: 'var(--navy)', padding: '12px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtCurrency(d.value)}</td>
-                          <td style={{ padding: '12px 18px' }}><button className="btn btn-outline btn-xs" onClick={() => openDeal(d)}>ดู/แก้ไข</button></td>
-                        </tr>
+                        <div
+                          key={d.id}
+                          style={{
+                            display: 'grid', gridTemplateColumns: PERIOD_ROW_GRID, gap: 12, alignItems: 'center',
+                            padding: '12px 18px', borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                            background: i % 2 ? 'var(--gray-bg)' : 'var(--white)',
+                          }}
+                        >
+                          <span style={{ fontWeight: 500 }}>{d.name}</span>
+                          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>{co ? co.name : '-'}</span>
+                          <span className={ov ? 'overdue' : ''} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(d[dateField])}</span>
+                          <span style={{ fontWeight: 600, color: 'var(--navy)', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtCurrency(d.value)}</span>
+                          <span style={{ textAlign: 'center' }}><button className="btn btn-outline btn-xs" onClick={() => openDeal(d)}>ดู/แก้ไข</button></span>
+                        </div>
                       )
                     })}
-                  </tbody>
-                </table>
-              </div>
-            )
-          }) : <div className="empty-state"><div>ไม่มีข้อมูล</div></div>}
+                  </div>
+                )
+              })}
+            </>
+          ) : <div className="empty-state"><div>ไม่มีข้อมูล</div></div>}
         </div>
       </div>
     </div>
