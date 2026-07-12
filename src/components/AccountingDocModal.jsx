@@ -156,7 +156,7 @@ function DocRequestForm({ order, existing, currentUser, onClose, onSaved }) {
 }
 
 // แสดงคำขอ 1 ใบ พร้อมไฟล์เอกสารที่บัญชีอัปโหลด (ดาวน์โหลดได้) + เลข tracking ตัวจริง + ปุ่มแก้ไข
-function DocRequestCard({ req, orderNo, onEdit }) {
+function DocRequestCard({ req, onEdit }) {
   const { toast } = useUi()
   const [files, setFiles] = useState(null)
 
@@ -168,12 +168,6 @@ function DocRequestCard({ req, orderNo, onEdit }) {
       const url = await getAccountingDocFileUrl(file.file_url, file.id)
       window.open(url, '_blank')
     } catch (e) { toast('เปิดไฟล์ไม่สำเร็จ: ' + e.message, 'error') }
-  }
-
-  const copyMessage = async () => {
-    const msg = `เรียน คุณ${req.customer_name || ''}\n\nทางบริษัทขอนำส่งเอกสาร${req.document_type} สำหรับออเดอร์เลขที่ ${orderNo || '-'}${req.original_tracking_no ? `\nเลขพัสดุ (เอกสารตัวจริง): ${req.original_tracking_no}` : ''}\n\nขอบคุณค่ะ/ครับ`
-    try { await navigator.clipboard.writeText(msg); toast('คัดลอกข้อความแล้ว', 'success') }
-    catch { toast('คัดลอกไม่สำเร็จ', 'error') }
   }
 
   const isDraft = req.document_status === ACCOUNTING_DOC_STATUS.DRAFT
@@ -215,10 +209,6 @@ function DocRequestCard({ req, orderNo, onEdit }) {
             </table>
           </div>
         ) : !isDraft && <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>ยังไม่มีไฟล์ที่บัญชีอัปโหลด</div>}
-
-        {currentFiles.length > 0 && (
-          <button className="btn btn-outline btn-xs" onClick={copyMessage}>คัดลอกข้อความสำหรับส่งลูกค้า</button>
-        )}
       </div>
     </div>
   )
@@ -264,7 +254,7 @@ export default function AccountingDocModal({ order, currentUser, onClose }) {
                       <div style={{ fontWeight: 600, marginBottom: 8 }}>แก้ไขคำขอ: {req.document_type}</div>
                       <DocRequestForm order={order} existing={req} currentUser={currentUser} onClose={() => setEditing(null)} onSaved={onSaved} />
                     </div></div>
-                  : <DocRequestCard key={req.id} req={req} orderNo={order.order_no} onEdit={startEdit} />
+                  : <DocRequestCard key={req.id} req={req} onEdit={startEdit} />
               ))}
 
               {/* สร้างคำขอใหม่ — เฉพาะออเดอร์ที่ยังไม่มีคำขอ (มีแล้วให้กด "แก้ไข" ใบเดิม) */}
