@@ -35,10 +35,12 @@ function docBtnClass(status) {
 }
 
 // ปุ่ม action ต่อแถว + badge สถานะใต้ปุ่ม (ถ้ามี) — ปุ่ม "ขอตรวจยอด"/"เอกสารบัญชี" ใช้ width คงที่เท่ากันเสมอ (ไม่ยึดตามความยาวข้อความ badge) ให้กล่องหน้าตาเท่ากันสวยงาม
+// overflow:'hidden' คือตัวที่บังคับได้จริง (นอกเหนือจาก minWidth:0/flexShrink:0) — ปิด "automatic minimum size" ของ flex item ตาม spec
+// ถ้าไม่มี overflow ที่ไม่ใช่ visible เบราว์เซอร์จะยอมให้กล่องกว้างเกิน 148px ตามความกว้างเนื้อหาจริงของฟอนต์ (โดยเฉพาะฟอนต์ไทย 'Mitr' ที่ระยะอักษรกว้างกว่าฟอนต์ทั่วไป) ทำให้กล่องสองอันกว้างไม่เท่ากัน
 const ACTION_STACK_WIDTH = 148
 function ActionStack({ button, badge, fixedWidth = false }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', width: fixedWidth ? ACTION_STACK_WIDTH : 'auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', width: fixedWidth ? ACTION_STACK_WIDTH : 'auto', minWidth: fixedWidth ? 0 : 'auto', flexShrink: fixedWidth ? 0 : 1, overflow: fixedWidth ? 'hidden' : 'visible' }}>
       {button}
       {badge}
     </div>
@@ -120,17 +122,17 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
                         {o.status === ORDER_STATUS.ACTIVE && (
                           <ActionStack
                             fixedWidth
-                            button={<button className={`btn ${paymentBtnClass(pr?.status)} btn-xs`} onClick={() => setPaymentModalOrder(o)} style={{ width: '100%' }}>ขอตรวจยอด</button>}
-                            badge={pr && <span className={`badge ${paymentBadgeClass(pr.status)}`} style={{ fontSize: 10, whiteSpace: 'normal', textAlign: 'center', lineHeight: 1.3, width: '100%', justifyContent: 'center' }}>{paymentStatusLabel(pr.status)}</span>}
+                            button={<button className={`btn ${paymentBtnClass(pr?.status)} btn-xs`} onClick={() => setPaymentModalOrder(o)} style={{ width: '100%', minWidth: 0 }}>ขอตรวจยอด</button>}
+                            badge={pr && <span className={`badge ${paymentBadgeClass(pr.status)}`} style={{ fontSize: 10, whiteSpace: 'normal', overflowWrap: 'break-word', wordBreak: 'break-word', textAlign: 'center', lineHeight: 1.3, width: '100%', maxWidth: '100%', minWidth: 0, justifyContent: 'center', boxSizing: 'border-box' }}>{paymentStatusLabel(pr.status)}</span>}
                           />
                         )}
                         {o.status === ORDER_STATUS.ACTIVE && (
                           <ActionStack
                             fixedWidth
-                            button={<button className={`btn ${docBtnClass(doc?.document_status)} btn-xs`} onClick={() => setDocModalOrder(o)} style={{ width: '100%' }}>เอกสารบัญชี</button>}
+                            button={<button className={`btn ${docBtnClass(doc?.document_status)} btn-xs`} onClick={() => setDocModalOrder(o)} style={{ width: '100%', minWidth: 0 }}>เอกสารบัญชี</button>}
                             badge={doc && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', width: '100%' }}>
-                                <span className={`badge ${docStatusBadgeClass(doc.document_status)}`} style={{ fontSize: 10, whiteSpace: 'normal', textAlign: 'center', lineHeight: 1.3, width: '100%', justifyContent: 'center' }}>{doc.document_status}</span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', width: '100%', minWidth: 0 }}>
+                                <span className={`badge ${docStatusBadgeClass(doc.document_status)}`} style={{ fontSize: 10, whiteSpace: 'normal', overflowWrap: 'break-word', wordBreak: 'break-word', textAlign: 'center', lineHeight: 1.3, width: '100%', maxWidth: '100%', minWidth: 0, justifyContent: 'center', boxSizing: 'border-box' }}>{doc.document_status}</span>
                                 {doc.revised_at && <span className="badge badge-orange" style={{ fontSize: 10 }}>อัพเดท</span>}
                               </div>
                             )}
