@@ -121,7 +121,7 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
                           <ActionStack
                             fixedWidth
                             button={<button className={`btn ${paymentBtnClass(pr?.status)} btn-xs`} onClick={() => setPaymentModalOrder(o)} style={{ width: '100%' }}>ขอตรวจยอด</button>}
-                            badge={pr && <span className={`badge ${paymentBadgeClass(pr.status)}`} style={{ fontSize: 10, whiteSpace: 'normal', textAlign: 'center', lineHeight: 1.3 }}>{paymentStatusLabel(pr.status)}</span>}
+                            badge={pr && <span className={`badge ${paymentBadgeClass(pr.status)}`} style={{ fontSize: 10, whiteSpace: 'normal', textAlign: 'center', lineHeight: 1.3, width: '100%', justifyContent: 'center' }}>{paymentStatusLabel(pr.status)}</span>}
                           />
                         )}
                         {o.status === ORDER_STATUS.ACTIVE && (
@@ -129,8 +129,8 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
                             fixedWidth
                             button={<button className={`btn ${docBtnClass(doc?.document_status)} btn-xs`} onClick={() => setDocModalOrder(o)} style={{ width: '100%' }}>เอกสารบัญชี</button>}
                             badge={doc && (
-                              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center' }}>
-                                <span className={`badge ${docStatusBadgeClass(doc.document_status)}`} style={{ fontSize: 10, whiteSpace: 'normal', textAlign: 'center', lineHeight: 1.3 }}>{doc.document_status}</span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', width: '100%' }}>
+                                <span className={`badge ${docStatusBadgeClass(doc.document_status)}`} style={{ fontSize: 10, whiteSpace: 'normal', textAlign: 'center', lineHeight: 1.3, width: '100%', justifyContent: 'center' }}>{doc.document_status}</span>
                                 {doc.revised_at && <span className="badge badge-orange" style={{ fontSize: 10 }}>อัพเดท</span>}
                               </div>
                             )}
