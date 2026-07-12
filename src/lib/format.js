@@ -59,6 +59,7 @@ export function paymentBadgeClass(s) { return PAYMENT_STATUS_META[s]?.cls || 'ba
 
 // สถานะคำขอเอกสารบัญชี (accounting_document_requests.document_status) — คู่สี badge (label ใช้ค่า status ตรงๆ อยู่แล้วเป็นภาษาไทย)
 const ACCOUNTING_DOC_STATUS_CLS = {
+  'ฉบับร่าง': 'badge-gray',
   'รอข้อมูลจากเซลล์': 'badge-orange',
   'รอบัญชีตรวจสอบ': 'badge-yellow',
   'รอออกเอกสาร': 'badge-yellow',

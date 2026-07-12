@@ -51,6 +51,7 @@ function DetailModal({ req, onClose, onChanged }) {
           <Row label="วิธีส่งเอกสาร" value={req.delivery_method} />
           <Row label="ความเร่งด่วน" value={<span className={`badge ${docPriorityBadgeClass(req.priority)}`}>{req.priority}</span>} />
           <Row label="สถานะ" value={<span className={`badge ${docStatusBadgeClass(req.document_status)}`}>{req.document_status}</span>} />
+          {req.revised_at && <Row label="อัพเดทจากเซลล์" value={<span className="badge badge-orange">แก้ไขล่าสุด {fmtDate(req.revised_at)}</span>} />}
           {req.tax_name && <Row label="ข้อมูลภาษี" value={`${req.tax_name} · ${req.tax_id} · ${req.branch_type}${req.branch_no ? ' ' + req.branch_no : ''}`} />}
           {req.tax_address && <Row label="ที่อยู่ออกเอกสาร" value={req.tax_address} />}
           {req.email_to && <Row label="อีเมลผู้รับ" value={req.email_to} />}
@@ -255,7 +256,7 @@ export default function AccountingDocuments({ reloadKey, currentUserName }) {
       <div className="filter-bar">
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
           <option value="">ทุกสถานะ</option>
-          {ACCOUNTING_DOC_STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+          {ACCOUNTING_DOC_STATUS_LIST.filter(s => s !== ACCOUNTING_DOC_STATUS.DRAFT).map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <select className="filter-select" value={priority} onChange={e => setPriority(e.target.value)}>
           <option value="">ทุกความเร่งด่วน</option>
@@ -296,7 +297,10 @@ export default function AccountingDocuments({ reloadKey, currentUserName }) {
                     <td style={{ fontSize: 12 }}>{req.document_type}</td>
                     <td style={{ fontSize: 12 }}>{req.delivery_method}</td>
                     <td>{req.priority !== 'ปกติ' ? <span className={`badge ${docPriorityBadgeClass(req.priority)}`}>{req.priority}</span> : '-'}</td>
-                    <td><span className={`badge ${docStatusBadgeClass(req.document_status)}`}>{req.document_status}</span></td>
+                    <td>
+                      <span className={`badge ${docStatusBadgeClass(req.document_status)}`}>{req.document_status}</span>
+                      {req.revised_at && <span className="badge badge-orange" style={{ marginLeft: 4 }} title={`แก้ไขล่าสุด ${fmtDate(req.revised_at)}`}>อัพเดท</span>}
+                    </td>
                     <td style={{ fontSize: 12 }}>{req.email_to || '-'}</td>
                     <td style={{ fontSize: 12 }}>{NEEDS_ORIGINAL(req.delivery_method) ? 'ใช่' : 'ไม่'}</td>
                     <td style={{ fontSize: 11 }}>

@@ -20,6 +20,7 @@ export const PAYMENT_STATUS_LIST = Object.values(PAYMENT_STATUS)
 
 // สถานะของคำขอเอกสารบัญชี (accounting_document_requests.document_status) — workflow คงที่ ไม่ใช่ picklist ที่แก้เองได้
 export const ACCOUNTING_DOC_STATUS = {
+  DRAFT: 'ฉบับร่าง',
   WAITING_SALES_INFO: 'รอข้อมูลจากเซลล์',
   PENDING_REVIEW: 'รอบัญชีตรวจสอบ',
   PENDING_ISSUE: 'รอออกเอกสาร',
@@ -884,6 +885,7 @@ export function accountingDocInfoComplete(f) {
 export async function fetchAccountingDocRequests({ status = '', priority = '', q = '', dateFrom = '', dateTo = '' } = {}) {
   let query = supabase.from('accounting_document_requests')
     .select('*, order:orders(id, order_no, created_at, value, company:companies(id,name))')
+    .neq('document_status', ACCOUNTING_DOC_STATUS.DRAFT)  // ฉบับร่างยังไม่ส่ง — ไม่ต้องโชว์ในคิวบัญชี
     .order('created_at', { ascending: false })
   if (status) query = query.eq('document_status', status)
   if (priority) query = query.eq('priority', priority)
@@ -902,15 +904,32 @@ export const fetchAccountingDocRequestsByOrder = (orderId) =>
   supabase.from('accounting_document_requests').select('*').eq('order_id', orderId)
     .order('created_at', { ascending: false }).then(handle)
 
-export async function addAccountingDocRequest(fields) {
+// บันทึกฉบับร่าง — ยังไม่ส่งเข้าคิวบัญชี (เซลล์อาจ preview/ส่งให้ลูกค้าเช็คก่อน แล้วค่อยกลับมากด "ส่งคำขอ")
+export async function saveAccountingDocDraft(fields, existing) {
+  if (existing?.id) {
+    return updateAccountingDocRequest(existing.id, { ...fields, document_status: ACCOUNTING_DOC_STATUS.DRAFT })
+  }
+  const req = await supabase.from('accounting_document_requests')
+    .insert({ ...fields, document_status: ACCOUNTING_DOC_STATUS.DRAFT, submitted_at: null }).select().single().then(handle)
+  await writeAuditLog({ entity_type: 'accounting_document_request', entity_id: req.id, action: 'draft', actor_name: fields.sales_name, detail: `บันทึกฉบับร่าง ${fields.document_type}` })
+  return req
+}
+
+// ส่งคำขอเข้าคิวบัญชี — ถ้าเป็นการแก้ไขคำขอที่เคยส่งไปแล้ว (existing.submitted_at) จะตั้ง revised_at + ดึงกลับมาสถานะ "รอบัญชีตรวจสอบ" ให้บัญชีรู้ว่ามีการอัพเดท
+export async function submitAccountingDocRequest(fields, existing) {
   const complete = accountingDocInfoComplete(fields)
   const now = new Date().toISOString()
-  const row = {
-    ...fields,
-    document_status: complete ? ACCOUNTING_DOC_STATUS.PENDING_REVIEW : ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO,
-    submitted_at: complete ? now : null,
+  const status = complete ? ACCOUNTING_DOC_STATUS.PENDING_REVIEW : ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO
+  if (existing?.id) {
+    const wasSubmitted = !!existing.submitted_at
+    const patch = { ...fields, document_status: status, submitted_at: existing.submitted_at || (complete ? now : null) }
+    if (wasSubmitted) patch.revised_at = now
+    const req = await updateAccountingDocRequest(existing.id, patch)
+    await writeAuditLog({ entity_type: 'accounting_document_request', entity_id: req.id, action: wasSubmitted ? 'revise' : 'submit', actor_name: fields.sales_name, detail: wasSubmitted ? `แก้ไข/ส่งคำขอใหม่ ${fields.document_type}` : `ส่งคำขอเอกสาร ${fields.document_type}` })
+    return req
   }
-  const req = await supabase.from('accounting_document_requests').insert(row).select().single().then(handle)
+  const req = await supabase.from('accounting_document_requests')
+    .insert({ ...fields, document_status: status, submitted_at: complete ? now : null }).select().single().then(handle)
   await writeAuditLog({ entity_type: 'accounting_document_request', entity_id: req.id, action: 'create', actor_name: fields.sales_name, detail: `สร้างคำขอเอกสาร ${fields.document_type}` })
   return req
 }

@@ -397,6 +397,9 @@ create table if not exists accounting_document_requests (
   cancelled_at              timestamptz
 );
 
+-- revised_at: ประทับเวลาเมื่อเซลล์แก้ไข+ส่งคำขอใหม่หลังเคยส่งไปแล้ว — ใช้โชว์ badge "อัพเดท" ให้บัญชีรู้ว่ามีการเปลี่ยนแปลง (เผื่อออกเอกสารไปแล้ว)
+alter table accounting_document_requests add column if not exists revised_at timestamptz;
+
 drop trigger if exists trg_accounting_document_requests_updated on accounting_document_requests;
 create trigger trg_accounting_document_requests_updated before update on accounting_document_requests
   for each row execute function set_updated_at();
