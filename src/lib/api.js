@@ -643,7 +643,7 @@ async function genApprovalRefNo() {
 }
 
 export async function fetchPaymentRequests({ status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
-  let query = supabase.from('payment_requests').select('*, company:companies(id,name)').order('created_at', { ascending: false })
+  let query = supabase.from('payment_requests').select('*, company:companies(id,name), order:orders(id,order_no)').order('created_at', { ascending: false })
   if (status) query = query.eq('status', status)
   const sq = safeLike(q)
   if (sq) query = query.or(`customer_name.ilike.%${sq}%,pr_no.ilike.%${sq}%,po_reference.ilike.%${sq}%,order_no.ilike.%${sq}%`)
@@ -855,7 +855,7 @@ export async function addOrderWithItems(fields, items) {
     }))
     await supabase.from('order_items').insert(rows).then(handle)
   }
-  await writeAuditLog({ entity_type: 'order', entity_id: order.id, action: 'create', actor_name: fields.sales_name, detail: `สร้างออเดอร์ ${order_no}` })
+  await writeAuditLog({ entity_type: 'order', entity_id: order.id, action: 'create', actor_name: fields.sales_name, detail: `สร้างออเดอร์ ${order.order_no}` })
   return order
 }
 
@@ -868,7 +868,7 @@ export async function cancelOrder(id, reason, actorName) {
 }
 
 // ===== ACCOUNTING DOCUMENT REQUESTS (คำขอเอกสารบัญชี — ใบแจ้งหนี้/ใบกำกับภาษี/ใบเสร็จ) =====
-// order_id ผูกกับ quotations เพราะระบบนี้ไม่มีตาราง "ออเดอร์" แยก — ใบเสนอราคาที่ปิดขายแล้วถือเป็นออเดอร์ในทางธุรกิจ
+// order_id ผูกกับ orders(id) — เซลล์เปิดคำขอเอกสารจากหน้า "ออเดอร์" (ออเดอร์หนึ่งใบขอเอกสารได้หลายรอบ)
 
 // เช็คว่าข้อมูลที่กรอกครบพอส่งเข้าคิวบัญชีตรวจสอบหรือยัง — ไม่ครบจะค้างที่สถานะ "รอข้อมูลจากเซลล์" แทน
 export function accountingDocInfoComplete(f) {
@@ -883,7 +883,7 @@ export function accountingDocInfoComplete(f) {
 
 export async function fetchAccountingDocRequests({ status = '', priority = '', q = '', dateFrom = '', dateTo = '' } = {}) {
   let query = supabase.from('accounting_document_requests')
-    .select('*, order:quotations(id, quot_no, quot_date, value, company:companies(id,name))')
+    .select('*, order:orders(id, order_no, created_at, value, company:companies(id,name))')
     .order('created_at', { ascending: false })
   if (status) query = query.eq('document_status', status)
   if (priority) query = query.eq('priority', priority)
@@ -897,7 +897,7 @@ export async function fetchAccountingDocRequests({ status = '', priority = '', q
   return data
 }
 
-// คำขอเอกสารทั้งหมดของออเดอร์ (ใบเสนอราคา) หนึ่งใบ — ใบเดียวขอเอกสารได้หลายรอบ (เช่น ขอใบแจ้งหนี้ก่อน แล้วขอใบกำกับภาษีทีหลัง)
+// คำขอเอกสารทั้งหมดของออเดอร์หนึ่งใบ — ออเดอร์เดียวขอเอกสารได้หลายรอบ (เช่น ขอใบแจ้งหนี้ก่อน แล้วขอใบกำกับภาษีทีหลัง)
 export const fetchAccountingDocRequestsByOrder = (orderId) =>
   supabase.from('accounting_document_requests').select('*').eq('order_id', orderId)
     .order('created_at', { ascending: false }).then(handle)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   ACCOUNTING_DOC_STATUS, ACCOUNTING_DOC_STATUS_LIST, DOC_PRIORITIES, DOC_FILE_TYPES, DOC_FILE_TYPE_LABEL,
-  fetchAccountingDocRequests, fetchAccountingDocSummary, updateAccountingDocRequest,
+  fetchAccountingDocRequests, updateAccountingDocRequest,
   markDocMissingInfo, markDocPendingIssue, saveAccountingDocNumbers, markDocEmailSent, markDocOriginalSent,
   markDocCompleted, markDocCancelled, listAccountingDocFiles, uploadAccountingDocFile, getAccountingDocFileUrl,
 } from '../lib/api'
@@ -44,7 +44,7 @@ function DetailModal({ req, onClose, onChanged }) {
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
-          <Row label="ออเดอร์ (ใบเสนอราคา)" value={req.order?.quot_no || '-'} />
+          <Row label="เลขที่ออเดอร์" value={req.order?.order_no || '-'} />
           <Row label="ลูกค้า" value={req.customer_name || '-'} />
           <Row label="เซลล์ผู้ขอ" value={req.sales_name || '-'} />
           <Row label="ประเภทเอกสาร" value={req.document_type} />
@@ -227,7 +227,6 @@ export default function AccountingDocuments({ reloadKey, currentUserName }) {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [rows, setRows] = useState([])
-  const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [detailReq, setDetailReq] = useState(null)
   const [uploadReq, setUploadReq] = useState(null)
@@ -237,7 +236,6 @@ export default function AccountingDocuments({ reloadKey, currentUserName }) {
     fetchAccountingDocRequests({ status, priority, q, dateFrom: fromDate, dateTo: toDate })
       .then(setRows).catch(e => toast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error'))
       .finally(() => setLoading(false))
-    fetchAccountingDocSummary().then(setSummary).catch(() => {})
   }
 
   useEffect(() => {
@@ -248,33 +246,11 @@ export default function AccountingDocuments({ reloadKey, currentUserName }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, priority, q, fromDate, toDate, reloadKey])
 
-  const SUMMARY_CARDS = summary ? [
-    { label: 'รอข้อมูลจากเซลล์', value: summary.byStatus[ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO], onClick: () => setStatus(ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO) },
-    { label: 'รอบัญชีตรวจสอบ', value: summary.byStatus[ACCOUNTING_DOC_STATUS.PENDING_REVIEW], onClick: () => setStatus(ACCOUNTING_DOC_STATUS.PENDING_REVIEW) },
-    { label: 'รอออกเอกสาร', value: summary.byStatus[ACCOUNTING_DOC_STATUS.PENDING_ISSUE], onClick: () => setStatus(ACCOUNTING_DOC_STATUS.PENDING_ISSUE) },
-    { label: 'รออัปโหลดเอกสาร', value: summary.byStatus[ACCOUNTING_DOC_STATUS.PENDING_UPLOAD], onClick: () => setStatus(ACCOUNTING_DOC_STATUS.PENDING_UPLOAD) },
-    { label: 'เอกสารพร้อมดาวน์โหลด', value: summary.byStatus[ACCOUNTING_DOC_STATUS.READY], onClick: () => setStatus(ACCOUNTING_DOC_STATUS.READY) },
-    { label: 'งานด่วน', value: summary.urgent, onClick: () => setStatus('') },
-    { label: 'งานเกินกำหนด', value: summary.overdue, onClick: () => setStatus('') },
-    { label: 'เสร็จสิ้นวันนี้', value: summary.completedToday, onClick: () => setStatus(ACCOUNTING_DOC_STATUS.COMPLETED) },
-  ] : []
-
   return (
     <div className="list-view">
       <div className="section-header">
         <div className="section-title">เอกสารบัญชี <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} รายการ)</span></div>
       </div>
-
-      {summary && (
-        <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 14 }}>
-          {SUMMARY_CARDS.map(c => (
-            <div className="kpi-card" key={c.label} onClick={c.onClick} style={{ cursor: 'pointer' }}>
-              <div className="kpi-label">{c.label}</div>
-              <div className="kpi-value">{c.value}</div>
-            </div>
-          ))}
-        </div>
-      )}
 
       <div className="filter-bar">
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
@@ -303,7 +279,7 @@ export default function AccountingDocuments({ reloadKey, currentUserName }) {
             <table>
               <thead>
                 <tr>
-                  <th>เลขที่ออเดอร์</th><th>วันที่ขาย</th><th>ลูกค้า</th><th>เซลล์</th><th>ยอดเงิน</th>
+                  <th>เลขที่ออเดอร์</th><th>วันที่ออเดอร์</th><th>ลูกค้า</th><th>เซลล์</th><th>ยอดเงิน</th>
                   <th>ประเภทเอกสาร</th><th>วิธีส่ง</th><th>ความเร่งด่วน</th><th>สถานะ</th>
                   <th>อีเมลลูกค้า</th><th>ส่งตัวจริง</th><th>เลขที่เอกสาร</th><th>วันที่ออก</th><th>Tracking</th>
                   <th>การจัดการ</th>
@@ -312,8 +288,8 @@ export default function AccountingDocuments({ reloadKey, currentUserName }) {
               <tbody>
                 {rows.map(req => (
                   <tr key={req.id}>
-                    <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{req.order?.quot_no || '-'}</td>
-                    <td style={{ fontSize: 12 }}>{fmtDate(req.order?.quot_date)}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{req.order?.order_no || '-'}</td>
+                    <td style={{ fontSize: 12 }}>{fmtDate(req.order?.created_at)}</td>
                     <td>{req.customer_name || '-'}</td>
                     <td style={{ fontSize: 12 }}>{req.sales_name || '-'}</td>
                     <td style={{ fontWeight: 600 }}>{fmtCurrency(req.order?.value)}</td>

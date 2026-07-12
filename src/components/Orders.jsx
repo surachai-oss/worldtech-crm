@@ -3,8 +3,9 @@ import { fetchOrders, listOrderItems, ORDER_STATUS } from '../lib/api'
 import { fmtCurrency, fmtDate } from '../lib/format'
 import { useUi } from './UiContext'
 import { OrderDetailModal } from './OrderModal'
+import AccountingDocModal from './AccountingDocModal'
 
-export default function Orders({ reloadKey, onAdd, onCancel }) {
+export default function Orders({ reloadKey, currentUser, onAdd, onCancel }) {
   const { toast } = useUi()
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
@@ -13,6 +14,7 @@ export default function Orders({ reloadKey, onAdd, onCancel }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [detail, setDetail] = useState(null) // { order, items }
+  const [docModalOrder, setDocModalOrder] = useState(null)
 
   useEffect(() => {
     let alive = true
@@ -52,6 +54,7 @@ export default function Orders({ reloadKey, onAdd, onCancel }) {
         </div>
       </div>
       {detail && <OrderDetailModal order={detail.order} items={detail.items} onClose={() => setDetail(null)} onCancel={onCancel} />}
+      {docModalOrder && <AccountingDocModal order={docModalOrder} currentUser={currentUser} onClose={() => setDocModalOrder(null)} />}
       <div className="card list-card">
         <div className="table-wrap">
           {rows.length ? (
@@ -67,7 +70,10 @@ export default function Orders({ reloadKey, onAdd, onCancel }) {
                     <td style={{ fontSize: 12 }}>{o.sales_name || '-'}</td>
                     <td style={{ fontSize: 12 }}>{fmtDate(o.created_at)}</td>
                     <td><span className={`badge ${o.status === ORDER_STATUS.ACTIVE ? 'badge-green' : 'badge-gray'}`}>{o.status === ORDER_STATUS.ACTIVE ? 'ใช้งานอยู่' : 'ยกเลิกแล้ว'}</span></td>
-                    <td className="td-actions"><button className="btn btn-outline btn-xs" onClick={() => openDetail(o)}>ดูรายละเอียด</button></td>
+                    <td className="td-actions">
+                      <button className="btn btn-outline btn-xs" onClick={() => openDetail(o)}>ดูรายละเอียด</button>
+                      {o.status === ORDER_STATUS.ACTIVE && <button className="btn btn-secondary btn-xs" onClick={() => setDocModalOrder(o)}>เอกสารบัญชี</button>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

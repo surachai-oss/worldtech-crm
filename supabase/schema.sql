@@ -350,12 +350,17 @@ drop trigger if exists trg_orders_immutable on orders;
 create trigger trg_orders_immutable before update on orders
   for each row execute function guard_orders_immutable();
 
+-- migration: คำขอตรวจยอด (payment_requests) เปลี่ยนจาก "เลือกใบเสนอราคา" เป็น "เลือกออเดอร์" — ผูก order_id
+-- (เพิ่มตรงนี้หลังนิยาม orders เพราะ FK อ้างถึง orders(id)) — quotation_id เดิมยังเก็บไว้ (ดึงมาจากออเดอร์อัตโนมัติ)
+alter table payment_requests add column if not exists order_id uuid references orders(id) on delete set null;
+
 -- ===== ACCOUNTING DOCUMENT REQUESTS (คำขอเอกสารบัญชี — ใบแจ้งหนี้/ใบกำกับภาษี/ใบเสร็จ) =====
--- ระบบนี้ไม่มีตาราง "ออเดอร์" แยก — order_id จึงผูกกับ quotations (ใบเสนอราคาที่ปิดขายแล้วถือเป็น "ออเดอร์" ในทางธุรกิจของระบบนี้)
+-- order_id ผูกกับ orders(id) — คำขอเอกสารบัญชีเปิดจากหน้า "ออเดอร์" (ออเดอร์หนึ่งใบขอเอกสารได้หลายรอบ เช่น ขอใบแจ้งหนี้ก่อน แล้วขอใบกำกับภาษีทีหลัง)
+-- (ฐานข้อมูลเก่าที่เคยผูกกับ quotations จะถูก re-anchor ไป orders โดยบล็อก migration ด้านล่างตาราง accounting_document_files)
 -- document_status ขับด้วย workflow ในโค้ด (ไม่ใช่ picklist ที่แก้เองได้) เหมือน payment_requests.status
 create table if not exists accounting_document_requests (
   id                        uuid primary key default uuid_generate_v4(),
-  order_id                  uuid references quotations(id) on delete cascade,
+  order_id                  uuid references orders(id) on delete cascade,
   company_id                uuid references companies(id) on delete set null,
   customer_name             text,
   sales_id                  uuid references auth.users(id),
@@ -400,7 +405,7 @@ create trigger trg_accounting_document_requests_updated before update on account
 create table if not exists accounting_document_files (
   id                     uuid primary key default uuid_generate_v4(),
   request_id             uuid references accounting_document_requests(id) on delete cascade,
-  order_id               uuid references quotations(id) on delete set null,
+  order_id               uuid references orders(id) on delete set null,
   file_type              text not null,   -- 'invoice' | 'tax_invoice' | 'receipt' | 'tax_invoice_receipt' | 'other'
   file_name              text,
   file_url               text not null,   -- path ใน storage bucket "accounting-documents"
@@ -423,6 +428,29 @@ create table if not exists accounting_document_files (
 drop trigger if exists trg_accounting_document_files_updated on accounting_document_files;
 create trigger trg_accounting_document_files_updated before update on accounting_document_files
   for each row execute function set_updated_at();
+
+-- migration (รันครั้งเดียวโดยอัตโนมัติ): re-anchor คำขอเอกสารบัญชีจาก quotations -> orders
+-- ฐานข้อมูลรุ่นเก่า order_id ชี้ไปที่ quotations(id) ซึ่งความหมายเปลี่ยนไปแล้ว (ตอนนี้ควรเป็น orders(id)) — แถวเดิมจึงใช้ไม่ได้ ต้องล้างทิ้ง
+-- บล็อกนี้ทำงานเฉพาะตอน constraint ยังชี้ไป quotations เท่านั้น รันซ้ำอีกครั้งจะข้าม (idempotent) และไม่ลบข้อมูลที่ผูกกับ orders แล้ว
+do $$
+declare
+  ref_table text;
+begin
+  select confrelid::regclass::text into ref_table
+  from pg_constraint where conname = 'accounting_document_requests_order_id_fkey';
+  if ref_table is not null and ref_table like '%quotations' then
+    delete from accounting_document_files;
+    delete from accounting_document_requests;
+    alter table accounting_document_files    drop constraint if exists accounting_document_files_order_id_fkey;
+    alter table accounting_document_requests drop constraint if exists accounting_document_requests_order_id_fkey;
+    alter table accounting_document_requests
+      add constraint accounting_document_requests_order_id_fkey
+      foreign key (order_id) references orders(id) on delete cascade;
+    alter table accounting_document_files
+      add constraint accounting_document_files_order_id_fkey
+      foreign key (order_id) references orders(id) on delete set null;
+  end if;
+end $$;
 
 -- ฟังก์ชัน SECURITY DEFINER ให้ Sale ทำ 2 อย่างนี้ได้โดยไม่ต้องมีสิทธิ์ UPDATE เต็มแถวไฟล์เอกสารบัญชี (ซึ่งห้าม Sale แก้ตาม requirement)
 -- จำกัดผลเฉพาะคอลัมน์ log การดาวน์โหลด/การส่งให้ลูกค้าเท่านั้น แก้ file_url/document_no ผ่านทางนี้ไม่ได้

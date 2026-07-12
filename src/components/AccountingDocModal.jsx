@@ -19,8 +19,8 @@ const RadioGroup = ({ options, value, onChange }) => (
   </div>
 )
 
-// ฟอร์มสร้างคำขอเอกสารบัญชีใหม่ — เซลล์กรอกหลังปิดออเดอร์ (ดู requirement 4 ส่วน: ต้องการไหม/ประเภท/วิธีส่ง/ความเร่งด่วน + ข้อมูลภาษี/อีเมล/ที่อยู่ตามเงื่อนไข)
-function NewDocRequestForm({ pr, currentUser, onClose, onCreated }) {
+// ฟอร์มสร้างคำขอเอกสารบัญชีใหม่ — เซลล์เปิดจากหน้าออเดอร์ (ต้องการไหม/ประเภท/วิธีส่ง/ความเร่งด่วน + ข้อมูลภาษี/อีเมล/ที่อยู่ตามเงื่อนไข)
+function NewDocRequestForm({ order, currentUser, onClose, onCreated }) {
   const { toast } = useUi()
   const [wants, setWants] = useState(null) // null = ยังไม่เลือก, true/false
   const [f, setF] = useState({
@@ -39,9 +39,9 @@ function NewDocRequestForm({ pr, currentUser, onClose, onCreated }) {
     try {
       await onCreated({
         ...f,
-        order_id: pr.quotation_id,
-        company_id: pr.company_id,
-        customer_name: pr.customer_name,
+        order_id: order.id,
+        company_id: order.company_id,
+        customer_name: order.customer_name,
         sales_id: currentUser.id,
         sales_name: currentUser.name,
       })
@@ -130,7 +130,7 @@ function NewDocRequestForm({ pr, currentUser, onClose, onCreated }) {
 }
 
 // แสดงคำขอที่มีอยู่แล้ว 1 ใบ พร้อมไฟล์เอกสาร + ปุ่มดาวน์โหลด/mark ส่งลูกค้าแล้ว
-function DocRequestCard({ req, currentUser, onChanged }) {
+function DocRequestCard({ req, orderNo, currentUser, onChanged }) {
   const { toast, confirm } = useUi()
   const [files, setFiles] = useState(null)
   const [channel, setChannel] = useState('email')
@@ -149,7 +149,7 @@ function DocRequestCard({ req, currentUser, onChanged }) {
 
   const copyMessage = async () => {
     const docNos = [req.invoice_no, req.tax_invoice_no, req.receipt_no].filter(Boolean).join(', ')
-    const msg = `เรียน คุณ${req.customer_name || ''}\n\nทางบริษัทขอนำส่งเอกสาร${req.document_type} เลขที่ ${docNos || '-'}\nสำหรับใบเสนอราคาเลขที่ ${req.order?.quot_no || '-'}\n\nขอบคุณค่ะ/ครับ`
+    const msg = `เรียน คุณ${req.customer_name || ''}\n\nทางบริษัทขอนำส่งเอกสาร${req.document_type} เลขที่ ${docNos || '-'}\nสำหรับออเดอร์เลขที่ ${orderNo || '-'}\n\nขอบคุณค่ะ/ครับ`
     try { await navigator.clipboard.writeText(msg); toast('คัดลอกข้อความแล้ว', 'success') }
     catch { toast('คัดลอกไม่สำเร็จ', 'error') }
   }
@@ -225,17 +225,17 @@ function DocRequestCard({ req, currentUser, onChanged }) {
   )
 }
 
-// ป็อปอัปหลักเปิดจากหน้า "คำขอตรวจยอด" (แสดงเฉพาะแถวที่เปิดออเดอร์แล้ว) — Section "เอกสารบัญชี" ตาม requirement
-export default function AccountingDocModal({ pr, currentUser, onClose }) {
+// ป็อปอัปหลักเปิดจากหน้า "ออเดอร์" — เซลล์ขอเอกสารบัญชี + ดู/ดาวน์โหลดเอกสารที่บัญชีออกให้ (ดูอย่างเดียว แก้ไขไม่ได้)
+export default function AccountingDocModal({ order, currentUser, onClose }) {
   const { toast } = useUi()
   const [requests, setRequests] = useState(null)
   const [showNew, setShowNew] = useState(false)
 
   const load = () => {
-    if (!pr.quotation_id) { setRequests([]); return }
-    fetchAccountingDocRequestsByOrder(pr.quotation_id).then(setRequests).catch(e => toast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error'))
+    if (!order?.id) { setRequests([]); return }
+    fetchAccountingDocRequestsByOrder(order.id).then(setRequests).catch(e => toast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error'))
   }
-  useEffect(() => { load() }, [pr.quotation_id])
+  useEffect(() => { load() }, [order?.id])
 
   const onCreated = async (fields) => {
     const complete = accountingDocInfoComplete(fields)
@@ -249,19 +249,17 @@ export default function AccountingDocModal({ pr, currentUser, onClose }) {
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={{ maxWidth: 640 }}>
         <div className="modal-header">
-          <div className="modal-title">เอกสารบัญชี · {pr.pr_no}</div>
+          <div className="modal-title">เอกสารบัญชี · {order.order_no}</div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
-          {!pr.quotation_id ? (
-            <div className="empty-state"><div>คำขอนี้ไม่ได้ผูกกับใบเสนอราคา จึงขอเอกสารบัญชีไม่ได้</div></div>
-          ) : requests === null ? (
+          {requests === null ? (
             <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-light)' }}>กำลังโหลด...</div>
           ) : (
             <>
-              {requests.map(req => <DocRequestCard key={req.id} req={req} currentUser={currentUser} onChanged={load} />)}
+              {requests.map(req => <DocRequestCard key={req.id} req={req} orderNo={order.order_no} currentUser={currentUser} onChanged={load} />)}
               {showNew ? (
-                <div className="card"><div className="card-body"><NewDocRequestForm pr={pr} currentUser={currentUser} onClose={() => setShowNew(false)} onCreated={onCreated} /></div></div>
+                <div className="card"><div className="card-body"><NewDocRequestForm order={order} currentUser={currentUser} onClose={() => setShowNew(false)} onCreated={onCreated} /></div></div>
               ) : (
                 <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>+ ขอเอกสารบัญชี</button>
               )}

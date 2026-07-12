@@ -424,12 +424,12 @@ function AppInner({ session }) {
             <Quotations perm={perm} reloadKey={reloadKey} settings={settings} deals={data.deals} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onCopy={actions.copyQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onCreateDeal={actions.createDealFromQuotation} />
           )}
           {view === 'orders' && (
-            <Orders reloadKey={reloadKey} onAdd={actions.addOrder} onCancel={actions.cancelOrder} />
+            <Orders reloadKey={reloadKey} currentUser={currentUser} onAdd={actions.addOrder} onCancel={actions.cancelOrder} />
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products />}
           {view === 'payment-requests' && (
-            <PaymentRequests reloadKey={reloadKey} settings={settings} perm={perm} currentUser={currentUser} onAdd={actions.addPaymentRequest} onEdit={actions.editPaymentRequest} onSubmit={actions.submitPayment} onDelete={actions.deletePaymentRequest} onMarkOrder={actions.markPaymentOrder} />
+            <PaymentRequests reloadKey={reloadKey} settings={settings} perm={perm} onAdd={actions.addPaymentRequest} onEdit={actions.editPaymentRequest} onSubmit={actions.submitPayment} onDelete={actions.deletePaymentRequest} onMarkOrder={actions.markPaymentOrder} />
           )}
           {view === 'finance-review' && (isFinance || isAdmin) && (
             <FinanceReview reloadKey={reloadKey} currentUserName={currentUser.name} onApprove={actions.approvePayment} onNeedInfo={actions.needInfoPayment} onMismatch={actions.mismatchPayment} onReject={actions.rejectPayment} />
@@ -447,7 +447,7 @@ function AppInner({ session }) {
       {modal?.type === 'task' && <TaskModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveTask} />}
       {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
       {modal?.type === 'lead' && <LeadModal initial={modal.payload?.initial} isAdmin={isAdmin} onClose={closeModal} onSave={saveLead} />}
-      {modal?.type === 'payment' && <PaymentRequestModal initial={modal.payload?.initial} companies={data.companies} quotations={data.quotations} isAdmin={isAdmin} onClose={closeModal} onSave={savePaymentRequest} />}
+      {modal?.type === 'payment' && <PaymentRequestModal initial={modal.payload?.initial} companies={data.companies} isAdmin={isAdmin} onClose={closeModal} onSave={savePaymentRequest} />}
       {modal?.type === 'payment-order' && <PaymentOrderModal pr={modal.payload.initial} onClose={closeModal} onSave={savePaymentOrder} />}
       {modal?.type === 'order' && <OrderModal companies={data.companies} quotations={data.quotations} currentUser={currentUser} onClose={closeModal} onSave={saveOrder} />}
     </div>

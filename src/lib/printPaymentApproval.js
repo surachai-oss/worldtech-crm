@@ -96,7 +96,7 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
         <div><span class="k">ลูกค้า:</span> ${escapeHtml(pr.customer_name || '-')}</div>
         <div><span class="k">ประเภทลูกค้า:</span> ${escapeHtml(pr.credit_type || '-')}</div>
         <div><span class="k">ประเภทการชำระ:</span> ${escapeHtml(pr.payment_type || '-')}</div>
-        <div><span class="k">Bill No.:</span> ${escapeHtml(pr.bill_no || '-')}</div>
+        <div><span class="k">เลขที่ออเดอร์:</span> ${escapeHtml(pr.order_no || pr.order?.order_no || '-')}</div>
         <div><span class="k">เลขที่ PO:</span> ${escapeHtml(pr.po_reference || '-')}</div>
         <div><span class="k">วันที่คำขอ:</span> ${fmtDate(pr.request_date || pr.created_at)}</div>
         <div><span class="k">ผู้ส่งคำขอ:</span> ${escapeHtml(pr.requested_by_name || '-')}</div>
