@@ -947,6 +947,10 @@ export const markDocMissingInfo = (id, reason) =>
 export const markDocPendingIssue = (id) =>
   updateAccountingDocRequest(id, { document_status: ACCOUNTING_DOC_STATUS.PENDING_ISSUE, reviewed_at: new Date().toISOString() })
 
+// บัญชีกด "อนุมัติ" ผ่านการตรวจ — ข้ามขั้นกรอกเลขเอกสาร ไปที่ "รออัปโหลดเอกสาร" เลย (บัญชีอัปโหลดไฟล์ในป็อปอัปรายละเอียดได้ทันที)
+export const approveAccountingDocRequest = (id) =>
+  updateAccountingDocRequest(id, { document_status: ACCOUNTING_DOC_STATUS.PENDING_UPLOAD, reviewed_at: new Date().toISOString() })
+
 // บันทึกเลขที่เอกสาร (ใบแจ้งหนี้/ใบกำกับภาษี/ใบเสร็จ) + วันที่ออก แล้วเข้าสถานะ "รออัปโหลดเอกสาร"
 export const saveAccountingDocNumbers = (id, { invoice_no, tax_invoice_no, receipt_no, issued_date }) =>
   updateAccountingDocRequest(id, { invoice_no, tax_invoice_no, receipt_no, issued_date, document_status: ACCOUNTING_DOC_STATUS.PENDING_UPLOAD })
@@ -954,8 +958,11 @@ export const saveAccountingDocNumbers = (id, { invoice_no, tax_invoice_no, recei
 export const markDocEmailSent = (id) =>
   updateAccountingDocRequest(id, { email_sent_at: new Date().toISOString() })
 
-export const markDocOriginalSent = (id, trackingNo) =>
-  updateAccountingDocRequest(id, { original_tracking_no: trackingNo, original_sent_at: new Date().toISOString(), document_status: ACCOUNTING_DOC_STATUS.ORIGINAL_SENT })
+// บัญชีส่งเอกสารตัวจริงแล้ว + ใส่เลข tracking → ปิดงาน (เสร็จสิ้น) พร้อมเก็บ tracking ให้เซลล์เห็นในหน้าออเดอร์
+export const markDocOriginalSent = (id, trackingNo) => {
+  const now = new Date().toISOString()
+  return updateAccountingDocRequest(id, { original_tracking_no: trackingNo, original_sent_at: now, document_status: ACCOUNTING_DOC_STATUS.COMPLETED, completed_at: now })
+}
 
 export const markDocCompleted = (id) =>
   updateAccountingDocRequest(id, { document_status: ACCOUNTING_DOC_STATUS.COMPLETED, completed_at: new Date().toISOString() })
@@ -1023,7 +1030,14 @@ export async function uploadAccountingDocFile(request, file, { file_type, docume
     uploaded_by: s?.user?.id || null, uploaded_by_name: uploaderName, note: note || null,
   }).select().single().then(handle)
 
-  await updateAccountingDocRequest(request.id, { document_status: ACCOUNTING_DOC_STATUS.READY, issued_at: new Date().toISOString() })
+  // อัปโหลดแล้ว: ถ้าต้องส่งตัวจริงด้วยไปรอที่ "รอส่งตัวจริง" (บัญชีใส่ tracking ต่อ), ถ้าไม่ต้อง = เสร็จสิ้นทันที
+  const now = new Date().toISOString()
+  const needsOriginal = request.delivery_method === 'ส่งตัวจริง' || request.delivery_method === 'ส่งทั้งอีเมลและตัวจริง'
+  const nextStatus = needsOriginal ? ACCOUNTING_DOC_STATUS.PENDING_ORIGINAL : ACCOUNTING_DOC_STATUS.COMPLETED
+  await updateAccountingDocRequest(request.id, {
+    document_status: nextStatus, issued_at: now,
+    ...(nextStatus === ACCOUNTING_DOC_STATUS.COMPLETED ? { completed_at: now } : {}),
+  })
   await writeAuditLog({ entity_type: 'accounting_document_request', entity_id: request.id, action: 'upload_file', actor_name: uploaderName, detail: `อัปโหลด ${file_type} v${version_no}` })
   return row
 }

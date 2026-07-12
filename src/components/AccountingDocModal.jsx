@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import {
-  DOC_TYPES, DOC_DELIVERY_METHODS, DOC_PRIORITIES, DOC_SENT_CHANNELS, DOC_SENT_CHANNEL_LABEL, DOC_FILE_TYPE_LABEL,
+  DOC_TYPES, DOC_DELIVERY_METHODS, DOC_PRIORITIES, DOC_FILE_TYPE_LABEL,
   ACCOUNTING_DOC_STATUS, fetchAccountingDocRequestsByOrder, saveAccountingDocDraft, submitAccountingDocRequest,
-  listAccountingDocFiles, getAccountingDocFileUrl, markAccountingDocFileSent, markDocSentToCustomer,
+  listAccountingDocFiles, getAccountingDocFileUrl,
 } from '../lib/api'
-import { docStatusBadgeClass, docPriorityBadgeClass, fmtDate } from '../lib/format'
+import { docStatusBadgeClass, docPriorityBadgeClass } from '../lib/format'
 import { printAccountingDocRequest } from '../lib/printAccountingDocRequest'
 import { useUi } from './UiContext'
 
@@ -155,15 +155,12 @@ function DocRequestForm({ order, existing, currentUser, onClose, onSaved }) {
   )
 }
 
-// แสดงคำขอที่มีอยู่แล้ว 1 ใบ พร้อมไฟล์เอกสาร + ปุ่มแก้ไข/ดาวน์โหลด/mark ส่งลูกค้าแล้ว
-function DocRequestCard({ req, orderNo, currentUser, onEdit, onChanged }) {
-  const { toast, confirm } = useUi()
+// แสดงคำขอ 1 ใบ พร้อมไฟล์เอกสารที่บัญชีอัปโหลด (ดาวน์โหลดได้) + เลข tracking ตัวจริง + ปุ่มแก้ไข
+function DocRequestCard({ req, orderNo, onEdit }) {
+  const { toast } = useUi()
   const [files, setFiles] = useState(null)
-  const [channel, setChannel] = useState('email')
-  const [busy, setBusy] = useState(false)
 
   useEffect(() => { listAccountingDocFiles(req.id).then(setFiles).catch(() => setFiles([])) }, [req.id])
-
   const currentFiles = (files || []).filter(f => f.is_current)
 
   const download = async (file) => {
@@ -174,27 +171,11 @@ function DocRequestCard({ req, orderNo, currentUser, onEdit, onChanged }) {
   }
 
   const copyMessage = async () => {
-    const docNos = [req.invoice_no, req.tax_invoice_no, req.receipt_no].filter(Boolean).join(', ')
-    const msg = `เรียน คุณ${req.customer_name || ''}\n\nทางบริษัทขอนำส่งเอกสาร${req.document_type} เลขที่ ${docNos || '-'}\nสำหรับออเดอร์เลขที่ ${orderNo || '-'}\n\nขอบคุณค่ะ/ครับ`
+    const msg = `เรียน คุณ${req.customer_name || ''}\n\nทางบริษัทขอนำส่งเอกสาร${req.document_type} สำหรับออเดอร์เลขที่ ${orderNo || '-'}${req.original_tracking_no ? `\nเลขพัสดุ (เอกสารตัวจริง): ${req.original_tracking_no}` : ''}\n\nขอบคุณค่ะ/ครับ`
     try { await navigator.clipboard.writeText(msg); toast('คัดลอกข้อความแล้ว', 'success') }
     catch { toast('คัดลอกไม่สำเร็จ', 'error') }
   }
 
-  const markSent = async () => {
-    if (!(await confirm('ยืนยันว่าส่งเอกสารให้ลูกค้าแล้ว?'))) return
-    setBusy(true)
-    try {
-      for (const file of currentFiles) {
-        await markAccountingDocFileSent(file.id, channel, currentUser.name)
-      }
-      await markDocSentToCustomer(req.id, req.delivery_method)
-      toast('บันทึกแล้ว', 'success')
-      onChanged()
-    } catch (e) { toast('บันทึกไม่สำเร็จ: ' + e.message, 'error') }
-    finally { setBusy(false) }
-  }
-
-  const canMarkSent = req.document_status === ACCOUNTING_DOC_STATUS.READY && currentFiles.length > 0
   const isDraft = req.document_status === ACCOUNTING_DOC_STATUS.DRAFT
 
   return (
@@ -213,24 +194,20 @@ function DocRequestCard({ req, orderNo, currentUser, onEdit, onChanged }) {
         {req.document_status === ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO && req.missing_info_reason && (
           <div style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 8 }}>บัญชีแจ้งข้อมูลไม่ครบ: {req.missing_info_reason}</div>
         )}
-        {req.revised_at && <div style={{ fontSize: 11, color: 'var(--text-light)', marginBottom: 6 }}>แก้ไขล่าสุด {fmtDate(req.revised_at)}</div>}
         {req.accounting_note && <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>หมายเหตุจากบัญชี: {req.accounting_note}</div>}
         <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>
           <div>วิธีส่ง: {req.delivery_method}</div>
-          {req.invoice_no && <div>เลขที่ใบแจ้งหนี้: {req.invoice_no}</div>}
-          {req.tax_invoice_no && <div>เลขที่ใบกำกับภาษี: {req.tax_invoice_no}</div>}
-          {req.receipt_no && <div>เลขที่ใบเสร็จ: {req.receipt_no}</div>}
+          {req.original_tracking_no && <div>เลขพัสดุ (เอกสารตัวจริง): <b style={{ color: 'var(--navy)' }}>{req.original_tracking_no}</b></div>}
         </div>
 
         {files === null ? <div style={{ fontSize: 12, color: 'var(--text-light)' }}>กำลังโหลดไฟล์...</div> : currentFiles.length ? (
           <div className="table-wrap" style={{ marginBottom: 8 }}>
             <table>
-              <thead><tr><th>ประเภทไฟล์</th><th>เลขที่เอกสาร</th><th></th></tr></thead>
+              <thead><tr><th>เอกสาร</th><th></th></tr></thead>
               <tbody>
                 {currentFiles.map(f => (
                   <tr key={f.id}>
                     <td>{DOC_FILE_TYPE_LABEL[f.file_type] || f.file_type}</td>
-                    <td>{f.document_no || '-'}</td>
                     <td><button className="btn btn-outline btn-xs" onClick={() => download(f)}>ดาวน์โหลด</button></td>
                   </tr>
                 ))}
@@ -240,17 +217,7 @@ function DocRequestCard({ req, orderNo, currentUser, onEdit, onChanged }) {
         ) : !isDraft && <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>ยังไม่มีไฟล์ที่บัญชีอัปโหลด</div>}
 
         {currentFiles.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="btn btn-outline btn-xs" onClick={copyMessage}>คัดลอกข้อความสำหรับส่งลูกค้า</button>
-            {canMarkSent && (
-              <>
-                <select className="filter-select" value={channel} onChange={e => setChannel(e.target.value)} style={{ height: 28, fontSize: 12 }}>
-                  {DOC_SENT_CHANNELS.map(c => <option key={c} value={c}>{DOC_SENT_CHANNEL_LABEL[c]}</option>)}
-                </select>
-                <button className="btn btn-success btn-xs" onClick={markSent} disabled={busy}>Mark ว่าส่งให้ลูกค้าแล้ว</button>
-              </>
-            )}
-          </div>
+          <button className="btn btn-outline btn-xs" onClick={copyMessage}>คัดลอกข้อความสำหรับส่งลูกค้า</button>
         )}
       </div>
     </div>
@@ -274,7 +241,9 @@ export default function AccountingDocModal({ order, currentUser, onClose }) {
   const onSaved = () => { setFormOpen(false); setEditing(null); load() }
   const startEdit = (req) => { setEditing(req); setFormOpen(false) }
 
-  const showGate = !formOpen && !editing
+  // ออเดอร์หนึ่งใบมีคำขอเอกสารได้ใบเดียว — ถ้ามีแล้วให้ "แก้ไข" ใบเดิม (ขึ้นสถานะอัพเดท) ไม่สร้างใบใหม่
+  const hasRequest = (requests?.length || 0) > 0
+  const showGate = !formOpen && !editing && !hasRequest
 
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
@@ -295,18 +264,18 @@ export default function AccountingDocModal({ order, currentUser, onClose }) {
                       <div style={{ fontWeight: 600, marginBottom: 8 }}>แก้ไขคำขอ: {req.document_type}</div>
                       <DocRequestForm order={order} existing={req} currentUser={currentUser} onClose={() => setEditing(null)} onSaved={onSaved} />
                     </div></div>
-                  : <DocRequestCard key={req.id} req={req} orderNo={order.order_no} currentUser={currentUser} onEdit={startEdit} onChanged={load} />
+                  : <DocRequestCard key={req.id} req={req} orderNo={order.order_no} onEdit={startEdit} />
               ))}
 
-              {/* สร้างคำขอใหม่ */}
-              {!editing && (formOpen ? (
+              {/* สร้างคำขอใหม่ — เฉพาะออเดอร์ที่ยังไม่มีคำขอ (มีแล้วให้กด "แก้ไข" ใบเดิม) */}
+              {!hasRequest && !editing && (formOpen ? (
                 <div className="card"><div className="card-body">
                   <div style={{ fontWeight: 600, marginBottom: 8 }}>คำขอเอกสารใหม่</div>
                   <DocRequestForm order={order} existing={null} currentUser={currentUser} onClose={() => setFormOpen(false)} onSaved={onSaved} />
                 </div></div>
               ) : showGate && (
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label required">{requests.length ? 'ต้องการขอเอกสารเพิ่มไหม' : 'ต้องการเอกสารบัญชีไหม'}</label>
+                  <label className="form-label required">ต้องการเอกสารบัญชีไหม</label>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button type="button" className="btn btn-outline btn-sm" onClick={onClose}>ไม่ต้องการ</button>
                     <button type="button" className="btn btn-primary btn-sm" onClick={() => setFormOpen(true)}>ต้องการ</button>
