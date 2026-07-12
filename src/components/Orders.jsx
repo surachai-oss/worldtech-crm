@@ -34,6 +34,16 @@ function docBtnClass(status) {
   return 'btn-secondary'
 }
 
+// ปุ่ม action ต่อแถว + badge สถานะใต้ปุ่ม (ถ้ามี) จัดกึ่งกลางเป็นชุดเดียวกันเสมอ ไม่ว่าจะมีกี่บรรทัด
+function ActionStack({ button, badge }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', minWidth: 88 }}>
+      {button}
+      {badge}
+    </div>
+  )
+}
+
 export default function Orders({ reloadKey, companies, perm, currentUser, settings, onAdd, onCancel }) {
   const { toast } = useUi()
   const [status, setStatus] = useState('')
@@ -104,24 +114,24 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
                       <td style={{ fontSize: 12 }}>{o.sales_name || '-'}</td>
                       <td style={{ fontSize: 12 }}>{fmtDate(o.created_at)}</td>
                       <td><span className={`badge ${o.status === ORDER_STATUS.ACTIVE ? 'badge-green' : 'badge-gray'}`}>{o.status === ORDER_STATUS.ACTIVE ? 'ใช้งานอยู่' : 'ยกเลิกแล้ว'}</span></td>
-                      <td className="td-actions">
-                        <button className="btn btn-outline btn-xs" onClick={() => openDetail(o)}>ดูรายละเอียด</button>
+                      <td className="td-actions" style={{ alignItems: 'flex-start', gap: 16 }}>
+                        <ActionStack button={<button className="btn btn-outline btn-xs" onClick={() => openDetail(o)}>ดูรายละเอียด</button>} />
                         {o.status === ORDER_STATUS.ACTIVE && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
-                            <button className={`btn ${paymentBtnClass(pr?.status)} btn-xs`} onClick={() => setPaymentModalOrder(o)}>ขอตรวจยอด</button>
-                            {pr && <span className={`badge ${paymentBadgeClass(pr.status)}`} style={{ fontSize: 10 }}>{paymentStatusLabel(pr.status)}</span>}
-                          </div>
+                          <ActionStack
+                            button={<button className={`btn ${paymentBtnClass(pr?.status)} btn-xs`} onClick={() => setPaymentModalOrder(o)} style={{ width: '100%' }}>ขอตรวจยอด</button>}
+                            badge={pr && <span className={`badge ${paymentBadgeClass(pr.status)}`} style={{ fontSize: 10 }}>{paymentStatusLabel(pr.status)}</span>}
+                          />
                         )}
                         {o.status === ORDER_STATUS.ACTIVE && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
-                            <button className={`btn ${docBtnClass(doc?.document_status)} btn-xs`} onClick={() => setDocModalOrder(o)}>เอกสารบัญชี</button>
-                            {doc && (
-                              <div style={{ display: 'flex', gap: 3 }}>
+                          <ActionStack
+                            button={<button className={`btn ${docBtnClass(doc?.document_status)} btn-xs`} onClick={() => setDocModalOrder(o)} style={{ width: '100%' }}>เอกสารบัญชี</button>}
+                            badge={doc && (
+                              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center' }}>
                                 <span className={`badge ${docStatusBadgeClass(doc.document_status)}`} style={{ fontSize: 10 }}>{doc.document_status}</span>
                                 {doc.revised_at && <span className="badge badge-orange" style={{ fontSize: 10 }}>อัพเดท</span>}
                               </div>
                             )}
-                          </div>
+                          />
                         )}
                       </td>
                     </tr>

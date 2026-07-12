@@ -15,7 +15,6 @@ import Orders from './components/Orders'
 import Users from './components/Users'
 import Products from './components/Products'
 import Leads from './components/Leads'
-import PaymentRequests from './components/PaymentRequests'
 import FinanceReview from './components/FinanceReview'
 import AccountingDocuments from './components/AccountingDocuments'
 import NotificationBell from './components/NotificationBell'
@@ -29,7 +28,7 @@ const TITLES = {
   dashboard: 'แดชบอร์ด', companies: 'บริษัทลูกค้า', 'company-detail': 'รายละเอียดบริษัท',
   deals: 'ดีลการขาย', activities: 'ประวัติการติดต่อ', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา', orders: 'ออเดอร์',
   users: 'ผู้ใช้งาน', products: 'สินค้า', leads: 'ผู้ติดต่อ',
-  'payment-requests': 'คำขอตรวจยอด', 'finance-review': 'ตรวจสอบยอดโอน', 'accounting-documents': 'เอกสารบัญชี'
+  'finance-review': 'ตรวจสอบยอดโอน', 'accounting-documents': 'เอกสารบัญชี'
 }
 
 function AppInner({ session }) {
@@ -188,11 +187,7 @@ function AppInner({ session }) {
     refreshData: reload,
 
     // ===== Payment Verification (คำขอตรวจยอด) =====
-    // สร้าง/แก้ไข/ส่งให้บัญชี ทำที่ปุ่ม "ขอตรวจยอด" ในหน้าออเดอร์แล้ว (OrderPaymentModal เรียก api.js ตรงๆ ไม่ผ่าน action ตรงนี้) เหลือแค่ลบไว้ให้หน้าติดตามภาพรวม
-    deletePaymentRequest: async (pr) => {
-      if (!(await confirm(`ลบคำขอ ${pr.pr_no}?`))) return
-      await run(() => api.deletePaymentRequest(pr.id), 'ลบสำเร็จ')
-    },
+    // สร้าง/แก้ไข/ส่งให้บัญชี/ลบฉบับร่าง ทำที่ปุ่ม "ขอตรวจยอด" ในหน้าออเดอร์ทั้งหมดแล้ว (OrderPaymentModal เรียก api.js ตรงๆ ไม่ผ่าน action ตรงนี้)
     // ฝ่ายบัญชีตัดสินผลตรวจ (ส่ง reviewerName ไปเก็บ + เขียน audit log)
     // อนุมัติ: บัญชีระบุชื่อผู้อนุมัติ (ลายเซ็น) + เลขอ้างอิงบัญชีได้เอง (ดู ReviewModal)
     approvePayment: async (pr, { remark, approverName, financeRefNo } = {}) => { await run(() => api.approvePaymentRequest(pr.id, { remark, reviewerName: approverName || currentUser.name, financeRefNo }), 'อนุมัติแล้ว') },
@@ -392,9 +387,6 @@ function AppInner({ session }) {
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products />}
-          {view === 'payment-requests' && (
-            <PaymentRequests reloadKey={reloadKey} settings={settings} perm={perm} onDelete={actions.deletePaymentRequest} />
-          )}
           {view === 'finance-review' && (isFinance || isAdmin) && (
             <FinanceReview reloadKey={reloadKey} currentUserName={currentUser.name} onApprove={actions.approvePayment} onNeedInfo={actions.needInfoPayment} onMismatch={actions.mismatchPayment} onReject={actions.rejectPayment} />
           )}
