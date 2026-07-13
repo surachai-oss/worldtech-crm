@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabaseClient'
 import * as api from './lib/api'
 import { UiProvider, useUi } from './components/UiContext'
+import { LanguageProvider, useLanguage } from './components/LanguageContext'
 import Sidebar from './components/Sidebar'
 import Login from './components/Login'
 import Dashboard from './components/Dashboard'
@@ -33,6 +34,7 @@ const TITLES = {
 
 function AppInner({ session }) {
   const { toast, confirm } = useUi()
+  const { t } = useLanguage()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState({ companies: [], contacts: [], deals: [], activities: [], tasks: [], quotations: [] })
   const [settings, setSettings] = useState({})
@@ -325,9 +327,9 @@ function AppInner({ session }) {
       <Sidebar activeView={view} onNav={nav} user={currentUser} isAdmin={isAdmin} isFinance={isFinance} onLogout={() => supabase.auth.signOut()} />
       <div className="main-content">
         <div className="topbar">
-          <div className="topbar-title">{TITLES[view]}</div>
+          <div className="topbar-title">{t(TITLES[view])}</div>
           <div className="search-wrap">
-            <input className="search-input" placeholder="ค้นหา..." value={searchQ}
+            <input className="search-input" placeholder={t('ค้นหา...')} value={searchQ}
               onChange={e => { setSearchQ(e.target.value); setShowResults(e.target.value.length >= 2) }}
               onBlur={() => setTimeout(() => setShowResults(false), 150)} />
             {showResults && (
@@ -432,12 +434,14 @@ export default function App() {
   }
 
   return (
-    <UiProvider>
-      {session ? (
-        <PicklistsProvider>
-          <AppInner session={session} />
-        </PicklistsProvider>
-      ) : <Login />}
-    </UiProvider>
+    <LanguageProvider>
+      <UiProvider>
+        {session ? (
+          <PicklistsProvider>
+            <AppInner session={session} />
+          </PicklistsProvider>
+        ) : <Login />}
+      </UiProvider>
+    </LanguageProvider>
   )
 }

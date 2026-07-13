@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { fetchOrders, listOrderItems, ORDER_STATUS, PAYMENT_STATUS, ACCOUNTING_DOC_STATUS } from '../lib/api'
 import { fmtCurrency, fmtDate, paymentStatusLabel, paymentBadgeClass, docStatusBadgeClass } from '../lib/format'
 import { useUi } from './UiContext'
+import { useLanguage } from './LanguageContext'
 import { OrderDetailModal } from './OrderModal'
 import AccountingDocModal from './AccountingDocModal'
 import OrderPaymentModal from './OrderPaymentModal'
@@ -49,6 +50,7 @@ function ActionStack({ button, badge, fixedWidth = false }) {
 
 export default function Orders({ reloadKey, companies, perm, currentUser, settings, onAdd, onCancel }) {
   const { toast } = useUi()
+  const { t, lang } = useLanguage()
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
   const [fromDate, setFromDate] = useState('')
@@ -79,21 +81,21 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
   return (
     <div className="list-view">
       <div className="section-header">
-        <div className="section-title">ออเดอร์ <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} รายการ)</span></div>
-        <button className="btn btn-primary" onClick={onAdd}>+ สร้างออเดอร์</button>
+        <div className="section-title">{t('ออเดอร์')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} {t('รายการ')})</span></div>
+        <button className="btn btn-primary" onClick={onAdd}>{t('+ สร้างออเดอร์')}</button>
       </div>
       <div className="filter-bar">
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
-          <option value="">ทุกสถานะ</option>
-          <option value={ORDER_STATUS.ACTIVE}>ใช้งานอยู่</option>
-          <option value={ORDER_STATUS.CANCELLED}>ยกเลิกแล้ว</option>
+          <option value="">{t('ทุกสถานะ')}</option>
+          <option value={ORDER_STATUS.ACTIVE}>{t('ใช้งานอยู่')}</option>
+          <option value={ORDER_STATUS.CANCELLED}>{t('ยกเลิกแล้ว')}</option>
         </select>
-        <input className="filter-input" placeholder="ค้นหา เลขออเดอร์/เลขใบเสนอราคา/ลูกค้า..." value={q} onChange={e => setQ(e.target.value)} style={{ minWidth: 260 }} />
+        <input className="filter-input" placeholder={lang === 'en' ? 'Search order no. / quotation no. / customer...' : 'ค้นหา เลขออเดอร์/เลขใบเสนอราคา/ลูกค้า...'} value={q} onChange={e => setQ(e.target.value)} style={{ minWidth: 260 }} />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
-          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่สร้าง ตั้งแต่" />
-          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>ถึง</span>
-          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่สร้าง ถึง" />
-          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
+          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title={lang === 'en' ? 'Created from' : 'วันที่สร้าง ตั้งแต่'} />
+          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ถึง')}</span>
+          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title={lang === 'en' ? 'Created to' : 'วันที่สร้าง ถึง'} />
+          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>{t('ล้าง')}</button>}
         </div>
       </div>
       {detail && <OrderDetailModal order={detail.order} items={detail.items} onClose={() => setDetail(null)} onCancel={onCancel} />}
@@ -103,7 +105,7 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>เลขออเดอร์</th><th>เลขใบเสนอราคา</th><th>บริษัท</th><th>ยอดรวม</th><th>เซลล์</th><th>วันที่สร้าง</th><th>สถานะ</th><th>การจัดการ</th></tr></thead>
+              <thead><tr><th>{t('เลขออเดอร์')}</th><th>{t('เลขใบเสนอราคา')}</th><th>{t('บริษัท')}</th><th>{t('ยอดรวม')}</th><th>{t('เซลล์')}</th><th>{t('วันที่สร้าง')}</th><th>{t('สถานะ')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(o => {
                   const pr = latestPaymentRequest(o)
@@ -116,24 +118,24 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
                       <td style={{ fontWeight: 600 }}>{fmtCurrency(o.value)}</td>
                       <td style={{ fontSize: 12 }}>{o.sales_name || '-'}</td>
                       <td style={{ fontSize: 12 }}>{fmtDate(o.created_at)}</td>
-                      <td><span className={`badge ${o.status === ORDER_STATUS.ACTIVE ? 'badge-green' : 'badge-gray'}`}>{o.status === ORDER_STATUS.ACTIVE ? 'ใช้งานอยู่' : 'ยกเลิกแล้ว'}</span></td>
+                      <td><span className={`badge ${o.status === ORDER_STATUS.ACTIVE ? 'badge-green' : 'badge-gray'}`}>{o.status === ORDER_STATUS.ACTIVE ? t('ใช้งานอยู่') : t('ยกเลิกแล้ว')}</span></td>
                       <td className="td-actions" style={{ alignItems: 'flex-start', gap: 16 }}>
-                        <ActionStack button={<button className="btn btn-outline btn-xs" onClick={() => openDetail(o)}>ดูรายละเอียด</button>} />
+                        <ActionStack button={<button className="btn btn-outline btn-xs" onClick={() => openDetail(o)}>{t('ดูรายละเอียด')}</button>} />
                         {o.status === ORDER_STATUS.ACTIVE && (
                           <ActionStack
                             fixedWidth
-                            button={<button className={`btn ${paymentBtnClass(pr?.status)} btn-xs`} onClick={() => setPaymentModalOrder(o)} style={{ width: '100%', minWidth: 0 }}>ขอตรวจยอด</button>}
+                            button={<button className={`btn ${paymentBtnClass(pr?.status)} btn-xs`} onClick={() => setPaymentModalOrder(o)} style={{ width: '100%', minWidth: 0 }}>{t('ขอตรวจยอด')}</button>}
                             badge={pr && <span className={`badge ${paymentBadgeClass(pr.status)}`} style={{ fontSize: 10, whiteSpace: 'normal', overflowWrap: 'break-word', wordBreak: 'break-word', textAlign: 'center', lineHeight: 1.3, width: '100%', maxWidth: '100%', minWidth: 0, justifyContent: 'center', boxSizing: 'border-box' }}>{paymentStatusLabel(pr.status)}</span>}
                           />
                         )}
                         {o.status === ORDER_STATUS.ACTIVE && (
                           <ActionStack
                             fixedWidth
-                            button={<button className={`btn ${docBtnClass(doc?.document_status)} btn-xs`} onClick={() => setDocModalOrder(o)} style={{ width: '100%', minWidth: 0 }}>เอกสารบัญชี</button>}
+                            button={<button className={`btn ${docBtnClass(doc?.document_status)} btn-xs`} onClick={() => setDocModalOrder(o)} style={{ width: '100%', minWidth: 0 }}>{t('เอกสารบัญชี')}</button>}
                             badge={doc && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', width: '100%', minWidth: 0 }}>
                                 <span className={`badge ${docStatusBadgeClass(doc.document_status)}`} style={{ fontSize: 10, whiteSpace: 'normal', overflowWrap: 'break-word', wordBreak: 'break-word', textAlign: 'center', lineHeight: 1.3, width: '100%', maxWidth: '100%', minWidth: 0, justifyContent: 'center', boxSizing: 'border-box' }}>{doc.document_status}</span>
-                                {doc.revised_at && <span className="badge badge-orange" style={{ fontSize: 10 }}>อัพเดท</span>}
+                                {doc.revised_at && <span className="badge badge-orange" style={{ fontSize: 10 }}>{t('อัพเดท')}</span>}
                               </div>
                             )}
                           />
@@ -144,7 +146,7 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
                 })}
               </tbody>
             </table>
-          ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีออเดอร์'}</div></div>}
+          ) : <div className="empty-state"><div>{loading ? t('กำลังโหลด...') : t('ยังไม่มีออเดอร์')}</div></div>}
         </div>
       </div>
     </div>

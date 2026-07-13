@@ -4,11 +4,13 @@ import { statusBadgeClass } from '../lib/format'
 import { companyEditable, adminOnlyDelete } from '../lib/permissions'
 import { useUi } from './UiContext'
 import { usePicklists } from './PicklistsContext'
+import { useLanguage } from './LanguageContext'
 import Pagination from './Pagination'
 import ImportCompaniesModal from './ImportCompaniesModal'
 
 export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete }) {
   const { toast } = useUi()
+  const { t } = useLanguage()
   const { list } = usePicklists()
   const [q, setQ] = useState('')
   const [status, setStatus] = useState('')
@@ -43,43 +45,43 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
   return (
     <div className="list-view">
       <div className="section-header">
-        <div className="section-title">บริษัทลูกค้า <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
+        <div className="section-title">{t('บริษัทลูกค้า')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} {t('รายการ')})</span></div>
         {/* ฝ่ายบัญชีดูบริษัทลูกค้าได้อย่างเดียว (ไว้ตรวจสอบข้อมูลกับที่เซลล์กรอก) เพิ่ม/นำเข้าไม่ได้ */}
         {!perm.isFinance && (
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-outline" onClick={() => setShowImport(true)}>นำเข้าจากไฟล์</button>
-            <button className="btn btn-primary" onClick={() => onEdit(null)}>+ เพิ่มบริษัท</button>
+            <button className="btn btn-outline" onClick={() => setShowImport(true)}>{t('นำเข้าจากไฟล์')}</button>
+            <button className="btn btn-primary" onClick={() => onEdit(null)}>{t('+ เพิ่มบริษัท')}</button>
           </div>
         )}
       </div>
       {showImport && <ImportCompaniesModal perm={perm} onClose={() => setShowImport(false)} onImported={() => setLocalBump(b => b + 1)} />}
       <div className="filter-bar">
-        <input className="filter-input" placeholder="ค้นหา..." value={q} onChange={e => setQ(e.target.value)} />
+        <input className="filter-input" placeholder={t('ค้นหา...')} value={q} onChange={e => setQ(e.target.value)} />
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
-          <option value="">ทุกสถานะ</option>
+          <option value="">{t('ทุกสถานะ')}</option>
           {list('company_statuses').map(s => <option key={s}>{s}</option>)}
         </select>
         <select className="filter-select" value={industry} onChange={e => setIndustry(e.target.value)}>
-          <option value="">ทุกอุตสาหกรรม</option>
+          <option value="">{t('ทุกอุตสาหกรรม')}</option>
           {list('industries').map(i => <option key={i}>{i}</option>)}
         </select>
         <select className="filter-select" value={customerType} onChange={e => setCustomerType(e.target.value)}>
-          <option value="">ทุกประเภทลูกค้า</option>
-          {list('customer_types').map(t => <option key={t}>{t}</option>)}
+          <option value="">{t('ทุกประเภทลูกค้า')}</option>
+          {list('customer_types').map(ct => <option key={ct}>{ct}</option>)}
         </select>
       </div>
       <div className="card list-card">
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>ชื่อบริษัท</th><th>อุตสาหกรรม</th><th>โทรศัพท์</th><th>สถานะ</th><th>ผู้รับผิดชอบ</th><th>การจัดการ</th></tr></thead>
+              <thead><tr><th>{t('ชื่อบริษัท')}</th><th>{t('อุตสาหกรรม')}</th><th>{t('โทรศัพท์')}</th><th>{t('สถานะ')}</th><th>{t('ผู้รับผิดชอบ')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(c => (
                   <tr key={c.id} onClick={() => onOpen(c.id)}>
                     <td>
                       <div style={{ fontWeight: 600, color: 'var(--navy)' }}>
                         {c.name}
-                        {c.customer_type === 'บุคคลธรรมดา' && <span className="badge badge-blue" style={{ marginLeft: 6, fontSize: 10, fontWeight: 400 }}>บุคคล</span>}
+                        {c.customer_type === 'บุคคลธรรมดา' && <span className="badge badge-blue" style={{ marginLeft: 6, fontSize: 10, fontWeight: 400 }}>{t('บุคคล')}</span>}
                         {c.credit_term && <span className="badge badge-orange" style={{ marginLeft: 6, fontSize: 10, fontWeight: 400 }}>{c.credit_term}</span>}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{c.email}</div>
@@ -89,15 +91,15 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
                     <td><span className={`badge ${statusBadgeClass(c.status)}`}>{c.status}</span></td>
                     <td style={{ fontSize: 12 }}>{c.owner || '-'}</td>
                     <td className="td-actions" onClick={e => e.stopPropagation()}>
-                      <button className="btn btn-outline btn-xs" onClick={() => onOpen(c.id)}>ดู</button>
-                      {companyEditable(c, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(c)}>แก้ไข</button>}
-                      {adminOnlyDelete(perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(c.id)}>ลบ</button>}
+                      <button className="btn btn-outline btn-xs" onClick={() => onOpen(c.id)}>{t('ดู')}</button>
+                      {companyEditable(c, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(c)}>{t('แก้ไข')}</button>}
+                      {adminOnlyDelete(perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(c.id)}>{t('ลบ')}</button>}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีข้อมูลบริษัท'}</div></div>}
+          ) : <div className="empty-state"><div>{loading ? t('กำลังโหลด...') : t('ยังไม่มีข้อมูลบริษัท')}</div></div>}
         </div>
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPage={setPage} />
       </div>

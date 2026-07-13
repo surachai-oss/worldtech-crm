@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { fmtCurrency, fmtDate, stageColor, toLocalDateStr } from '../lib/format'
 import { canEdit, adminOnlyDelete } from '../lib/permissions'
 import { usePicklists } from './PicklistsContext'
+import { useLanguage } from './LanguageContext'
 
 const OPEN_STAGES_EXCLUDED = ['Closed Won', 'Closed Lost']
 
@@ -54,6 +55,7 @@ const PERIOD_ROW_GRID = 'minmax(200px, 2fr) minmax(160px, 1.3fr) 100px 130px 96p
 // ป็อปอัปแสดงรายละเอียดดีลตามช่วง (วัน/สัปดาห์/เดือน) ของฟิลด์วันที่ที่เลือก — แต่ละกลุ่มลิสต์ดีลที่อยู่ในนั้น
 // highlightOverdue = ไฮไลต์วันที่เป็นสีแดงถ้าเลยกำหนดแล้ว (ใช้กับยอดที่ต้องติดตาม)
 function DealPeriodModal({ title, deals, companies, mode, dateField, ascending = false, highlightOverdue = false, onEdit, onClose }) {
+  const { t, lang } = useLanguage()
   const groups = groupDealsByPeriod(deals, mode, dateField, ascending)
   const grandTotal = deals.reduce((s, d) => s + (Number(d.value) || 0), 0)
   const modeLabel = (SALES_MODES.find(m => m.key === mode) || {}).label || ''
@@ -64,7 +66,7 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={{ maxWidth: 1080 }}>
         <div className="modal-header">
-          <div className="modal-title">{title} · {modeLabel} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({deals.length} ดีล · {fmtCurrency(grandTotal)})</span></div>
+          <div className="modal-title">{t(title)} · {t(modeLabel)} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({deals.length} {t('ดีล')} · {fmtCurrency(grandTotal)})</span></div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body" style={{ padding: '0 20px 20px' }}>
@@ -77,11 +79,11 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
                 padding: '16px 18px 10px', borderBottom: '2px solid var(--border)',
                 fontSize: 11, fontWeight: 700, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '.03em',
               }}>
-                <span>ดีล / สินค้า</span>
-                <span>บริษัท</span>
-                <span>วันที่</span>
-                <span style={{ textAlign: 'right' }}>มูลค่า</span>
-                <span style={{ textAlign: 'center' }}>จัดการ</span>
+                <span>{t('ดีล / สินค้า')}</span>
+                <span>{t('บริษัท')}</span>
+                <span>{t('วันที่')}</span>
+                <span style={{ textAlign: 'right' }}>{t('มูลค่า')}</span>
+                <span style={{ textAlign: 'center' }}>{t('จัดการ')}</span>
               </div>
               {groups.map(g => {
                 const total = g.rows.reduce((s, d) => s + (Number(d.value) || 0), 0)
@@ -89,7 +91,7 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
                   <div key={g.key} style={{ border: '1px solid var(--border)', borderRadius: 10, marginTop: 14, overflow: 'hidden' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 18px', background: 'var(--gray-bg)', fontWeight: 700, fontSize: 14 }}>
                       <span>{g.label}</span>
-                      <span style={{ color: 'var(--navy)' }}>{g.rows.length} ดีล · {fmtCurrency(total)}</span>
+                      <span style={{ color: 'var(--navy)' }}>{g.rows.length} {t('ดีล')} · {fmtCurrency(total)}</span>
                     </div>
                     {g.rows.map((d, i) => {
                       const co = companies.find(c => c.id === d.company_id)
@@ -107,7 +109,7 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
                           <span style={{ fontSize: 12, color: 'var(--text-light)' }}>{co ? co.name : '-'}</span>
                           <span className={ov ? 'overdue' : ''} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(d[dateField])}</span>
                           <span style={{ fontWeight: 600, color: 'var(--navy)', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtCurrency(d.value)}</span>
-                          <span style={{ textAlign: 'center' }}><button className="btn btn-outline btn-xs" onClick={() => openDeal(d)}>ดู/แก้ไข</button></span>
+                          <span style={{ textAlign: 'center' }}><button className="btn btn-outline btn-xs" onClick={() => openDeal(d)}>{lang === 'en' ? 'View/Edit' : 'ดู/แก้ไข'}</button></span>
                         </div>
                       )
                     })}
@@ -115,7 +117,7 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
                 )
               })}
             </>
-          ) : <div className="empty-state"><div>ไม่มีข้อมูล</div></div>}
+          ) : <div className="empty-state"><div>{t('ไม่มีข้อมูล')}</div></div>}
         </div>
       </div>
     </div>
@@ -123,6 +125,7 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
 }
 
 export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdit, onDelete, onCreateQuotation }) {
+  const { t, lang } = useLanguage()
   const { list } = usePicklists()
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
@@ -146,18 +149,18 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">ดีลการขาย <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({filtered.length} ดีล · {fmtCurrency(totalVal)})</span></div>
-        <button className="btn btn-primary" onClick={onAdd}>+ เพิ่มดีล</button>
+        <div className="section-title">{t('ดีลการขาย')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({filtered.length} {t('ดีล')} · {fmtCurrency(totalVal)})</span></div>
+        <button className="btn btn-primary" onClick={onAdd}>{t('+ เพิ่มดีล')}</button>
       </div>
       {/* กล่องสรุป 2 ใบ (ยอดขายปิดสำเร็จ + ยอดที่ต้องติดตาม) ชิดซ้าย + ตัวกรองวันที่ชิดขวา — กดปุ่มช่วงเวลาเพื่อเปิด popup รายละเอียด */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
           <div className="kpi-card green" style={{ flex: '1 1 380px', padding: '16px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-              <div className="kpi-label">ยอดขายที่ปิดดีลสำเร็จ</div>
+              <div className="kpi-label">{t('ยอดขายที่ปิดดีลสำเร็จ')}</div>
               <div style={{ display: 'flex', gap: 4 }}>
                 {SALES_MODES.map(m => (
-                  <button key={m.key} type="button" className={`btn btn-xs ${salesMode === m.key ? 'btn-primary' : 'btn-outline'}`} onClick={() => setSalesMode(m.key)} title={`ดูยอดขาย${m.label}`}>{m.label}</button>
+                  <button key={m.key} type="button" className={`btn btn-xs ${salesMode === m.key ? 'btn-primary' : 'btn-outline'}`} onClick={() => setSalesMode(m.key)} title={lang === 'en' ? `View ${t(m.label).toLowerCase()} sales` : `ดูยอดขาย${m.label}`}>{t(m.label)}</button>
                 ))}
               </div>
             </div>
@@ -165,10 +168,10 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
           </div>
           <div className="kpi-card navy" style={{ flex: '1 1 380px', padding: '16px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-              <div className="kpi-label">ยอดที่ต้องติดตาม</div>
+              <div className="kpi-label">{t('ยอดที่ต้องติดตาม')}</div>
               <div style={{ display: 'flex', gap: 4 }}>
                 {SALES_MODES.map(m => (
-                  <button key={m.key} type="button" className={`btn btn-xs ${followMode === m.key ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFollowMode(m.key)} title={`ดูยอดที่ต้องติดตาม${m.label}`}>{m.label}</button>
+                  <button key={m.key} type="button" className={`btn btn-xs ${followMode === m.key ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFollowMode(m.key)} title={lang === 'en' ? `View ${t(m.label).toLowerCase()} follow-up amount` : `ดูยอดที่ต้องติดตาม${m.label}`}>{t(m.label)}</button>
                 ))}
               </div>
             </div>
@@ -176,10 +179,10 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
           </div>
         </div>
         <div className="filter-bar" style={{ margin: 0, flexShrink: 0 }}>
-          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่สร้างดีล ตั้งแต่" />
-          <span style={{ fontSize: 12, color: 'var(--text-light)', alignSelf: 'center' }}>ถึง</span>
-          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่สร้างดีล ถึง" />
-          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
+          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title={lang === 'en' ? 'Deal created from' : 'วันที่สร้างดีล ตั้งแต่'} />
+          <span style={{ fontSize: 12, color: 'var(--text-light)', alignSelf: 'center' }}>{t('ถึง')}</span>
+          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title={lang === 'en' ? 'Deal created to' : 'วันที่สร้างดีล ถึง'} />
+          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>{t('ล้าง')}</button>}
         </div>
       </div>
       {salesMode && <DealPeriodModal title="ยอดขายที่ปิดดีลสำเร็จ" deals={won} companies={companies} mode={salesMode} dateField="close_date" onEdit={onEdit} onClose={() => setSalesMode(null)} />}
@@ -202,7 +205,7 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
                   return (
                     <div className="kanban-card" key={d.id} style={{ position: 'relative' }}>
                       {canEdit(d, perm) && (
-                        <button className="btn btn-secondary btn-xs" style={{ position: 'absolute', top: 6, right: 6, padding: '2px 6px', fontSize: 10 }} onClick={() => onCreateQuotation(d)} title="ก็อปข้อมูลดีลนี้ไปสร้างใบเสนอราคา">ออกใบเสนอราคา</button>
+                        <button className="btn btn-secondary btn-xs" style={{ position: 'absolute', top: 6, right: 6, padding: '2px 6px', fontSize: 10 }} onClick={() => onCreateQuotation(d)} title={lang === 'en' ? 'Copy this deal into a new quotation' : 'ก็อปข้อมูลดีลนี้ไปสร้างใบเสนอราคา'}>{t('ออกใบเสนอราคา')}</button>
                       )}
                       <div className="deal-name" style={{ paddingRight: canEdit(d, perm) ? 92 : 0 }}>{d.name}</div>
                       <div className="deal-co">{co ? co.name : '-'}{co?.credit_term && <span className="badge badge-orange" style={{ marginLeft: 6, fontSize: 9, fontWeight: 400 }}>{co.credit_term}</span>}</div>
@@ -210,15 +213,15 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, gap: 8 }}>
                         <div className="deal-val">{fmtCurrency(d.value)}</div>
                         <div style={{ display: 'flex', gap: 4 }}>
-                          {canEdit(d, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>แก้ไข</button>}
-                          {adminOnlyDelete(perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(d.id)}>ลบ</button>}
+                          {canEdit(d, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>{t('แก้ไข')}</button>}
+                          {adminOnlyDelete(perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(d.id)}>{t('ลบ')}</button>}
                         </div>
                       </div>
                     </div>
                   )
                 })}
               </div>
-              <button className="btn btn-outline btn-sm" style={{ width: '100%', marginTop: 8, fontSize: 11 }} onClick={() => onAddStage(stage)}>+ เพิ่ม</button>
+              <button className="btn btn-outline btn-sm" style={{ width: '100%', marginTop: 8, fontSize: 11 }} onClick={() => onAddStage(stage)}>{t('+ เพิ่ม')}</button>
             </div>
           )
         })}

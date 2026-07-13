@@ -1,3 +1,5 @@
+import { useLanguage } from './LanguageContext'
+
 const NAV = [
   { section: 'หลัก', items: [{ id: 'dashboard', label: 'แดชบอร์ด' }] },
   { section: 'ข้อมูลลูกค้า', items: [{ id: 'companies', label: 'บริษัทลูกค้า' }, { id: 'leads', label: 'ผู้ติดต่อ' }] },
@@ -10,7 +12,8 @@ const ADMIN_SECTION = { section: 'ผู้ดูแลระบบ', items: [
 ] }
 
 export default function Sidebar({ activeView, onNav, user, isAdmin, isFinance, onLogout }) {
-  const name = user?.name || 'ผู้ใช้งาน'
+  const { lang, setLang, t } = useLanguage()
+  const name = user?.name || (lang === 'en' ? 'User' : 'ผู้ใช้งาน')
   // เมนู "ตรวจสอบยอดโอน"/"เอกสารบัญชี" ให้เห็นเฉพาะฝ่ายบัญชี/แอดมิน — เซลล์ทำ/ติดตามคำขอตรวจยอดที่หน้า "ออเดอร์" แทนแล้ว จึงไม่มีเมนูนี้ให้เห็นเลยถ้าไม่ใช่บัญชี/แอดมิน
   const financeItems = (isFinance || isAdmin) ? [{ id: 'finance-review', label: 'ตรวจสอบยอดโอน' }, { id: 'accounting-documents', label: 'เอกสารบัญชี' }] : []
   const financeSection = financeItems.length ? { section: 'การเงิน', items: financeItems } : null
@@ -30,16 +33,28 @@ export default function Sidebar({ activeView, onNav, user, isAdmin, isFinance, o
         <div className="brand">Worldtech</div>
         <div className="brand-sub">B2B CRM</div>
       </div>
+      <div style={{ display: 'flex', gap: 4, padding: '0 16px 12px' }}>
+        <button
+          className={`btn btn-xs ${lang === 'th' ? 'btn-primary' : 'btn-outline'}`}
+          style={{ flex: 1 }}
+          onClick={() => setLang('th')}
+        >ไทย</button>
+        <button
+          className={`btn btn-xs ${lang === 'en' ? 'btn-primary' : 'btn-outline'}`}
+          style={{ flex: 1 }}
+          onClick={() => setLang('en')}
+        >EN</button>
+      </div>
       {sections.map(sec => (
         <div className="nav-section" key={sec.section}>
-          <div className="nav-section-title">{sec.section}</div>
+          <div className="nav-section-title">{t(sec.section)}</div>
           {sec.items.map(it => (
             <div
               key={it.id}
               className={`nav-item${activeView === it.id || (activeView === 'company-detail' && it.id === 'companies') ? ' active' : ''}`}
               onClick={() => onNav(it.id)}
             >
-              <span>{it.label}</span>
+              <span>{t(it.label)}</span>
             </div>
           ))}
         </div>
@@ -51,7 +66,7 @@ export default function Sidebar({ activeView, onNav, user, isAdmin, isFinance, o
             <div className="user-name">{name}</div>
             <div className="user-role">{user?.email || ''}</div>
           </div>
-          <button className="btn btn-outline btn-xs" onClick={onLogout} title="ออกจากระบบ">ออก</button>
+          <button className="btn btn-outline btn-xs" onClick={onLogout} title={t('ออกจากระบบ')}>{t('ออก')}</button>
         </div>
       </div>
     </aside>

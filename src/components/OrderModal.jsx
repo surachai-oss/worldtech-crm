@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { listQuotationItems, computeDealTotals, fetchActiveOrderQuotationIds, listProducts, genOrderNo, peekOrderNo } from '../lib/api'
 import { fmtCurrency } from '../lib/format'
 import { useUi } from './UiContext'
+import { useLanguage } from './LanguageContext'
 import SearchableSelect from './SearchableSelect'
 
 const EMPTY_ITEM = { product_id: '', description: '', quantity: 1, unit_price: '' }
@@ -20,6 +21,7 @@ function mapCopiedItems(rows) {
 // onSave(fields, items) — บันทึกแล้วแก้ไขไม่ได้อีก (ยกเลิกได้อย่างเดียว) จึงไม่มีโหมดแก้ไขในคอมโพเนนต์นี้
 export default function OrderModal({ companies, quotations, currentUser, onClose, onSave }) {
   const { toast, confirm } = useUi()
+  const { t, lang } = useLanguage()
   const [orderType, setOrderType] = useState('ปกติ')
   const [orderNo, setOrderNo] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -85,7 +87,10 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
     if (!quotationId) { toast('กรุณาเลือกใบเสนอราคา', 'error'); return }
     if (!cleanItems.length) { toast('กรุณาใส่รายการสินค้าอย่างน้อย 1 รายการ', 'error'); return }
     if (!shippingAddress.trim()) { toast('กรุณากรอกที่อยู่จัดส่ง', 'error'); return }
-    if (!(await confirm(`ยืนยันบันทึกออเดอร์เลขที่ ${orderNo}?\n\nหลังบันทึกแล้วจะแก้ไขข้อมูลไม่ได้อีก หากลงข้อมูลผิดต้องยกเลิกออเดอร์นี้แล้วเปิดออเดอร์ใหม่เท่านั้น`))) return
+    const confirmMsg = lang === 'en'
+      ? `Confirm saving order ${orderNo}?\n\nOnce saved, this order cannot be edited — you can only cancel it and open a new one if there's a mistake.`
+      : `ยืนยันบันทึกออเดอร์เลขที่ ${orderNo}?\n\nหลังบันทึกแล้วจะแก้ไขข้อมูลไม่ได้อีก หากลงข้อมูลผิดต้องยกเลิกออเดอร์นี้แล้วเปิดออเดอร์ใหม่เท่านั้น`
+    if (!(await confirm(confirmMsg))) return
     setSaving(true)
     // จองเลขออเดอร์จริงตรงนี้เท่านั้น (เพิ่ม counter จริง) — ก่อนหน้านี้ที่โชว์อยู่เป็นแค่พรีวิว เผื่อมีคนอื่นบันทึกออเดอร์ประเภทเดียวกันแทรกไปก่อน เลขจริงอาจไม่ตรงกับที่ยืนยันแบบเป๊ะๆ แต่ไม่มีทางซ้ำกันแน่นอน
     let realOrderNo
@@ -105,58 +110,58 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={{ maxWidth: 720 }}>
         <div className="modal-header">
-          <div className="modal-title">สร้างออเดอร์</div>
+          <div className="modal-title">{t('สร้างออเดอร์')}</div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           <div className="form-group">
-            <label className="form-label">ประเภทออเดอร์</label>
+            <label className="form-label">{t('ประเภทออเดอร์')}</label>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" className={`btn btn-sm ${orderType === 'ปกติ' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setOrderType('ปกติ'); previewOrderNo('ปกติ') }}>สินค้าปกติ (WT)</button>
-              <button type="button" className={`btn btn-sm ${orderType === 'Grade B' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setOrderType('Grade B'); previewOrderNo('Grade B') }}>สินค้า Grade B (GB)</button>
+              <button type="button" className={`btn btn-sm ${orderType === 'ปกติ' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setOrderType('ปกติ'); previewOrderNo('ปกติ') }}>{t('สินค้าปกติ (WT)')}</button>
+              <button type="button" className={`btn btn-sm ${orderType === 'Grade B' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setOrderType('Grade B'); previewOrderNo('Grade B') }}>{t('สินค้า Grade B (GB)')}</button>
             </div>
           </div>
 
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 13, color: 'var(--text-light)' }}>เลขที่ออเดอร์ (โดยประมาณ)</span>
-              <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--navy)' }}>{orderNo || 'กำลังโหลด...'}</span>
+              <span style={{ fontSize: 13, color: 'var(--text-light)' }}>{t('เลขที่ออเดอร์ (โดยประมาณ)')}</span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--navy)' }}>{orderNo || t('กำลังโหลด...')}</span>
             </div>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: -10, marginBottom: 16 }}>เลขนี้จะยังไม่ถูกใช้จนกว่าจะกดบันทึกออเดอร์จริง</div>
+          <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: -10, marginBottom: 16 }}>{lang === 'en' ? "This number isn't reserved until you actually save the order" : 'เลขนี้จะยังไม่ถูกใช้จนกว่าจะกดบันทึกออเดอร์จริง'}</div>
 
           <div className="form-group">
-            <label className="form-label required">เลขที่ใบเสนอราคา</label>
+            <label className="form-label required">{t('เลขที่ใบเสนอราคา')}</label>
             <SearchableSelect
               options={availableQuots} value={quotationId} onChange={onQuotationChange}
-              placeholder={usedQuotationIds === null ? 'กำลังโหลด...' : '-- พิมพ์เพื่อค้นหาเลขที่ใบเสนอราคา --'}
+              placeholder={usedQuotationIds === null ? t('กำลังโหลด...') : (lang === 'en' ? '-- Type to search quotation no. --' : '-- พิมพ์เพื่อค้นหาเลขที่ใบเสนอราคา --')}
               getOptionLabel={q => `${q.quot_no} - ${q.subject} (${companyById.get(q.company_id)?.name || '-'})`}
               disabled={usedQuotationIds === null}
             />
-            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>แสดงเฉพาะใบเสนอราคาที่ยังไม่ถูกใช้เปิดออเดอร์อื่น</div>
+            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('แสดงเฉพาะใบเสนอราคาที่ยังไม่ถูกใช้เปิดออเดอร์อื่น')}</div>
           </div>
 
           {companyId && (
             <div className="card" style={{ marginBottom: 14 }}>
               <div className="card-body" style={{ fontSize: 13, lineHeight: 1.7 }}>
                 <div><b>{customerName}</b></div>
-                {companyInfo.tax_id && <div>เลขประจำตัวผู้เสียภาษี: {companyInfo.tax_id}</div>}
-                {companyInfo.address && <div>ที่อยู่: {companyInfo.address}</div>}
-                {companyInfo.phone && <div>โทร: {companyInfo.phone}</div>}
-                {companyInfo.email && <div>อีเมล: {companyInfo.email}</div>}
+                {companyInfo.tax_id && <div>{t('เลขประจำตัวผู้เสียภาษี')}: {companyInfo.tax_id}</div>}
+                {companyInfo.address && <div>{t('ที่อยู่')}: {companyInfo.address}</div>}
+                {companyInfo.phone && <div>{t('โทร')}: {companyInfo.phone}</div>}
+                {companyInfo.email && <div>{t('อีเมล')}: {companyInfo.email}</div>}
               </div>
             </div>
           )}
 
-          <label className="form-label" style={{ marginTop: 4 }}>รายการสินค้า</label>
+          <label className="form-label" style={{ marginTop: 4 }}>{t('รายการสินค้า')}</label>
           <div className="table-wrap" style={{ marginBottom: 4 }}>
             <table>
               <thead>
                 <tr>
-                  <th>สินค้า / รายการ</th>
-                  <th style={{ width: 70 }}>จำนวน</th>
-                  <th style={{ width: 120 }}>ราคา/หน่วย</th>
-                  <th style={{ width: 110 }}>รวม</th>
+                  <th>{t('สินค้า / รายการ')}</th>
+                  <th style={{ width: 70 }}>{t('จำนวน')}</th>
+                  <th style={{ width: 120 }}>{t('ราคา/หน่วย')}</th>
+                  <th style={{ width: 110 }}>{t('รวม')}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -164,55 +169,55 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
                 {items.map((it, i) => (
                   <tr key={i}>
                     <td>
-                      <SearchableSelect options={products || []} value={it.product_id} onChange={v => onProductChange(i, v)} freeText={it.description} onFreeTextChange={v => updateItem(i, { description: v })} placeholder={products ? '-- พิมพ์ชื่อสินค้า หรือพิมพ์เอง --' : 'กำลังโหลด...'} getOptionLabel={p => `${p.code} - ${p.name}`} disabled={!products} />
+                      <SearchableSelect options={products || []} value={it.product_id} onChange={v => onProductChange(i, v)} freeText={it.description} onFreeTextChange={v => updateItem(i, { description: v })} placeholder={products ? (lang === 'en' ? '-- Type a product name, or type your own --' : '-- พิมพ์ชื่อสินค้า หรือพิมพ์เอง --') : t('กำลังโหลด...')} getOptionLabel={p => `${p.code} - ${p.name}`} disabled={!products} />
                     </td>
                     <td><input className="form-control" type="number" min="0" value={it.quantity} onChange={e => updateItem(i, { quantity: e.target.value })} /></td>
                     <td><input className="form-control" type="number" min="0" value={it.unit_price} onChange={e => updateItem(i, { unit_price: e.target.value })} /></td>
                     <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)).toLocaleString('th-TH')}</td>
-                    <td><button type="button" className="btn btn-danger btn-xs" onClick={() => removeItem(i)}>ลบ</button></td>
+                    <td><button type="button" className="btn btn-danger btn-xs" onClick={() => removeItem(i)}>{t('ลบ')}</button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <button type="button" className="btn btn-outline btn-sm" onClick={addItem}>+ เพิ่มรายการ</button>
+          <button type="button" className="btn btn-outline btn-sm" onClick={addItem}>{t('+ เพิ่มรายการ')}</button>
           <div className="card" style={{ marginTop: 8, marginBottom: 14 }}>
             <div className="card-body" style={{ display: 'flex', justifyContent: 'flex-end', gap: 24, fontSize: 13 }}>
-              <div>ไม่รวม VAT: <b>{totals.exVat.toLocaleString('th-TH')}</b></div>
+              <div>{t('ไม่รวม VAT')}: <b>{totals.exVat.toLocaleString('th-TH')}</b></div>
               <div>VAT 7%: <b>{totals.vatAmount.toLocaleString('th-TH')}</b></div>
-              <div>รวมทั้งสิ้น: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(totals.subtotalIncVat)}</b></div>
+              <div>{t('รวมทั้งสิ้น')}: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(totals.subtotalIncVat)}</b></div>
             </div>
           </div>
 
-          <label className="form-label" style={{ marginTop: 4 }}>ที่อยู่จัดส่ง</label>
+          <label className="form-label" style={{ marginTop: 4 }}>{t('ที่อยู่จัดส่ง')}</label>
           <div className="form-group">
-            <label className="form-label required">ที่อยู่สำหรับจัดส่งสินค้า</label>
+            <label className="form-label required">{t('ที่อยู่สำหรับจัดส่งสินค้า')}</label>
             <textarea className="form-control" rows={2} value={shippingAddress} onChange={e => setShippingAddress(e.target.value)} />
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">ชื่อผู้รับ (ถ้ามี)</label>
+              <label className="form-label">{t('ชื่อผู้รับ (ถ้ามี)')}</label>
               <input className="form-control" value={shippingContactName} onChange={e => setShippingContactName(e.target.value)} />
             </div>
             <div className="form-group">
-              <label className="form-label">เบอร์โทรผู้รับ (ถ้ามี)</label>
+              <label className="form-label">{t('เบอร์โทรผู้รับ (ถ้ามี)')}</label>
               <input className="form-control" value={shippingContactPhone} onChange={e => setShippingContactPhone(e.target.value)} />
             </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label">หมายเหตุ</label>
+            <label className="form-label">{t('หมายเหตุ')}</label>
             <textarea className="form-control" rows={2} value={remark} onChange={e => setRemark(e.target.value)} />
           </div>
 
           <div className="form-group">
-            <label className="form-label">เซลล์ผู้เปิดออเดอร์</label>
+            <label className="form-label">{t('เซลล์ผู้เปิดออเดอร์')}</label>
             <input className="form-control" value={currentUser.name} disabled />
           </div>
         </div>
         <div className="modal-footer">
-          <button className="btn btn-outline" onClick={onClose} disabled={saving}>ยกเลิก</button>
-          <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? 'กำลังบันทึก...' : 'บันทึกออเดอร์'}</button>
+          <button className="btn btn-outline" onClick={onClose} disabled={saving}>{t('ยกเลิก')}</button>
+          <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? t('กำลังบันทึก...') : t('บันทึกออเดอร์')}</button>
         </div>
       </div>
     </div>
@@ -222,13 +227,14 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
 // ป็อปอัปดูรายละเอียดออเดอร์ (อ่านอย่างเดียว) + ปุ่มยกเลิก — ไม่มีโหมดแก้ไขเพราะออเดอร์ที่บันทึกแล้วแก้ไม่ได้
 export function OrderDetailModal({ order, items, onClose, onCancel }) {
   const { toast } = useUi()
+  const { t, lang } = useLanguage()
   const [reason, setReason] = useState('')
   const [showCancelForm, setShowCancelForm] = useState(false)
   const [busy, setBusy] = useState(false)
 
   // onCancel (App.jsx action) จัดการ toast/error เองผ่าน run() อยู่แล้ว ไม่โยน error กลับมา — ปิดมอดัลได้ทันทีหลัง await
   const doCancel = async () => {
-    if (!reason.trim()) { toast('กรุณาระบุเหตุผลที่ยกเลิก', 'error'); return }
+    if (!reason.trim()) { toast(t('กรุณาระบุเหตุผลที่ยกเลิก'), 'error'); return }
     setBusy(true)
     await onCancel(order, reason.trim())
     onClose()
@@ -244,27 +250,27 @@ export function OrderDetailModal({ order, items, onClose, onCancel }) {
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={{ maxWidth: 680 }}>
         <div className="modal-header">
-          <div className="modal-title">ออเดอร์ · {order.order_no}</div>
+          <div className="modal-title">{lang === 'en' ? 'Order' : 'ออเดอร์'} · {order.order_no}</div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
-          {order.order_type === 'Grade B' && <Row label="ประเภทออเดอร์" value={<span className="badge badge-orange">Grade B</span>} />}
-          <Row label="เลขที่ใบเสนอราคา" value={order.quot_no || '-'} />
-          <Row label="บริษัท" value={order.customer_name || order.company?.name || '-'} />
-          {order.company_tax_id && <Row label="เลขประจำตัวผู้เสียภาษี" value={order.company_tax_id} />}
-          {order.company_address && <Row label="ที่อยู่บริษัท" value={order.company_address} />}
-          {order.company_phone && <Row label="โทรศัพท์บริษัท" value={order.company_phone} />}
-          {order.company_email && <Row label="อีเมลบริษัท" value={order.company_email} />}
-          <Row label="ที่อยู่จัดส่ง" value={order.shipping_address} />
-          {order.shipping_contact_name && <Row label="ผู้รับ" value={`${order.shipping_contact_name}${order.shipping_contact_phone ? ` (${order.shipping_contact_phone})` : ''}`} />}
-          {order.remark && <Row label="หมายเหตุ" value={order.remark} />}
-          <Row label="เซลล์ผู้เปิดออเดอร์" value={order.sales_name || '-'} />
-          <Row label="สถานะ" value={<span className={`badge ${order.status === 'Active' ? 'badge-green' : 'badge-gray'}`}>{order.status === 'Active' ? 'ใช้งานอยู่' : 'ยกเลิกแล้ว'}</span>} />
-          {order.status === 'Cancelled' && order.cancel_reason && <Row label="เหตุผลที่ยกเลิก" value={order.cancel_reason} />}
+          {order.order_type === 'Grade B' && <Row label={t('ประเภทออเดอร์')} value={<span className="badge badge-orange">Grade B</span>} />}
+          <Row label={t('เลขที่ใบเสนอราคา')} value={order.quot_no || '-'} />
+          <Row label={t('บริษัท')} value={order.customer_name || order.company?.name || '-'} />
+          {order.company_tax_id && <Row label={t('เลขประจำตัวผู้เสียภาษี')} value={order.company_tax_id} />}
+          {order.company_address && <Row label={t('ที่อยู่บริษัท')} value={order.company_address} />}
+          {order.company_phone && <Row label={t('โทรศัพท์บริษัท')} value={order.company_phone} />}
+          {order.company_email && <Row label={t('อีเมลบริษัท')} value={order.company_email} />}
+          <Row label={t('ที่อยู่จัดส่ง')} value={order.shipping_address} />
+          {order.shipping_contact_name && <Row label={t('ผู้รับ')} value={`${order.shipping_contact_name}${order.shipping_contact_phone ? ` (${order.shipping_contact_phone})` : ''}`} />}
+          {order.remark && <Row label={t('หมายเหตุ')} value={order.remark} />}
+          <Row label={t('เซลล์ผู้เปิดออเดอร์')} value={order.sales_name || '-'} />
+          <Row label={t('สถานะ')} value={<span className={`badge ${order.status === 'Active' ? 'badge-green' : 'badge-gray'}`}>{order.status === 'Active' ? t('ใช้งานอยู่') : t('ยกเลิกแล้ว')}</span>} />
+          {order.status === 'Cancelled' && order.cancel_reason && <Row label={t('เหตุผลที่ยกเลิก')} value={order.cancel_reason} />}
 
           <div className="table-wrap" style={{ marginTop: 12 }}>
             <table>
-              <thead><tr><th>สินค้า/รายการ</th><th style={{ textAlign: 'center' }}>จำนวน</th><th style={{ textAlign: 'right' }}>ราคา/หน่วย</th><th style={{ textAlign: 'right' }}>รวม</th></tr></thead>
+              <thead><tr><th>{lang === 'en' ? 'Product/Item' : 'สินค้า/รายการ'}</th><th style={{ textAlign: 'center' }}>{t('จำนวน')}</th><th style={{ textAlign: 'right' }}>{t('ราคา/หน่วย')}</th><th style={{ textAlign: 'right' }}>{t('รวม')}</th></tr></thead>
               <tbody>
                 {(items || []).map(it => (
                   <tr key={it.id}>
@@ -277,26 +283,26 @@ export function OrderDetailModal({ order, items, onClose, onCancel }) {
               </tbody>
             </table>
           </div>
-          <div style={{ textAlign: 'right', marginTop: 8, fontSize: 13 }}>ยอดรวม: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(order.value)}</b></div>
+          <div style={{ textAlign: 'right', marginTop: 8, fontSize: 13 }}>{t('ยอดรวม')}: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(order.value)}</b></div>
 
           {order.status === 'Active' && (
             showCancelForm ? (
               <div className="form-group" style={{ marginTop: 16 }}>
-                <label className="form-label required">เหตุผลที่ยกเลิกออเดอร์</label>
-                <textarea className="form-control" rows={2} value={reason} onChange={e => setReason(e.target.value)} placeholder="เช่น ลงข้อมูลผิด กรอกจำนวน/ราคาผิด" />
+                <label className="form-label required">{t('เหตุผลที่ยกเลิกออเดอร์')}</label>
+                <textarea className="form-control" rows={2} value={reason} onChange={e => setReason(e.target.value)} placeholder={lang === 'en' ? 'e.g. wrong data entered, wrong quantity/price' : 'เช่น ลงข้อมูลผิด กรอกจำนวน/ราคาผิด'} />
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button className="btn btn-outline btn-sm" onClick={() => setShowCancelForm(false)} disabled={busy}>ไม่ยกเลิก</button>
-                  <button className="btn btn-danger btn-sm" onClick={doCancel} disabled={busy}>{busy ? 'กำลังยกเลิก...' : 'ยืนยันยกเลิกออเดอร์'}</button>
+                  <button className="btn btn-outline btn-sm" onClick={() => setShowCancelForm(false)} disabled={busy}>{t('ไม่ยกเลิก')}</button>
+                  <button className="btn btn-danger btn-sm" onClick={doCancel} disabled={busy}>{busy ? t('กำลังยกเลิก...') : t('ยืนยันยกเลิกออเดอร์')}</button>
                 </div>
               </div>
             ) : (
               <div style={{ marginTop: 16 }}>
-                <button className="btn btn-danger btn-sm" onClick={() => setShowCancelForm(true)}>ยกเลิกออเดอร์</button>
+                <button className="btn btn-danger btn-sm" onClick={() => setShowCancelForm(true)}>{t('ยกเลิกออเดอร์')}</button>
               </div>
             )
           )}
         </div>
-        <div className="modal-footer"><button className="btn btn-outline" onClick={onClose}>ปิด</button></div>
+        <div className="modal-footer"><button className="btn btn-outline" onClick={onClose}>{t('ปิด')}</button></div>
       </div>
     </div>
   )
