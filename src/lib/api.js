@@ -812,8 +812,9 @@ export async function markAllNotificationsRead() {
 
 // ===== ORDERS (รันเลขออเดอร์จากใบเสนอราคา เพื่อเอาไปเปิดบิลต่อในระบบบัญชีอื่น) =====
 // เรียกตอนเปิดฟอร์มสร้างออเดอร์เลย (ไม่รอบันทึก) ให้เซลล์เห็นเลขทันที — เลขที่รันไปแล้วแต่ปิดฟอร์มไม่บันทึกจะถูกข้ามไป ไม่ใช้ซ้ำ (เหมือนเลขบิลที่ฉีกทิ้งได้)
-export async function genOrderNo() {
-  const { data, error } = await supabase.rpc('gen_order_no')
+// orderType: 'ปกติ' (WT, ค่าเริ่มต้น) หรือ 'Grade B' (GB) — คนละชุดเลขรัน แยกกันคนละ counter
+export async function genOrderNo(orderType = 'ปกติ') {
+  const { data, error } = await supabase.rpc('gen_order_no', { p_order_type: orderType })
   if (error) throw error
   return data
 }

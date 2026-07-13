@@ -19,6 +19,7 @@ function mapCopiedItems(rows) {
 // onSave(fields, items) — บันทึกแล้วแก้ไขไม่ได้อีก (ยกเลิกได้อย่างเดียว) จึงไม่มีโหมดแก้ไขในคอมโพเนนต์นี้
 export default function OrderModal({ companies, quotations, currentUser, onClose, onSave }) {
   const { toast, confirm } = useUi()
+  const [orderType, setOrderType] = useState('ปกติ')
   const [orderNo, setOrderNo] = useState(null)
   const [quotationId, setQuotationId] = useState('')
   const [companyId, setCompanyId] = useState('')
@@ -33,10 +34,14 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
   const [usedQuotationIds, setUsedQuotationIds] = useState(null)
   const [products, setProducts] = useState(null)
 
+  // รันเลขออเดอร์ใหม่ทุกครั้งที่เปลี่ยนประเภท เพราะ WT (ปกติ) กับ GB (Grade B) เป็นคนละชุดเลข — เลขที่รันข้ามไปตอนสลับประเภทถือว่าฉีกทิ้ง ไม่ใช้ซ้ำ เหมือนตอนปิดฟอร์มไม่บันทึก
+  const rollOrderNo = (type) => { setOrderNo(null); genOrderNo(type).then(setOrderNo).catch(e => toast('รันเลขออเดอร์ไม่สำเร็จ: ' + e.message, 'error')) }
+
   useEffect(() => {
     fetchActiveOrderQuotationIds().then(setUsedQuotationIds).catch(() => setUsedQuotationIds(new Set()))
     listProducts().then(setProducts).catch(() => setProducts([]))
-    genOrderNo().then(setOrderNo).catch(e => toast('รันเลขออเดอร์ไม่สำเร็จ: ' + e.message, 'error'))
+    rollOrderNo(orderType)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const companyById = new Map(companies.map(c => [c.id, c]))
@@ -80,7 +85,7 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
     if (!shippingAddress.trim()) { toast('กรุณากรอกที่อยู่จัดส่ง', 'error'); return }
     if (!(await confirm(`ยืนยันบันทึกออเดอร์เลขที่ ${orderNo}?\n\nหลังบันทึกแล้วจะแก้ไขข้อมูลไม่ได้อีก หากลงข้อมูลผิดต้องยกเลิกออเดอร์นี้แล้วเปิดออเดอร์ใหม่เท่านั้น`))) return
     onSave({
-      order_no: orderNo, quotation_id: quotationId, quot_no: quotNo, company_id: companyId || null, customer_name: customerName,
+      order_no: orderNo, order_type: orderType, quotation_id: quotationId, quot_no: quotNo, company_id: companyId || null, customer_name: customerName,
       company_tax_id: companyInfo.tax_id || null, company_address: companyInfo.address || null,
       company_phone: companyInfo.phone || null, company_email: companyInfo.email || null,
       shipping_address: shippingAddress.trim(), shipping_contact_name: shippingContactName.trim() || null,
@@ -97,6 +102,14 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
+          <div className="form-group">
+            <label className="form-label">ประเภทออเดอร์</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" className={`btn btn-sm ${orderType === 'ปกติ' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setOrderType('ปกติ'); rollOrderNo('ปกติ') }}>สินค้าปกติ (WT)</button>
+              <button type="button" className={`btn btn-sm ${orderType === 'Grade B' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setOrderType('Grade B'); rollOrderNo('Grade B') }}>สินค้า Grade B (GB)</button>
+            </div>
+          </div>
+
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 13, color: 'var(--text-light)' }}>เลขที่ออเดอร์</span>
@@ -227,6 +240,7 @@ export function OrderDetailModal({ order, items, onClose, onCancel }) {
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
+          {order.order_type === 'Grade B' && <Row label="ประเภทออเดอร์" value={<span className="badge badge-orange">Grade B</span>} />}
           <Row label="เลขที่ใบเสนอราคา" value={order.quot_no || '-'} />
           <Row label="บริษัท" value={order.customer_name || order.company?.name || '-'} />
           {order.company_tax_id && <Row label="เลขประจำตัวผู้เสียภาษี" value={order.company_tax_id} />}

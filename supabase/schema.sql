@@ -284,6 +284,9 @@ alter table orders add column if not exists company_phone text;
 alter table orders add column if not exists company_email text;
 alter table orders add column if not exists remark text;
 
+-- order_type = ประเภทออเดอร์ที่เซลล์เลือกก่อนรันเลข ('ปกติ' รันเป็น WT, 'Grade B' รันเป็น GB) — ดู gen_order_no() ด้านล่าง
+alter table orders add column if not exists order_type text not null default 'ปกติ' check (order_type in ('ปกติ', 'Grade B'));
+
 -- ===== ORDER ITEMS (snapshot รายการสินค้าจากใบเสนอราคา ณ ตอนเปิดออเดอร์ — ไม่ผูกสดกับ quotation_items เพราะใบเสนอราคาแก้ไขทีหลังได้ แต่ออเดอร์ต้องคงข้อมูล ณ วันที่เปิดไว้) =====
 create table if not exists order_items (
   id           uuid primary key default uuid_generate_v4(),
@@ -300,25 +303,33 @@ create table if not exists order_items (
 create unique index if not exists idx_orders_active_quotation on orders(quotation_id) where status = 'Active';
 
 -- เลขออเดอร์: นับแยกตามปี (ปีเปลี่ยน = เริ่มนับ 0001 ใหม่) ต่างจาก gen_pr_no/gen_quot_no ที่นับต่อเนื่องไม่รีเซ็ต
+-- แยกตัวนับตามประเภทออเดอร์ด้วย (order_type) เพราะ WT (ปกติ) กับ GB (Grade B) ต้องรันคนละชุดเลข ไม่ปนกัน
 create table if not exists order_no_counters (
-  year     int primary key,
-  counter  int not null default 0
+  year        int not null,
+  counter     int not null default 0,
+  order_type  text not null default 'ปกติ'
 );
+alter table order_no_counters add column if not exists order_type text not null default 'ปกติ';
+alter table order_no_counters drop constraint if exists order_no_counters_pkey;
+alter table order_no_counters add constraint order_no_counters_pkey primary key (year, order_type);
 
 -- security definer: bypass RLS บนตาราง counter นี้ (ไม่มีใครควรเขียนตรงๆ นอกจากผ่านฟังก์ชันนี้) — ต่างจาก gen_pr_no/gen_quot_no ที่ใช้ sequence ซึ่งไม่ผ่าน RLS อยู่แล้ว
-create or replace function gen_order_no() returns text as $$
+-- p_order_type: 'ปกติ' รันเลขรูปแบบ WTE{ปี}WT{เลขรัน} เดิม, 'Grade B' รันเป็น WTE{ปี}GB{เลขรัน} แยกชุดเลขต่างหาก
+drop function if exists gen_order_no();
+create or replace function gen_order_no(p_order_type text default 'ปกติ') returns text as $$
 declare
   yr int := extract(year from now())::int;
   yy text := to_char(now(), 'YY');
+  code text := case when p_order_type = 'Grade B' then 'GB' else 'WT' end;
   n int;
 begin
-  insert into order_no_counters (year, counter) values (yr, 1)
-  on conflict (year) do update set counter = order_no_counters.counter + 1
+  insert into order_no_counters (year, order_type, counter) values (yr, p_order_type, 1)
+  on conflict (year, order_type) do update set counter = order_no_counters.counter + 1
   returning counter into n;
-  return 'WTE' || yy || 'WT' || lpad(n::text, 4, '0');
+  return 'WTE' || yy || code || lpad(n::text, 4, '0');
 end;
 $$ language plpgsql security definer set search_path = public;
-grant execute on function gen_order_no() to authenticated;
+grant execute on function gen_order_no(text) to authenticated;
 
 -- บังคับกฎ "แก้ไขไม่ได้หลังบันทึก ต้องยกเลิกเท่านั้น" ที่ระดับฐานข้อมูล (กันเผลอแก้ผ่านทางอื่นนอกแอป) —
 -- อนุญาตแค่เปลี่ยนสถานะเป็น Cancelled พร้อม cancel_reason/cancelled_at เท่านั้น ห้ามแก้ฟิลด์อื่นหรือแก้ออเดอร์ที่ยกเลิกไปแล้ว
@@ -338,7 +349,8 @@ begin
     new.company_address is distinct from old.company_address or
     new.company_phone is distinct from old.company_phone or
     new.company_email is distinct from old.company_email or
-    new.remark is distinct from old.remark
+    new.remark is distinct from old.remark or
+    new.order_type is distinct from old.order_type
   ) then
     raise exception 'ออเดอร์ที่บันทึกแล้วแก้ไขไม่ได้ ถ้าลงข้อมูลผิดต้องยกเลิกแล้วเปิดออเดอร์ใหม่';
   end if;
