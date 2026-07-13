@@ -331,6 +331,22 @@ end;
 $$ language plpgsql security definer set search_path = public;
 grant execute on function gen_order_no(text) to authenticated;
 
+-- ดูตัวอย่างเลขออเดอร์ถัดไปแบบ "อ่านอย่างเดียว" ไม่เพิ่ม counter จริง — ใช้โชว์พรีวิวตอนเปิดฟอร์ม/สลับประเภทก่อนกดบันทึก
+-- เลขจริงจะถูกจอง (เพิ่ม counter) ก็ต่อเมื่อกดบันทึกออเดอร์แล้วเรียก gen_order_no() เท่านั้น กันเลขถูกใช้ไปเปล่าๆ ตอนแค่เปิดฟอร์มดูหรือสลับประเภทไปมา
+create or replace function peek_order_no(p_order_type text default 'ปกติ') returns text as $$
+declare
+  yr int := extract(year from now())::int;
+  yy text := to_char(now(), 'YY');
+  code text := case when p_order_type = 'Grade B' then 'GB' else 'WT' end;
+  n int;
+begin
+  select counter into n from order_no_counters where year = yr and order_type = p_order_type;
+  n := coalesce(n, 0) + 1;
+  return 'WTE' || yy || code || lpad(n::text, 4, '0');
+end;
+$$ language plpgsql security definer set search_path = public;
+grant execute on function peek_order_no(text) to authenticated;
+
 -- บังคับกฎ "แก้ไขไม่ได้หลังบันทึก ต้องยกเลิกเท่านั้น" ที่ระดับฐานข้อมูล (กันเผลอแก้ผ่านทางอื่นนอกแอป) —
 -- อนุญาตแค่เปลี่ยนสถานะเป็น Cancelled พร้อม cancel_reason/cancelled_at เท่านั้น ห้ามแก้ฟิลด์อื่นหรือแก้ออเดอร์ที่ยกเลิกไปแล้ว
 create or replace function guard_orders_immutable() returns trigger as $$

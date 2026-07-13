@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { listQuotationItems, computeDealTotals, fetchActiveOrderQuotationIds, listProducts, genOrderNo } from '../lib/api'
+import { listQuotationItems, computeDealTotals, fetchActiveOrderQuotationIds, listProducts, genOrderNo, peekOrderNo } from '../lib/api'
 import { fmtCurrency } from '../lib/format'
 import { useUi } from './UiContext'
 import SearchableSelect from './SearchableSelect'
@@ -15,12 +15,14 @@ function mapCopiedItems(rows) {
 }
 
 // ฟอร์มสร้างออเดอร์ใหม่ — เลือกใบเสนอราคา -> คัดลอกบริษัท (ชื่อ/เลขผู้เสียภาษี/ที่อยู่/เบอร์/อีเมล) + รายการสินค้าทั้งหมดมาให้อัตโนมัติ -> กรอกที่อยู่จัดส่งเพิ่ม
-// เลขออเดอร์ (WTE{ปี}WT{เลขรัน}) รันทันทีตอนเปิดฟอร์ม (ไม่รอบันทึก) ให้เซลล์เห็นเลขล่วงหน้าได้
+// เลขออเดอร์ (WTE{ปี}WT{เลขรัน}) ที่โชว์ตอนเปิดฟอร์ม/สลับประเภท เป็นแค่ "พรีวิว" (peekOrderNo — อ่านอย่างเดียว ไม่เพิ่ม counter)
+// เลขจริงจะถูกจอง (เพิ่ม counter จริงผ่าน genOrderNo) ตอนกดบันทึกออเดอร์เท่านั้น กันเลขถูกใช้ไปเปล่าๆ จากการเปิดฟอร์มดูหรือสลับประเภทไปมาโดยไม่ได้บันทึก
 // onSave(fields, items) — บันทึกแล้วแก้ไขไม่ได้อีก (ยกเลิกได้อย่างเดียว) จึงไม่มีโหมดแก้ไขในคอมโพเนนต์นี้
 export default function OrderModal({ companies, quotations, currentUser, onClose, onSave }) {
   const { toast, confirm } = useUi()
   const [orderType, setOrderType] = useState('ปกติ')
   const [orderNo, setOrderNo] = useState(null)
+  const [saving, setSaving] = useState(false)
   const [quotationId, setQuotationId] = useState('')
   const [companyId, setCompanyId] = useState('')
   const [customerName, setCustomerName] = useState('')
@@ -34,13 +36,13 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
   const [usedQuotationIds, setUsedQuotationIds] = useState(null)
   const [products, setProducts] = useState(null)
 
-  // รันเลขออเดอร์ใหม่ทุกครั้งที่เปลี่ยนประเภท เพราะ WT (ปกติ) กับ GB (Grade B) เป็นคนละชุดเลข — เลขที่รันข้ามไปตอนสลับประเภทถือว่าฉีกทิ้ง ไม่ใช้ซ้ำ เหมือนตอนปิดฟอร์มไม่บันทึก
-  const rollOrderNo = (type) => { setOrderNo(null); genOrderNo(type).then(setOrderNo).catch(e => toast('รันเลขออเดอร์ไม่สำเร็จ: ' + e.message, 'error')) }
+  // แค่ดูตัวอย่างเลขถัดไป (ไม่เพิ่ม counter จริง) ทุกครั้งที่เปลี่ยนประเภท เพราะ WT (ปกติ) กับ GB (Grade B) เป็นคนละชุดเลข
+  const previewOrderNo = (type) => { setOrderNo(null); peekOrderNo(type).then(setOrderNo).catch(e => toast('ดูเลขออเดอร์ไม่สำเร็จ: ' + e.message, 'error')) }
 
   useEffect(() => {
     fetchActiveOrderQuotationIds().then(setUsedQuotationIds).catch(() => setUsedQuotationIds(new Set()))
     listProducts().then(setProducts).catch(() => setProducts([]))
-    rollOrderNo(orderType)
+    previewOrderNo(orderType)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -84,8 +86,13 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
     if (!cleanItems.length) { toast('กรุณาใส่รายการสินค้าอย่างน้อย 1 รายการ', 'error'); return }
     if (!shippingAddress.trim()) { toast('กรุณากรอกที่อยู่จัดส่ง', 'error'); return }
     if (!(await confirm(`ยืนยันบันทึกออเดอร์เลขที่ ${orderNo}?\n\nหลังบันทึกแล้วจะแก้ไขข้อมูลไม่ได้อีก หากลงข้อมูลผิดต้องยกเลิกออเดอร์นี้แล้วเปิดออเดอร์ใหม่เท่านั้น`))) return
+    setSaving(true)
+    // จองเลขออเดอร์จริงตรงนี้เท่านั้น (เพิ่ม counter จริง) — ก่อนหน้านี้ที่โชว์อยู่เป็นแค่พรีวิว เผื่อมีคนอื่นบันทึกออเดอร์ประเภทเดียวกันแทรกไปก่อน เลขจริงอาจไม่ตรงกับที่ยืนยันแบบเป๊ะๆ แต่ไม่มีทางซ้ำกันแน่นอน
+    let realOrderNo
+    try { realOrderNo = await genOrderNo(orderType) }
+    catch (e) { toast('รันเลขออเดอร์ไม่สำเร็จ: ' + e.message, 'error'); setSaving(false); return }
     onSave({
-      order_no: orderNo, order_type: orderType, quotation_id: quotationId, quot_no: quotNo, company_id: companyId || null, customer_name: customerName,
+      order_no: realOrderNo, order_type: orderType, quotation_id: quotationId, quot_no: quotNo, company_id: companyId || null, customer_name: customerName,
       company_tax_id: companyInfo.tax_id || null, company_address: companyInfo.address || null,
       company_phone: companyInfo.phone || null, company_email: companyInfo.email || null,
       shipping_address: shippingAddress.trim(), shipping_contact_name: shippingContactName.trim() || null,
@@ -105,17 +112,18 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
           <div className="form-group">
             <label className="form-label">ประเภทออเดอร์</label>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" className={`btn btn-sm ${orderType === 'ปกติ' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setOrderType('ปกติ'); rollOrderNo('ปกติ') }}>สินค้าปกติ (WT)</button>
-              <button type="button" className={`btn btn-sm ${orderType === 'Grade B' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setOrderType('Grade B'); rollOrderNo('Grade B') }}>สินค้า Grade B (GB)</button>
+              <button type="button" className={`btn btn-sm ${orderType === 'ปกติ' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setOrderType('ปกติ'); previewOrderNo('ปกติ') }}>สินค้าปกติ (WT)</button>
+              <button type="button" className={`btn btn-sm ${orderType === 'Grade B' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setOrderType('Grade B'); previewOrderNo('Grade B') }}>สินค้า Grade B (GB)</button>
             </div>
           </div>
 
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 13, color: 'var(--text-light)' }}>เลขที่ออเดอร์</span>
-              <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--navy)' }}>{orderNo || 'กำลังรันเลข...'}</span>
+              <span style={{ fontSize: 13, color: 'var(--text-light)' }}>เลขที่ออเดอร์ (โดยประมาณ)</span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--navy)' }}>{orderNo || 'กำลังโหลด...'}</span>
             </div>
           </div>
+          <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: -10, marginBottom: 16 }}>เลขนี้จะยังไม่ถูกใช้จนกว่าจะกดบันทึกออเดอร์จริง</div>
 
           <div className="form-group">
             <label className="form-label required">เลขที่ใบเสนอราคา</label>
@@ -203,8 +211,8 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
           </div>
         </div>
         <div className="modal-footer">
-          <button className="btn btn-outline" onClick={onClose}>ยกเลิก</button>
-          <button className="btn btn-primary" onClick={submit}>บันทึกออเดอร์</button>
+          <button className="btn btn-outline" onClick={onClose} disabled={saving}>ยกเลิก</button>
+          <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? 'กำลังบันทึก...' : 'บันทึกออเดอร์'}</button>
         </div>
       </div>
     </div>
