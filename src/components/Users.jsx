@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { CONSTANTS, listProfiles, updateProfileRole, adminCreateUser, adminUpdateUserProfile, adminResetUserPassword, adminDeleteUser } from '../lib/api'
 import { fmtDate } from '../lib/format'
 import { useUi } from './UiContext'
+import { useLanguage } from './LanguageContext'
 
 const ROLE_LABEL = { admin: 'ผู้ดูแลระบบ', sale: 'พนักงานขาย', finance: 'ฝ่ายบัญชี' }
 
@@ -11,6 +12,7 @@ function genPassword() {
 
 function AddUserModal({ onClose, onCreated }) {
   const { toast } = useUi()
+  const { t } = useLanguage()
   const [f, setF] = useState({ email: '', full_name: '', password: genPassword() })
   const [saving, setSaving] = useState(false)
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
@@ -33,30 +35,30 @@ function AddUserModal({ onClose, onCreated }) {
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal">
         <div className="modal-header">
-          <div className="modal-title">เพิ่มผู้ใช้งานใหม่</div>
+          <div className="modal-title">{t('เพิ่มผู้ใช้งานใหม่')}</div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           <div className="form-group">
-            <label className="form-label required">อีเมล</label>
+            <label className="form-label required">{t('อีเมล')}</label>
             <input className="form-control" type="email" value={f.email} onChange={set('email')} autoFocus />
           </div>
           <div className="form-group">
-            <label className="form-label">ชื่อ-นามสกุล</label>
+            <label className="form-label">{t('ชื่อ-นามสกุล')}</label>
             <input className="form-control" value={f.full_name} onChange={set('full_name')} />
           </div>
           <div className="form-group">
-            <label className="form-label required">รหัสผ่านเริ่มต้น</label>
+            <label className="form-label required">{t('รหัสผ่านเริ่มต้น')}</label>
             <div style={{ display: 'flex', gap: 6 }}>
               <input className="form-control" value={f.password} onChange={set('password')} />
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => setF(s => ({ ...s, password: genPassword() }))}>สุ่มใหม่</button>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setF(s => ({ ...s, password: genPassword() }))}>{t('สุ่มใหม่')}</button>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>คัดลอกรหัสผ่านนี้ไปแจ้งพนักงานเอง — ระบบยังไม่มีอีเมลแจ้งอัตโนมัติ</div>
+            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('คัดลอกรหัสผ่านนี้ไปแจ้งพนักงานเอง — ระบบยังไม่มีอีเมลแจ้งอัตโนมัติ')}</div>
           </div>
         </div>
         <div className="modal-footer">
-          <button className="btn btn-outline" onClick={onClose}>ยกเลิก</button>
-          <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? 'กำลังบันทึก...' : 'สร้างผู้ใช้งาน'}</button>
+          <button className="btn btn-outline" onClick={onClose}>{t('ยกเลิก')}</button>
+          <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? t('กำลังบันทึก...') : t('สร้างผู้ใช้งาน')}</button>
         </div>
       </div>
     </div>
@@ -65,6 +67,7 @@ function AddUserModal({ onClose, onCreated }) {
 
 function EditUserModal({ user, onClose, onSaved }) {
   const { toast } = useUi()
+  const { t } = useLanguage()
   const [f, setF] = useState({ full_name: user.full_name || '', email: user.email || '' })
   const [saving, setSaving] = useState(false)
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
@@ -86,22 +89,22 @@ function EditUserModal({ user, onClose, onSaved }) {
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal">
         <div className="modal-header">
-          <div className="modal-title">แก้ไขผู้ใช้งาน</div>
+          <div className="modal-title">{t('แก้ไขผู้ใช้งาน')}</div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           <div className="form-group">
-            <label className="form-label">ชื่อ-นามสกุล</label>
+            <label className="form-label">{t('ชื่อ-นามสกุล')}</label>
             <input className="form-control" value={f.full_name} onChange={set('full_name')} autoFocus />
           </div>
           <div className="form-group">
-            <label className="form-label required">อีเมล</label>
+            <label className="form-label required">{t('อีเมล')}</label>
             <input className="form-control" type="email" value={f.email} onChange={set('email')} />
           </div>
         </div>
         <div className="modal-footer">
-          <button className="btn btn-outline" onClick={onClose}>ยกเลิก</button>
-          <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? 'กำลังบันทึก...' : 'บันทึก'}</button>
+          <button className="btn btn-outline" onClick={onClose}>{t('ยกเลิก')}</button>
+          <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? t('กำลังบันทึก...') : t('บันทึก')}</button>
         </div>
       </div>
     </div>
@@ -111,6 +114,7 @@ function EditUserModal({ user, onClose, onSaved }) {
 // แสดงรหัสผ่านใหม่ให้แอดมินครั้งเดียวหลังรีเซ็ต — ระบบไม่เก็บ/แสดงรหัสผ่านเดิมได้เลย (Supabase Auth เก็บแบบ hash) จึงทำได้แค่ตั้งรหัสใหม่แทน
 function NewPasswordModal({ password, onClose }) {
   const { toast } = useUi()
+  const { t } = useLanguage()
   const copy = async () => {
     try { await navigator.clipboard.writeText(password); toast('คัดลอกรหัสผ่านแล้ว', 'success') }
     catch { toast('คัดลอกไม่สำเร็จ กรุณาคัดลอกเองจากช่องด้านล่าง', 'error') }
@@ -119,21 +123,21 @@ function NewPasswordModal({ password, onClose }) {
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal">
         <div className="modal-header">
-          <div className="modal-title">รีเซ็ตรหัสผ่านสำเร็จ</div>
+          <div className="modal-title">{t('รีเซ็ตรหัสผ่านสำเร็จ')}</div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           <div className="form-group">
-            <label className="form-label">รหัสผ่านใหม่</label>
+            <label className="form-label">{t('รหัสผ่านใหม่')}</label>
             <div style={{ display: 'flex', gap: 6 }}>
               <input className="form-control" value={password} readOnly />
-              <button type="button" className="btn btn-outline btn-sm" onClick={copy}>คัดลอก</button>
+              <button type="button" className="btn btn-outline btn-sm" onClick={copy}>{t('คัดลอก')}</button>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>คัดลอกรหัสผ่านนี้ไปแจ้งพนักงานเอง — ปิดหน้าต่างนี้แล้วจะดูรหัสผ่านนี้ซ้ำไม่ได้อีก</div>
+            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('คัดลอกรหัสผ่านนี้ไปแจ้งพนักงานเอง — ปิดหน้าต่างนี้แล้วจะดูรหัสผ่านนี้ซ้ำไม่ได้อีก')}</div>
           </div>
         </div>
         <div className="modal-footer">
-          <button className="btn btn-primary" onClick={onClose}>ปิด</button>
+          <button className="btn btn-primary" onClick={onClose}>{t('ปิด')}</button>
         </div>
       </div>
     </div>
@@ -142,6 +146,7 @@ function NewPasswordModal({ password, onClose }) {
 
 export default function Users({ currentUserId, accessToken }) {
   const { toast, confirm } = useUi()
+  const { t } = useLanguage()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
@@ -202,8 +207,8 @@ export default function Users({ currentUserId, accessToken }) {
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">ผู้ใช้งานระบบ <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} คน)</span></div>
-        <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ เพิ่มผู้ใช้งาน</button>
+        <div className="section-title">{t('ผู้ใช้งานระบบ')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} {t('คน')})</span></div>
+        <button className="btn btn-primary" onClick={() => setShowAdd(true)}>{t('+ เพิ่มผู้ใช้งาน')}</button>
       </div>
       {showAdd && <AddUserModal onClose={() => setShowAdd(false)} onCreated={onCreateUser} />}
       {editingUser && <EditUserModal user={editingUser} onClose={() => setEditingUser(null)} onSaved={onSaveEdit} />}
@@ -212,28 +217,28 @@ export default function Users({ currentUserId, accessToken }) {
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>ชื่อ</th><th>อีเมล</th><th>สิทธิ์</th><th>เข้าร่วมเมื่อ</th><th>การจัดการ</th></tr></thead>
+              <thead><tr><th>{t('ชื่อ')}</th><th>{t('อีเมล')}</th><th>{t('สิทธิ์')}</th><th>{t('เข้าร่วมเมื่อ')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(u => (
                   <tr key={u.id}>
-                    <td style={{ fontWeight: 500 }}>{u.full_name}{u.id === currentUserId && <span style={{ color: 'var(--text-light)', fontWeight: 400 }}> (คุณ)</span>}</td>
+                    <td style={{ fontWeight: 500 }}>{u.full_name}{u.id === currentUserId && <span style={{ color: 'var(--text-light)', fontWeight: 400 }}> {t('(คุณ)')}</span>}</td>
                     <td style={{ fontSize: 12 }}>{u.email}</td>
                     <td>
                       <select className="filter-select" value={u.role} onChange={e => onChangeRole(u, e.target.value)}>
-                        {CONSTANTS.ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r] || r}</option>)}
+                        {CONSTANTS.ROLES.map(r => <option key={r} value={r}>{t(ROLE_LABEL[r]) || r}</option>)}
                       </select>
                     </td>
                     <td style={{ fontSize: 12 }}>{fmtDate(u.created_at)}</td>
                     <td className="td-actions">
-                      <button className="btn btn-outline btn-xs" onClick={() => setEditingUser(u)}>แก้ไข</button>
-                      <button className="btn btn-secondary btn-xs" onClick={() => onResetPassword(u)}>รีเซ็ตรหัสผ่าน</button>
-                      {u.id !== currentUserId && <button className="btn btn-danger btn-xs" onClick={() => onDeleteUser(u)}>ลบ</button>}
+                      <button className="btn btn-outline btn-xs" onClick={() => setEditingUser(u)}>{t('แก้ไข')}</button>
+                      <button className="btn btn-secondary btn-xs" onClick={() => onResetPassword(u)}>{t('รีเซ็ตรหัสผ่าน')}</button>
+                      {u.id !== currentUserId && <button className="btn btn-danger btn-xs" onClick={() => onDeleteUser(u)}>{t('ลบ')}</button>}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีผู้ใช้งาน'}</div></div>}
+          ) : <div className="empty-state"><div>{loading ? t('กำลังโหลด...') : t('ยังไม่มีผู้ใช้งาน')}</div></div>}
         </div>
       </div>
     </div>

@@ -4,12 +4,14 @@ import { exportLeadsToExcel } from '../lib/importExport'
 import { fmtDate } from '../lib/format'
 import { useUi } from './UiContext'
 import { usePicklists } from './PicklistsContext'
+import { useLanguage } from './LanguageContext'
 import EditableSelect from './EditableSelect'
 import Pagination from './Pagination'
 import ImportLeadsModal from './ImportLeadsModal'
 
 export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onCreateCompany, onStatusChange, onDelete }) {
   const { toast } = useUi()
+  const { t, lang } = useLanguage()
   const { list } = usePicklists()
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
@@ -66,11 +68,11 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onCreateCo
   return (
     <div className="list-view">
       <div className="section-header">
-        <div className="section-title">ผู้ติดต่อ <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
+        <div className="section-title">{t('ผู้ติดต่อ')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} {t('รายการ')})</span></div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-outline btn-sm" onClick={() => setShowImport(true)}>นำเข้าจากไฟล์</button>
-          <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting}>{exporting ? 'กำลังส่งออก...' : 'ส่งออกเป็น Excel'}</button>
-          <button className="btn btn-primary btn-sm" onClick={onAdd}>+ เพิ่มผู้ติดต่อ</button>
+          <button className="btn btn-outline btn-sm" onClick={() => setShowImport(true)}>{t('นำเข้าจากไฟล์')}</button>
+          <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting}>{exporting ? t('กำลังส่งออก...') : t('ส่งออกเป็น Excel')}</button>
+          <button className="btn btn-primary btn-sm" onClick={onAdd}>{t('+ เพิ่มผู้ติดต่อ')}</button>
         </div>
       </div>
       {showImport && <ImportLeadsModal onClose={() => setShowImport(false)} onImported={() => setLocalBump(b => b + 1)} />}
@@ -79,7 +81,7 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onCreateCo
         // สองสรุปวางข้างกันคนละครึ่ง กันหน้ายาวเกินไป — การ์ดในแต่ละฝั่งไหลต่อกันเองตามความกว้างที่เหลือ
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>สรุปตามสถานะ</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>{t('สรุปตามสถานะ')}</div>
             <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', margin: 0 }}>
               {statusKeys.map((st, i) => (
                 <div className={`kpi-card ${kpiColor(i)}`} key={st}>
@@ -90,7 +92,7 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onCreateCo
             </div>
           </div>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>สรุปตามช่องทางที่มา</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>{t('สรุปตามช่องทางที่มา')}</div>
             <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', margin: 0 }}>
               {sourceKeys.map((src, i) => (
                 <div className={`kpi-card ${kpiColor(i)}`} key={src}>
@@ -105,15 +107,15 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onCreateCo
 
       <div className="filter-bar">
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
-          <option value="">ทุกสถานะ</option>
+          <option value="">{t('ทุกสถานะ')}</option>
           {list('lead_statuses').map(s => <option key={s}>{s}</option>)}
         </select>
-        <input className="filter-input" placeholder="ค้นหาชื่อ/เบอร์/อีเมล..." value={q} onChange={e => setQ(e.target.value)} />
+        <input className="filter-input" placeholder={t('ค้นหาชื่อ/เบอร์/อีเมล...')} value={q} onChange={e => setQ(e.target.value)} />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
-          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่กรอกเข้ามา ตั้งแต่" />
-          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>ถึง</span>
-          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่กรอกเข้ามา ถึง" />
-          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
+          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title={lang === 'en' ? 'Submitted from' : 'วันที่กรอกเข้ามา ตั้งแต่'} />
+          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ถึง')}</span>
+          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title={lang === 'en' ? 'Submitted to' : 'วันที่กรอกเข้ามา ถึง'} />
+          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>{t('ล้าง')}</button>}
         </div>
       </div>
 
@@ -121,7 +123,7 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onCreateCo
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>หัวข้อ</th><th>ชื่อ</th><th>ติดต่อ</th><th>ตำแหน่ง/ธุรกิจ</th><th>สนใจ</th><th>เหตุผล</th><th>ที่มา</th><th>สถานะ</th><th>วันที่</th><th>การจัดการ</th></tr></thead>
+              <thead><tr><th>{t('หัวข้อ')}</th><th>{t('ชื่อ')}</th><th>{t('ติดต่อ')}</th><th>{t('ตำแหน่ง/ธุรกิจ')}</th><th>{t('สนใจ')}</th><th>{t('เหตุผล')}</th><th>{t('ที่มา')}</th><th>{t('สถานะ')}</th><th>{t('วันที่')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(l => (
                   <tr key={l.id}>
@@ -136,15 +138,15 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onCreateCo
                     <td style={{ fontSize: 12 }}>{fmtDate(l.created_at)}</td>
                     <td className="td-actions">
                       {l.converted_company_id
-                        ? <button className="btn btn-outline btn-xs" onClick={() => onNavCompany(l.converted_company_id)}>ลูกค้า: {l.company?.name || '-'}</button>
-                        : <button className="btn btn-secondary btn-xs" onClick={() => onCreateCompany(l)}>สร้างเป็นลูกค้า</button>}
-                      {perm.isAdmin && <button className="btn btn-danger btn-xs" onClick={() => onDelete(l.id)}>ลบ</button>}
+                        ? <button className="btn btn-outline btn-xs" onClick={() => onNavCompany(l.converted_company_id)}>{t('ลูกค้า:')} {l.company?.name || '-'}</button>
+                        : <button className="btn btn-secondary btn-xs" onClick={() => onCreateCompany(l)}>{t('สร้างเป็นลูกค้า')}</button>}
+                      {perm.isAdmin && <button className="btn btn-danger btn-xs" onClick={() => onDelete(l.id)}>{t('ลบ')}</button>}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีลีดเข้ามา'}</div></div>}
+          ) : <div className="empty-state"><div>{loading ? t('กำลังโหลด...') : t('ยังไม่มีลีดเข้ามา')}</div></div>}
         </div>
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPage={setPage} />
       </div>

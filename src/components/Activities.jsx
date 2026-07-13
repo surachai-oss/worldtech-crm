@@ -4,10 +4,12 @@ import { fmtDate, activityColor } from '../lib/format'
 import { canManageChild } from '../lib/permissions'
 import { useUi } from './UiContext'
 import { usePicklists } from './PicklistsContext'
+import { useLanguage } from './LanguageContext'
 import Pagination from './Pagination'
 
 export default function Activities({ perm, reloadKey, onNavCompany, onAdd, onDelete }) {
   const { toast } = useUi()
+  const { t } = useLanguage()
   const { list } = usePicklists()
   const [type, setType] = useState('')
   const [page, setPage] = useState(0)
@@ -31,13 +33,13 @@ export default function Activities({ perm, reloadKey, onNavCompany, onAdd, onDel
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">ประวัติการติดต่อ <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
-        <button className="btn btn-primary" onClick={onAdd}>+ บันทึกการติดต่อ</button>
+        <div className="section-title">{t('ประวัติการติดต่อ')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} {t('รายการ')})</span></div>
+        <button className="btn btn-primary" onClick={onAdd}>{t('+ บันทึกการติดต่อ')}</button>
       </div>
       <div className="filter-bar">
         <select className="filter-select" value={type} onChange={e => setType(e.target.value)}>
-          <option value="">ทุกประเภท</option>
-          {list('activity_types').map(t => <option key={t}>{t}</option>)}
+          <option value="">{t('ทุกประเภท')}</option>
+          {list('activity_types').map(ty => <option key={ty}>{ty}</option>)}
         </select>
       </div>
       <div className="card">
@@ -50,13 +52,13 @@ export default function Activities({ perm, reloadKey, onNavCompany, onAdd, onDel
                   <div className="activity-title">{a.subject}</div>
                   <div className="activity-meta">
                     {a.company && <a onClick={() => onNavCompany(a.company.id)} style={{ fontWeight: 500 }}>{a.company.name}</a>}
-                    <span>{a.type}</span><span>{fmtDate(a.activity_date)}</span><span>โดย {a.recorded_by}</span>
+                    <span>{a.type}</span><span>{fmtDate(a.activity_date)}</span><span>{t('โดย')} {a.recorded_by}</span>
                   </div>
                   {a.detail && <div className="activity-detail">{a.detail}</div>}
                 </div>
-                {canManageChild(a.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(a.id)}>ลบ</button>}
+                {canManageChild(a.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(a.id)}>{t('ลบ')}</button>}
               </div>
-            )) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ยังไม่มีการบันทึกกิจกรรม'}</div></div>}
+            )) : <div className="empty-state"><div>{loading ? t('กำลังโหลด...') : t('ยังไม่มีการบันทึกกิจกรรม')}</div></div>}
           </div>
         </div>
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPage={setPage} />

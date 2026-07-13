@@ -3,6 +3,7 @@ import { fetchPaymentRequests, listPaymentItems, getPaymentSlipUrl, PAYMENT_STAT
 import { exportPaymentRequestsToExcel } from '../lib/importExport'
 import { fmtCurrency, fmtDate, paymentStatusLabel, paymentBadgeClass } from '../lib/format'
 import { useUi } from './UiContext'
+import { useLanguage } from './LanguageContext'
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
@@ -10,6 +11,7 @@ const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 // ตอนอนุมัติ: บังคับระบุชื่อผู้อนุมัติ (ลายเซ็น) + ใส่ Ref No. ได้ (ไม่บังคับ)
 function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMismatch, onReject }) {
   const { toast } = useUi()
+  const { t, lang } = useLanguage()
   const [items, setItems] = useState(null)
   const [remark, setRemark] = useState('')
   const [approverName, setApproverName] = useState(currentUserName || '')
@@ -52,31 +54,31 @@ function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMi
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={{ maxWidth: 720 }}>
         <div className="modal-header">
-          <div className="modal-title">ตรวจสอบยอดโอน · {pr.pr_no}</div>
+          <div className="modal-title">{t('ตรวจสอบยอดโอน')} · {pr.pr_no}</div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
-          <Row label="วันที่คำขอ" value={fmtDate(pr.request_date || pr.created_at)} />
-          <Row label="ลูกค้า" value={pr.customer_name || pr.company?.name || '-'} />
-          <Row label="ประเภทลูกค้า" value={pr.credit_type || '-'} />
-          <Row label="ประเภทการชำระ" value={pr.payment_type || '-'} />
-          <Row label="เลขที่ PO" value={pr.po_reference || '-'} />
-          <Row label="เลขที่ออเดอร์" value={pr.order?.order_no || pr.order_no || '-'} />
-          <Row label="ยอดไม่รวม VAT" value={fmtCurrency(exVat)} />
+          <Row label={t('วันที่คำขอ')} value={fmtDate(pr.request_date || pr.created_at)} />
+          <Row label={t('ลูกค้า')} value={pr.customer_name || pr.company?.name || '-'} />
+          <Row label={t('ประเภทลูกค้า')} value={pr.credit_type || '-'} />
+          <Row label={t('ประเภทการชำระ')} value={pr.payment_type || '-'} />
+          <Row label={t('เลขที่ PO')} value={pr.po_reference || '-'} />
+          <Row label={t('เลขที่ออเดอร์')} value={pr.order?.order_no || pr.order_no || '-'} />
+          <Row label={t('ยอดไม่รวม VAT')} value={fmtCurrency(exVat)} />
           <Row label="VAT 7%" value={fmtCurrency(vat)} />
-          <Row label="ยอดรวมทั้งสิ้น" value={<b>{fmtCurrency(total)}</b>} />
-          <Row label="ผู้ขอ" value={pr.requested_by_name || '-'} />
+          <Row label={t('ยอดรวมทั้งสิ้น')} value={<b>{fmtCurrency(total)}</b>} />
+          <Row label={t('ผู้ขอ')} value={pr.requested_by_name || '-'} />
 
           <div style={{ margin: '12px 0' }}>
-            <button className="btn btn-outline btn-sm" onClick={viewSlip} disabled={!pr.slip_file_url}>{pr.slip_file_url ? 'ดูสลิปการโอน' : 'ไม่มีสลิปแนบ'}</button>
-            <span style={{ fontSize: 12, color: 'var(--text-light)', marginLeft: 10 }}>เทียบยอดโอน/ธนาคาร/วันเวลาจากสลิปจริง</span>
+            <button className="btn btn-outline btn-sm" onClick={viewSlip} disabled={!pr.slip_file_url}>{pr.slip_file_url ? t('ดูสลิปการโอน') : t('ไม่มีสลิปแนบ')}</button>
+            <span style={{ fontSize: 12, color: 'var(--text-light)', marginLeft: 10 }}>{t('เทียบยอดโอน/ธนาคาร/วันเวลาจากสลิปจริง')}</span>
           </div>
 
           <div className="table-wrap">
             <table>
-              <thead><tr><th>สินค้า/รายการ</th><th style={{ textAlign: 'center' }}>จำนวน</th><th style={{ textAlign: 'right' }}>ราคา/หน่วย</th><th style={{ textAlign: 'right' }}>รวม</th></tr></thead>
+              <thead><tr><th>{lang === 'en' ? 'Product/Item' : 'สินค้า/รายการ'}</th><th style={{ textAlign: 'center' }}>{t('จำนวน')}</th><th style={{ textAlign: 'right' }}>{t('ราคา/หน่วย')}</th><th style={{ textAlign: 'right' }}>{t('รวม')}</th></tr></thead>
               <tbody>
-                {items === null ? <tr><td colSpan={4} style={{ textAlign: 'center', padding: 16, color: 'var(--text-light)' }}>กำลังโหลด...</td></tr>
+                {items === null ? <tr><td colSpan={4} style={{ textAlign: 'center', padding: 16, color: 'var(--text-light)' }}>{t('กำลังโหลด...')}</td></tr>
                   : items.length ? items.map(it => (
                     <tr key={it.id}>
                       <td>{it.product_name || it.sku || '-'}</td>
@@ -84,34 +86,34 @@ function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMi
                       <td style={{ textAlign: 'right' }}>{fmtCurrency(it.unit_price)}</td>
                       <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtCurrency(it.line_total)}</td>
                     </tr>
-                  )) : <tr><td colSpan={4} style={{ textAlign: 'center', padding: 16, color: 'var(--text-light)' }}>ไม่มีรายการสินค้า</td></tr>}
+                  )) : <tr><td colSpan={4} style={{ textAlign: 'center', padding: 16, color: 'var(--text-light)' }}>{t('ไม่มีรายการสินค้า')}</td></tr>}
               </tbody>
             </table>
           </div>
 
-          {pr.remark && <div style={{ fontSize: 12, color: 'var(--text-light)', marginTop: 10 }}>หมายเหตุจากเซลล์: {pr.remark}</div>}
+          {pr.remark && <div style={{ fontSize: 12, color: 'var(--text-light)', marginTop: 10 }}>{t('หมายเหตุจากเซลล์')}: {pr.remark}</div>}
 
           <div className="form-row" style={{ marginTop: 12 }}>
             <div className="form-group">
-              <label className="form-label required">ชื่อผู้อนุมัติ (ลายเซ็น)</label>
-              <input className="form-control" value={approverName} onChange={e => setApproverName(e.target.value)} placeholder="ชื่อผู้ตรวจ/อนุมัติ" />
+              <label className="form-label required">{t('ชื่อผู้อนุมัติ (ลายเซ็น)')}</label>
+              <input className="form-control" value={approverName} onChange={e => setApproverName(e.target.value)} placeholder={t('ชื่อผู้ตรวจ/อนุมัติ')} />
             </div>
             <div className="form-group">
               <label className="form-label">Ref No.</label>
-              <input className="form-control" value={financeRefNo} onChange={e => setFinanceRefNo(e.target.value)} placeholder="ไม่บังคับ" />
+              <input className="form-control" value={financeRefNo} onChange={e => setFinanceRefNo(e.target.value)} placeholder={t('ไม่บังคับ')} />
             </div>
           </div>
           <div className="form-group">
-            <label className="form-label">หมายเหตุจากบัญชี (บังคับกรอก ยกเว้นตอนอนุมัติ)</label>
-            <textarea className="form-control" rows={2} value={remark} onChange={e => setRemark(e.target.value)} placeholder="เช่น สลิปไม่ชัด / ยอดขาด 500 / ไม่พบยอดเข้า" />
+            <label className="form-label">{t('หมายเหตุจากบัญชี (บังคับกรอก ยกเว้นตอนอนุมัติ)')}</label>
+            <textarea className="form-control" rows={2} value={remark} onChange={e => setRemark(e.target.value)} placeholder={lang === 'en' ? 'e.g. slip unclear / short by 500 / transfer not received' : 'เช่น สลิปไม่ชัด / ยอดขาด 500 / ไม่พบยอดเข้า'} />
           </div>
         </div>
         <div className="modal-footer" style={{ flexWrap: 'wrap' }}>
-          <button className="btn btn-outline" onClick={onClose} disabled={busy}>ปิด</button>
-          <button className="btn btn-danger" onClick={() => act(onReject, true)} disabled={busy}>ปฏิเสธ</button>
-          <button className="btn btn-outline" onClick={() => act(onMismatch, true)} disabled={busy} style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}>ยอดไม่ตรง</button>
-          <button className="btn btn-secondary" onClick={() => act(onNeedInfo, true)} disabled={busy}>ขอข้อมูลเพิ่ม</button>
-          <button className="btn btn-success" onClick={approve} disabled={busy}>อนุมัติ</button>
+          <button className="btn btn-outline" onClick={onClose} disabled={busy}>{t('ปิด')}</button>
+          <button className="btn btn-danger" onClick={() => act(onReject, true)} disabled={busy}>{t('ปฏิเสธ')}</button>
+          <button className="btn btn-outline" onClick={() => act(onMismatch, true)} disabled={busy} style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}>{t('ยอดไม่ตรง')}</button>
+          <button className="btn btn-secondary" onClick={() => act(onNeedInfo, true)} disabled={busy}>{t('ขอข้อมูลเพิ่ม')}</button>
+          <button className="btn btn-success" onClick={approve} disabled={busy}>{t('อนุมัติ')}</button>
         </div>
       </div>
     </div>
@@ -120,6 +122,7 @@ function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMi
 
 export default function FinanceReview({ reloadKey, currentUserName, onApprove, onNeedInfo, onMismatch, onReject }) {
   const { toast } = useUi()
+  const { t, lang } = useLanguage()
   const [status, setStatus] = useState('') // ค่าเริ่มต้นแสดงทุกสถานะ
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
@@ -145,19 +148,19 @@ export default function FinanceReview({ reloadKey, currentUserName, onApprove, o
   return (
     <div className="list-view">
       <div className="section-header">
-        <div className="section-title">ตรวจสอบยอดโอน <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} รายการ)</span></div>
-        <button className="btn btn-outline" onClick={exportExcel}>ส่งออกข้อมูล</button>
+        <div className="section-title">{t('ตรวจสอบยอดโอน')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} {t('รายการ')})</span></div>
+        <button className="btn btn-outline" onClick={exportExcel}>{t('ส่งออกข้อมูล')}</button>
       </div>
       <div className="filter-bar">
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
-          <option value="">ทุกสถานะ</option>
+          <option value="">{t('ทุกสถานะ')}</option>
           {PAYMENT_STATUS_LIST.map(s => <option key={s} value={s}>{paymentStatusLabel(s)}</option>)}
         </select>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
-          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่คำขอ ตั้งแต่" />
-          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>ถึง</span>
-          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่คำขอ ถึง" />
-          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
+          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title={lang === 'en' ? 'Request date from' : 'วันที่คำขอ ตั้งแต่'} />
+          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ถึง')}</span>
+          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title={lang === 'en' ? 'Request date to' : 'วันที่คำขอ ถึง'} />
+          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>{t('ล้าง')}</button>}
         </div>
       </div>
       {review && <ReviewModal pr={review} currentUserName={currentUserName} onClose={() => setReview(null)} onApprove={onApprove} onNeedInfo={onNeedInfo} onMismatch={onMismatch} onReject={onReject} />}
@@ -165,13 +168,13 @@ export default function FinanceReview({ reloadKey, currentUserName, onApprove, o
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>เลขคำขอ</th><th>วันที่</th><th>ลูกค้า</th><th>ประเภทลูกค้า</th><th>ยอดรวม</th><th>สถานะ</th><th>ผู้ขอ</th><th>การจัดการ</th></tr></thead>
+              <thead><tr><th>{t('เลขคำขอ')}</th><th>{t('วันที่')}</th><th>{t('ลูกค้า')}</th><th>{t('ประเภทลูกค้า')}</th><th>{t('ยอดรวม')}</th><th>{t('สถานะ')}</th><th>{t('ผู้ขอ')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(pr => (
                   <tr key={pr.id}>
                     <td style={{ fontWeight: 600, color: 'var(--navy)' }}>
                       {pr.pr_no}
-                      {(pr.order?.order_no || pr.order_no) && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>ออเดอร์: {pr.order?.order_no || pr.order_no}</div>}
+                      {(pr.order?.order_no || pr.order_no) && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>{lang === 'en' ? 'Order' : 'ออเดอร์'}: {pr.order?.order_no || pr.order_no}</div>}
                     </td>
                     <td style={{ fontSize: 12 }}>{fmtDate(pr.request_date || pr.created_at)}</td>
                     <td>{pr.customer_name || pr.company?.name || '-'}</td>
@@ -179,12 +182,12 @@ export default function FinanceReview({ reloadKey, currentUserName, onApprove, o
                     <td style={{ fontWeight: 600 }}>{fmtCurrency(pr.total_amount)}</td>
                     <td><span className={`badge ${paymentBadgeClass(pr.status)}`}>{paymentStatusLabel(pr.status)}</span></td>
                     <td style={{ fontSize: 12 }}>{pr.requested_by_name || '-'}</td>
-                    <td className="td-actions"><button className="btn btn-secondary btn-xs" onClick={() => setReview(pr)}>ตรวจสอบ</button></td>
+                    <td className="td-actions"><button className="btn btn-secondary btn-xs" onClick={() => setReview(pr)}>{t('ตรวจสอบ')}</button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : <div className="empty-state"><div>{loading ? 'กำลังโหลด...' : 'ไม่มีรายการในสถานะนี้'}</div></div>}
+          ) : <div className="empty-state"><div>{loading ? t('กำลังโหลด...') : t('ไม่มีรายการในสถานะนี้')}</div></div>}
         </div>
       </div>
     </div>
