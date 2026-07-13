@@ -1014,8 +1014,9 @@ export const listAccountingDocFiles = (requestId) =>
   supabase.from('accounting_document_files').select('*').eq('request_id', requestId)
     .order('file_type', { ascending: true }).order('version_no', { ascending: false }).then(handle)
 
-// อัปโหลดเอกสารเวอร์ชันใหม่ — ไฟล์เก่าประเภทเดียวกันเปลี่ยนเป็น is_current=false ไม่ลบทิ้ง (เก็บ version history ให้ finance/admin ดูย้อนหลังได้)
-export async function uploadAccountingDocFile(request, file, { file_type, document_no, document_date, note, uploaderName }) {
+// อัปโหลดไฟล์เข้า storage + บันทึกแถวใหม่ (เวอร์ชันถัดไปของ file_type เดียวกัน ไฟล์เก่าเปลี่ยนเป็น is_current=false ไม่ลบทิ้ง)
+// ใช้ร่วมกันทั้งอัปโหลดครั้งแรก (uploadAccountingDocFile) และเพิ่มไฟล์ภายหลัง (uploadAccountingDocExtraFile)
+async function storeAccountingDocFile(request, file, { file_type, document_no, document_date, note, uploaderName }) {
   if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('ไฟล์ใหญ่เกิน 20MB')
   const { data: existing } = await supabase.from('accounting_document_files')
     .select('version_no').eq('request_id', request.id).eq('file_type', file_type)
@@ -1031,11 +1032,16 @@ export async function uploadAccountingDocFile(request, file, { file_type, docume
     .eq('request_id', request.id).eq('file_type', file_type).then(handle)
 
   const { data: s } = await supabase.auth.getUser()
-  const row = await supabase.from('accounting_document_files').insert({
+  return supabase.from('accounting_document_files').insert({
     request_id: request.id, order_id: request.order_id, file_type, file_name: file.name, file_url: path,
     document_no: document_no || null, document_date: document_date || null, version_no, is_current: true,
     uploaded_by: s?.user?.id || null, uploaded_by_name: uploaderName, note: note || null,
   }).select().single().then(handle)
+}
+
+// อัปโหลดเอกสารครั้งแรกของคำขอ — เสร็จแล้วเปลี่ยนสถานะคำขอต่อ (ไปรอส่งตัวจริง หรือ เสร็จสิ้นเลย)
+export async function uploadAccountingDocFile(request, file, opts) {
+  const row = await storeAccountingDocFile(request, file, opts)
 
   // อัปโหลดแล้ว: ถ้าต้องส่งตัวจริงด้วยไปรอที่ "รอส่งตัวจริง" (บัญชีใส่ tracking ต่อ), ถ้าไม่ต้อง = เสร็จสิ้นทันที
   const now = new Date().toISOString()
@@ -1045,7 +1051,14 @@ export async function uploadAccountingDocFile(request, file, { file_type, docume
     document_status: nextStatus, issued_at: now,
     ...(nextStatus === ACCOUNTING_DOC_STATUS.COMPLETED ? { completed_at: now } : {}),
   })
-  await writeAuditLog({ entity_type: 'accounting_document_request', entity_id: request.id, action: 'upload_file', actor_name: uploaderName, detail: `อัปโหลด ${file_type} v${version_no}` })
+  await writeAuditLog({ entity_type: 'accounting_document_request', entity_id: request.id, action: 'upload_file', actor_name: opts.uploaderName, detail: `อัปโหลด ${opts.file_type} v${row.version_no}` })
+  return row
+}
+
+// เพิ่มไฟล์เอกสารอีกประเภทให้คำขอเดิม (เช่น ลูกค้าขอทั้งใบแจ้งหนี้และใบกำกับภาษีแยกไฟล์กัน) — ไม่เปลี่ยนสถานะคำขอ เพราะอัปโหลดหลักปิดงานไปแล้ว
+export async function uploadAccountingDocExtraFile(request, file, opts) {
+  const row = await storeAccountingDocFile(request, file, opts)
+  await writeAuditLog({ entity_type: 'accounting_document_request', entity_id: request.id, action: 'upload_extra_file', actor_name: opts.uploaderName, detail: `เพิ่มไฟล์ ${opts.file_type} v${row.version_no}` })
   return row
 }
 

@@ -3,7 +3,7 @@ import {
   ACCOUNTING_DOC_STATUS, ACCOUNTING_DOC_STATUS_LIST, DOC_PRIORITIES, DOC_FILE_TYPES, DOC_FILE_TYPE_LABEL,
   fetchAccountingDocRequests, updateAccountingDocRequest,
   markDocMissingInfo, approveAccountingDocRequest, markDocOriginalSent, markDocCancelled,
-  listAccountingDocFiles, uploadAccountingDocFile, getAccountingDocFileUrl,
+  listAccountingDocFiles, uploadAccountingDocFile, uploadAccountingDocExtraFile, getAccountingDocFileUrl,
 } from '../lib/api'
 import { fmtCurrency, fmtDate, docStatusBadgeClass, docPriorityBadgeClass } from '../lib/format'
 import { useUi } from './UiContext'
@@ -27,8 +27,12 @@ function DetailModal({ req, currentUserName, onClose, onChanged }) {
   const [file, setFile] = useState(null)
   const [files, setFiles] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [showAddFile, setShowAddFile] = useState(false)
+  const [addFileType, setAddFileType] = useState(DOC_FILE_TYPES.OTHER)
+  const [addFile, setAddFile] = useState(null)
 
-  useEffect(() => { listAccountingDocFiles(req.id).then(setFiles).catch(() => setFiles([])) }, [req.id])
+  const reloadFiles = () => listAccountingDocFiles(req.id).then(setFiles).catch(() => setFiles([]))
+  useEffect(() => { reloadFiles() }, [req.id])
   const currentFiles = (files || []).filter(f => f.is_current)
 
   const run = async (fn, msg) => {
@@ -44,6 +48,22 @@ function DetailModal({ req, currentUserName, onClose, onChanged }) {
     await run(() => uploadAccountingDocFile(req, file, {
       file_type: DOC_TYPE_TO_FILE[req.document_type] || DOC_FILE_TYPES.OTHER, document_no: '', document_date: '', note: '', uploaderName: currentUserName,
     }), NEEDS_ORIGINAL(req.delivery_method) ? 'อัปโหลดแล้ว — รอส่งเอกสารตัวจริง' : 'อัปโหลดแล้ว — ปิดงานเรียบร้อย')
+  }
+
+  // เพิ่มไฟล์เอกสารประเภทอื่นให้คำขอเดิม (เช่น ลูกค้าขอทั้งใบแจ้งหนี้และใบกำกับภาษีแยกไฟล์กัน) — ไม่ปิด modal เพราะอาจต้องเพิ่มได้อีกหลายไฟล์
+  const uploadExtraDoc = async () => {
+    if (!addFile) { toast('กรุณาเลือกไฟล์เอกสาร', 'error'); return }
+    const ext = (addFile.name.match(/\.[^.]+$/) || [''])[0].toLowerCase()
+    if (!['.pdf', '.jpg', '.jpeg', '.png'].includes(ext)) { toast('รองรับเฉพาะไฟล์ PDF หรือรูปภาพ (jpg/png)', 'error'); return }
+    setBusy(true)
+    try {
+      await uploadAccountingDocExtraFile(req, addFile, { file_type: addFileType, document_no: '', document_date: '', note: '', uploaderName: currentUserName })
+      toast('เพิ่มไฟล์แล้ว', 'success')
+      await reloadFiles()
+      setAddFile(null); setShowAddFile(false)
+      onChanged()
+    } catch (e) { toast('เพิ่มไฟล์ไม่สำเร็จ: ' + e.message, 'error') }
+    finally { setBusy(false) }
   }
 
   const viewFile = async (f) => {
@@ -62,18 +82,40 @@ function DetailModal({ req, currentUserName, onClose, onChanged }) {
     </div>
   )
 
-  const FilesList = () => currentFiles.length ? (
-    <div className="table-wrap" style={{ marginTop: 10, marginBottom: 4 }}>
-      <table>
-        <thead><tr><th>เอกสารที่อัปโหลดแล้ว</th><th></th></tr></thead>
-        <tbody>
-          {currentFiles.map(f => (
-            <tr key={f.id}><td>{DOC_FILE_TYPE_LABEL[f.file_type] || f.file_type} · v{f.version_no}</td><td><button className="btn btn-outline btn-xs" onClick={() => viewFile(f)}>ดู</button></td></tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  ) : null
+  const FilesList = () => {
+    if (!currentFiles.length) return null
+    return (
+      <div style={{ marginTop: 10, marginBottom: 4 }}>
+        <div className="table-wrap" style={{ marginBottom: 8 }}>
+          <table>
+            <thead><tr><th>เอกสารที่อัปโหลดแล้ว</th><th></th></tr></thead>
+            <tbody>
+              {currentFiles.map(f => (
+                <tr key={f.id}><td>{DOC_FILE_TYPE_LABEL[f.file_type] || f.file_type} · v{f.version_no}</td><td><button className="btn btn-outline btn-xs" onClick={() => viewFile(f)}>ดู</button></td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {req.document_status !== ACCOUNTING_DOC_STATUS.CANCELLED && (
+          showAddFile ? (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 10, marginBottom: 8 }}>
+              <label className="form-label">เพิ่มไฟล์เอกสาร (กรณีลูกค้าขอเอกสารหลายอย่าง)</label>
+              <select className="form-control" value={addFileType} onChange={e => setAddFileType(e.target.value)} style={{ marginBottom: 6 }}>
+                {Object.values(DOC_FILE_TYPES).map(t => <option key={t} value={t}>{DOC_FILE_TYPE_LABEL[t] || t}</option>)}
+              </select>
+              <input className="form-control" type="file" accept=".pdf,image/*" onChange={e => setAddFile(e.target.files?.[0] || null)} style={{ marginBottom: 6 }} />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn btn-primary btn-sm" disabled={busy} onClick={uploadExtraDoc}>{busy ? 'กำลังอัปโหลด...' : 'อัปโหลด'}</button>
+                <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => { setShowAddFile(false); setAddFile(null) }}>ยกเลิก</button>
+              </div>
+            </div>
+          ) : (
+            <button className="btn btn-outline btn-xs" onClick={() => setShowAddFile(true)}>+ เพิ่มไฟล์</button>
+          )
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
