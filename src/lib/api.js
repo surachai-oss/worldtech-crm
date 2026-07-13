@@ -278,7 +278,8 @@ export function getProductImageUrl(imagePath) {
 
 export async function uploadProductImage(productId, file) {
   if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('ไฟล์ใหญ่เกิน 20MB')
-  const safeName = file.name.replace(/[^\w.\-ก-๙ ]/g, '_')
+  // Supabase Storage ปฏิเสธ key ที่มีอักขระไทย/เว้นวรรค ("Invalid key") ต้องใช้แค่ ASCII สำหรับ path จริง
+  const safeName = file.name.replace(/[^\w.-]/g, '_')
   const path = `${productId}/${Date.now()}_${safeName}`
   const { error: upErr } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, file)
   if (upErr) throw upErr
@@ -357,7 +358,8 @@ export async function updateQuotationWithItems(id, fields, items) {
 // ใช้ quotations.file_url เป็น path ในไฟล์แนบ (คอลัมน์เดิมที่มีอยู่แล้วแต่ไม่เคยใช้งาน) + signed_file_name เก็บชื่อไฟล์เดิมไว้แสดงผล
 export async function uploadSignedQuotation(quotationId, file) {
   if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('ไฟล์ใหญ่เกิน 20MB')
-  const safeName = file.name.replace(/[^\w.\-ก-๙ ]/g, '_')
+  // Supabase Storage ปฏิเสธ key ที่มีอักขระไทย/เว้นวรรค ("Invalid key") ต้องใช้แค่ ASCII สำหรับ path จริง — ชื่อไฟล์เดิม (รวมภาษาไทย) เก็บแยกไว้ที่ signed_file_name ด้านล่าง
+  const safeName = file.name.replace(/[^\w.-]/g, '_')
   const path = `signed-quotations/${quotationId}/${Date.now()}_${safeName}`
   const { error: upErr } = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file)
   if (upErr) throw upErr
