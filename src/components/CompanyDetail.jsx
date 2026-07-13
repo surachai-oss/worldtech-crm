@@ -151,7 +151,7 @@ function DealsTab({ deals, quotations, perm, onAdd, onEdit, onDelete, onCreateQu
                   <td className="td-actions">
                     {canEdit(d, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>แก้ไข</button>}
                     {canEdit(d, perm) && <button className="btn btn-secondary btn-xs" onClick={() => onCreateQuotation(d)}>ออกใบเสนอราคา</button>}
-                    {canDelete(d, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(d.id)}>ลบ</button>}
+                    {adminOnlyDelete(perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(d.id)}>ลบ</button>}
                   </td>
                 </tr>
               )

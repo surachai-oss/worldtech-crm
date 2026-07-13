@@ -904,7 +904,7 @@ create policy "companies delete" on companies for delete using (
   is_admin()
 );
 
--- ----- deals: เหมือน companies -----
+-- ----- deals: select/update เหมือน companies (owner หรือยังไม่มีเจ้าของ) — ลบได้เฉพาะ admin เท่านั้น -----
 drop policy if exists "deals select" on deals;
 create policy "deals select" on deals for select using (
   is_admin() or created_by = auth.uid() or created_by is null
@@ -917,9 +917,10 @@ create policy "deals update" on deals for update using (
 ) with check (
   is_admin() or created_by = auth.uid() or created_by is null
 );
+-- ลบดีลได้เฉพาะ admin เท่านั้น (ตัดสิทธิ์ sale ลบเองออก เหมือน companies/quotations/products — ต้องแจ้ง admin ให้ลบแทน)
 drop policy if exists "deals delete" on deals;
 create policy "deals delete" on deals for delete using (
-  is_admin() or created_by = auth.uid()
+  is_admin()
 );
 
 -- ----- deal_items: สืบสิทธิ์จากดีลแม่ (deal_id) เหมือน contacts สืบจาก company -----

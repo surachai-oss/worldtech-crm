@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { fmtCurrency, fmtDate, stageColor, toLocalDateStr } from '../lib/format'
-import { canEdit } from '../lib/permissions'
+import { canEdit, adminOnlyDelete } from '../lib/permissions'
 import { usePicklists } from './PicklistsContext'
 
 const OPEN_STAGES_EXCLUDED = ['Closed Won', 'Closed Lost']
@@ -122,7 +122,7 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
   )
 }
 
-export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdit, onCreateQuotation }) {
+export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdit, onDelete, onCreateQuotation }) {
   const { list } = usePicklists()
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
@@ -209,7 +209,10 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
                       {/* ราคา + ปุ่มแก้ไข อยู่บรรทัดเดียวกัน (แก้ไขชิดขวา) เพื่อให้การ์ดสั้นลง */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, gap: 8 }}>
                         <div className="deal-val">{fmtCurrency(d.value)}</div>
-                        {canEdit(d, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>แก้ไข</button>}
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {canEdit(d, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(d)}>แก้ไข</button>}
+                          {adminOnlyDelete(perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(d.id)}>ลบ</button>}
+                        </div>
                       </div>
                     </div>
                   )
