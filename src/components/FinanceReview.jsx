@@ -121,6 +121,8 @@ function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMi
 export default function FinanceReview({ reloadKey, currentUserName, onApprove, onNeedInfo, onMismatch, onReject }) {
   const { toast } = useUi()
   const [status, setStatus] = useState('') // ค่าเริ่มต้นแสดงทุกสถานะ
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [review, setReview] = useState(null)
@@ -128,12 +130,12 @@ export default function FinanceReview({ reloadKey, currentUserName, onApprove, o
   useEffect(() => {
     let alive = true
     setLoading(true)
-    fetchPaymentRequests({ status })
+    fetchPaymentRequests({ status, dateFrom: fromDate, dateTo: toDate })
       .then(r => { if (alive) setRows(r) })
       .catch(e => { if (alive) toast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error') })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [status, reloadKey, toast])
+  }, [status, fromDate, toDate, reloadKey, toast])
 
   const exportExcel = () => {
     if (!rows.length) { toast('ไม่มีข้อมูลให้ส่งออก', 'info'); return }
@@ -151,6 +153,12 @@ export default function FinanceReview({ reloadKey, currentUserName, onApprove, o
           <option value="">ทุกสถานะ</option>
           {PAYMENT_STATUS_LIST.map(s => <option key={s} value={s}>{paymentStatusLabel(s)}</option>)}
         </select>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
+          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="วันที่คำขอ ตั้งแต่" />
+          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>ถึง</span>
+          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="วันที่คำขอ ถึง" />
+          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>ล้าง</button>}
+        </div>
       </div>
       {review && <ReviewModal pr={review} currentUserName={currentUserName} onClose={() => setReview(null)} onApprove={onApprove} onNeedInfo={onNeedInfo} onMismatch={onMismatch} onReject={onReject} />}
       <div className="card list-card">
