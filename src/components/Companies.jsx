@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { PAGE_SIZE, fetchCompaniesPage } from '../lib/api'
 import { statusBadgeClass } from '../lib/format'
-import { canEdit, canDelete } from '../lib/permissions'
+import { companyEditable, adminOnlyDelete } from '../lib/permissions'
 import { useUi } from './UiContext'
 import { usePicklists } from './PicklistsContext'
 import Pagination from './Pagination'
@@ -44,10 +44,13 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
     <div className="list-view">
       <div className="section-header">
         <div className="section-title">บริษัทลูกค้า <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} รายการ)</span></div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-outline" onClick={() => setShowImport(true)}>นำเข้าจากไฟล์</button>
-          <button className="btn btn-primary" onClick={() => onEdit(null)}>+ เพิ่มบริษัท</button>
-        </div>
+        {/* ฝ่ายบัญชีดูบริษัทลูกค้าได้อย่างเดียว (ไว้ตรวจสอบข้อมูลกับที่เซลล์กรอก) เพิ่ม/นำเข้าไม่ได้ */}
+        {!perm.isFinance && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-outline" onClick={() => setShowImport(true)}>นำเข้าจากไฟล์</button>
+            <button className="btn btn-primary" onClick={() => onEdit(null)}>+ เพิ่มบริษัท</button>
+          </div>
+        )}
       </div>
       {showImport && <ImportCompaniesModal perm={perm} onClose={() => setShowImport(false)} onImported={() => setLocalBump(b => b + 1)} />}
       <div className="filter-bar">
@@ -87,8 +90,8 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
                     <td style={{ fontSize: 12 }}>{c.owner || '-'}</td>
                     <td className="td-actions" onClick={e => e.stopPropagation()}>
                       <button className="btn btn-outline btn-xs" onClick={() => onOpen(c.id)}>ดู</button>
-                      {canEdit(c, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(c)}>แก้ไข</button>}
-                      {canDelete(c, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(c.id)}>ลบ</button>}
+                      {companyEditable(c, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(c)}>แก้ไข</button>}
+                      {adminOnlyDelete(perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(c.id)}>ลบ</button>}
                     </td>
                   </tr>
                 ))}

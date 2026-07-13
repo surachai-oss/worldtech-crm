@@ -854,22 +854,26 @@ drop policy if exists "allow all for authenticated" on tasks;
 drop policy if exists "allow all for authenticated" on quotations;
 drop policy if exists "allow all for authenticated" on settings;
 
--- ----- companies: admin เห็น/แก้ไขทั้งหมด, sale เห็น/แก้ไขเฉพาะของตัวเอง + ข้อมูลเก่าที่ยังไม่มีเจ้าของ -----
+-- ----- companies: admin เห็น/แก้ไข/ลบได้ทั้งหมด, sale เห็น/แก้ไขเฉพาะของตัวเอง + ข้อมูลเก่าที่ยังไม่มีเจ้าของ (ลบไม่ได้ ต้องแจ้ง admin) -----
+-- ฝ่ายบัญชี (finance) เห็นได้ทุกบริษัท (ไว้ตรวจสอบข้อมูลกับที่เซลล์กรอก) แต่เพิ่ม/แก้ไข/ลบไม่ได้เด็ดขาด
 drop policy if exists "companies select" on companies;
 create policy "companies select" on companies for select using (
-  is_admin() or created_by = auth.uid() or created_by is null
+  is_admin() or is_finance() or created_by = auth.uid() or created_by is null
 );
 drop policy if exists "companies insert" on companies;
-create policy "companies insert" on companies for insert with check (auth.role() = 'authenticated');
+create policy "companies insert" on companies for insert with check (
+  auth.role() = 'authenticated' and not is_finance()
+);
 drop policy if exists "companies update" on companies;
 create policy "companies update" on companies for update using (
-  is_admin() or created_by = auth.uid() or created_by is null
+  is_admin() or (not is_finance() and (created_by = auth.uid() or created_by is null))
 ) with check (
-  is_admin() or created_by = auth.uid() or created_by is null
+  is_admin() or (not is_finance() and (created_by = auth.uid() or created_by is null))
 );
+-- ลบบริษัทลูกค้าได้เฉพาะ admin เท่านั้น (ตัดสิทธิ์ sale ลบเองออก กันลบข้อมูลลูกค้า/ผู้ติดต่อออกจากระบบโดยไม่ตั้งใจ — ต้องแจ้ง admin ให้ลบแทน)
 drop policy if exists "companies delete" on companies;
 create policy "companies delete" on companies for delete using (
-  is_admin() or created_by = auth.uid()
+  is_admin()
 );
 
 -- ----- deals: เหมือน companies -----
@@ -937,13 +941,29 @@ create policy "activities all" on activities for all using (
     and (is_admin() or c.created_by = auth.uid() or c.created_by is null))
 );
 
+-- select/insert/update สืบสิทธิ์จากบริษัทแม่เหมือนเดิม — ลบแยกเป็นนโยบายของตัวเอง จำกัดเฉพาะ admin (sale ลบเองไม่ได้แล้ว ต้องแจ้ง admin)
 drop policy if exists "quotations all" on quotations;
-create policy "quotations all" on quotations for all using (
+drop policy if exists "quotations select" on quotations;
+create policy "quotations select" on quotations for select using (
+  exists (select 1 from companies c where c.id = quotations.company_id
+    and (is_admin() or c.created_by = auth.uid() or c.created_by is null))
+);
+drop policy if exists "quotations insert" on quotations;
+create policy "quotations insert" on quotations for insert with check (
+  exists (select 1 from companies c where c.id = quotations.company_id
+    and (is_admin() or c.created_by = auth.uid() or c.created_by is null))
+);
+drop policy if exists "quotations update" on quotations;
+create policy "quotations update" on quotations for update using (
   exists (select 1 from companies c where c.id = quotations.company_id
     and (is_admin() or c.created_by = auth.uid() or c.created_by is null))
 ) with check (
   exists (select 1 from companies c where c.id = quotations.company_id
     and (is_admin() or c.created_by = auth.uid() or c.created_by is null))
+);
+drop policy if exists "quotations delete" on quotations;
+create policy "quotations delete" on quotations for delete using (
+  is_admin()
 );
 
 -- ----- quotation_items: สืบสิทธิ์จากใบเสนอราคาแม่ -> บริษัทแม่ (สองชั้นเหมือน quotations เอง) -----
@@ -985,11 +1005,16 @@ create policy "picklists select" on picklists for select using (auth.role() = 'a
 drop policy if exists "picklists write" on picklists;
 create policy "picklists write" on picklists for all using (is_admin()) with check (is_admin());
 
--- ----- products: ทุกคนที่ login แล้วอ่าน/เพิ่ม/แก้ไข/ลบได้หมด (ไม่ได้จำกัดแค่ admin เหมือน picklists) -----
+-- ----- products: ทุกคนที่ login แล้วอ่าน/เพิ่ม/แก้ไขได้หมด — ลบได้เฉพาะ admin เท่านั้น (sale ลบเองไม่ได้แล้ว ต้องแจ้ง admin) -----
 drop policy if exists "products select" on products;
 create policy "products select" on products for select using (auth.role() = 'authenticated');
 drop policy if exists "products write" on products;
-create policy "products write" on products for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+drop policy if exists "products insert" on products;
+create policy "products insert" on products for insert with check (auth.role() = 'authenticated');
+drop policy if exists "products update" on products;
+create policy "products update" on products for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+drop policy if exists "products delete" on products;
+create policy "products delete" on products for delete using (is_admin());
 
 -- ----- profiles: เห็นของตัวเอง หรือ admin เห็นทั้งหมด, แก้ไข role ได้เฉพาะ admin -----
 drop policy if exists "profiles select" on profiles;

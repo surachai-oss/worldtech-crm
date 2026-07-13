@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { PAGE_SIZE, fetchQuotationsPage, fetchQuotationsTotal, fetchQuotationsSummary } from '../lib/api'
 import { fmtCurrency, fmtDate, quotBadgeClass } from '../lib/format'
 import { printQuotation } from '../lib/printQuotation'
-import { canManageChild } from '../lib/permissions'
+import { canManageChild, adminOnlyDelete } from '../lib/permissions'
 import { useUi } from './UiContext'
 import { usePicklists } from './PicklistsContext'
 import EditableSelect from './EditableSelect'
@@ -115,7 +115,7 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
                         {canManageChild(qt.company, perm) && <button className="btn btn-outline btn-xs" onClick={() => onCopy(qt)} title="คัดลอกเป็นใบเสนอราคาใหม่">คัดลอก</button>}
                         <button className="btn btn-secondary btn-xs" onClick={() => doPrint(qt)}>PDF</button>
                         <SignedQuotationControl quotation={qt} manageable={canManageChild(qt.company, perm)} onChanged={() => setLocalBump(b => b + 1)} />
-                        {canManageChild(qt.company, perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(qt.id)}>ลบ</button>}
+                        {adminOnlyDelete(perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(qt.id)}>ลบ</button>}
                       </td>
                     </tr>
                   )

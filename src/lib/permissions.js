@@ -21,3 +21,17 @@ export function canDelete(row, perm) {
 export function canManageChild(company, perm) {
   return canEdit(company, perm)
 }
+
+// บริษัทลูกค้าโดยเฉพาะ: ฝ่ายบัญชี (finance) ดูได้เสมอแต่แก้ไขไม่ได้เด็ดขาด แม้เป็นข้อมูลที่ยังไม่มีเจ้าของ
+// (ไว้ตรวจสอบข้อมูลกับที่เซลล์กรอกเท่านั้น ไม่ใช่คนดูแลข้อมูลลูกค้า) — ต่างจาก canEdit ทั่วไปตรงที่ตัด finance ออกก่อนเช็คเงื่อนไขอื่น
+export function companyEditable(row, perm) {
+  if (!row || !perm) return false
+  if (perm.isFinance) return false
+  return canEdit(row, perm)
+}
+
+// ลบได้เฉพาะ admin เท่านั้น — ใช้กับบริษัทลูกค้า/ใบเสนอราคา/สินค้า กันเซลล์ลบข้อมูลลูกค้า/ผู้ติดต่อ/เอกสารออกจากระบบโดยไม่ตั้งใจ
+// ถ้าต้องการลบข้อมูลเหล่านี้จริงๆ ให้แจ้งผู้ดูแลระบบทำให้แทน
+export function adminOnlyDelete(perm) {
+  return !!perm?.isAdmin
+}

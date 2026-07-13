@@ -14,7 +14,16 @@ export default function Sidebar({ activeView, onNav, user, isAdmin, isFinance, o
   // เมนู "ตรวจสอบยอดโอน"/"เอกสารบัญชี" ให้เห็นเฉพาะฝ่ายบัญชี/แอดมิน — เซลล์ทำ/ติดตามคำขอตรวจยอดที่หน้า "ออเดอร์" แทนแล้ว จึงไม่มีเมนูนี้ให้เห็นเลยถ้าไม่ใช่บัญชี/แอดมิน
   const financeItems = (isFinance || isAdmin) ? [{ id: 'finance-review', label: 'ตรวจสอบยอดโอน' }, { id: 'accounting-documents', label: 'เอกสารบัญชี' }] : []
   const financeSection = financeItems.length ? { section: 'การเงิน', items: financeItems } : null
-  const sections = [...NAV.slice(0, 3), ...(financeSection ? [financeSection] : []), ...NAV.slice(3), ...(isAdmin ? [ADMIN_SECTION] : [])]
+
+  // ฝ่ายบัญชี (finance ที่ไม่ใช่ admin) ทำงานแค่ตรวจสอบยอดโอน/ออกเอกสารบัญชี + ดูข้อมูลบริษัทลูกค้าเพื่อเทียบข้อมูลกับเซลล์
+  // ไม่ได้ทำแดชบอร์ด/ผู้ติดต่อ/การขาย/ติดตาม จึงเอาออกจากเมนูไปเลยกันสับสน ("บริษัทลูกค้า" ยังเห็นแต่ดูอย่างเดียว แก้ไข/ลบไม่ได้ — บังคับที่ permissions.js/RLS)
+  const sections = (isFinance && !isAdmin)
+    ? [
+        { section: 'ข้อมูลลูกค้า', items: [{ id: 'companies', label: 'บริษัทลูกค้า' }] },
+        ...(financeSection ? [financeSection] : []),
+        NAV[3], // ข้อมูลสินค้า
+      ]
+    : [...NAV.slice(0, 3), ...(financeSection ? [financeSection] : []), ...NAV.slice(3), ...(isAdmin ? [ADMIN_SECTION] : [])]
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">

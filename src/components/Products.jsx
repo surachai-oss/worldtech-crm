@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listProducts, addProduct, updateProduct, deleteProduct, uploadProductImage, deleteProductImage, getProductImageUrl } from '../lib/api'
 import { exportProductsToExcel } from '../lib/importExport'
+import { adminOnlyDelete } from '../lib/permissions'
 import { useUi } from './UiContext'
 import ImportProductsModal from './ImportProductsModal'
 
@@ -48,7 +49,7 @@ function ProductModal({ initial, onClose, onSave }) {
   )
 }
 
-export default function Products() {
+export default function Products({ perm }) {
   const { toast, confirm } = useUi()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -122,7 +123,7 @@ export default function Products() {
                       <td>{p.name}</td>
                       <td className="td-actions">
                         <button className="btn btn-outline btn-xs" onClick={() => setModal({ initial: p })}>แก้ไข</button>
-                        <button className="btn btn-danger btn-xs" onClick={() => onDelete(p)}>ลบ</button>
+                        {adminOnlyDelete(perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(p)}>ลบ</button>}
                       </td>
                     </tr>
                   )

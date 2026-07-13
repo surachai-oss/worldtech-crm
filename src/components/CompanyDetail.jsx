@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { fmtCurrency, fmtDate, fmtFileSize, isOverdue, isDueToday, stageBadgeClass, statusBadgeClass, quotBadgeClass, activityColor } from '../lib/format'
 import { listAttachments, uploadAttachment, deleteAttachment, getAttachmentUrl, uploadAttachmentToDrive } from '../lib/api'
 import { printQuotation } from '../lib/printQuotation'
-import { canEdit, canDelete, canManageChild } from '../lib/permissions'
+import { canEdit, canDelete, canManageChild, companyEditable, adminOnlyDelete } from '../lib/permissions'
 import { useUi } from './UiContext'
 import EditableSelect from './EditableSelect'
 import SignedQuotationControl from './SignedQuotationControl'
@@ -18,7 +18,7 @@ export default function CompanyDetail({ company, contacts, deals, activities, ta
 
   const counts = { contacts: contacts.length, deals: deals.length, activities: activities.length, tasks: tasks.length, quotations: quotations.length }
   const pendingTasks = tasks.filter(t => t.status !== 'เสร็จสิ้น').length
-  const canEditCompany = canEdit(company, perm)
+  const canEditCompany = companyEditable(company, perm)
 
   return (
     <div>
@@ -257,7 +257,7 @@ function QuotationsTab({ quotations, deals, company, perm, settings, onAdd, onEd
                     {manageable && <button className="btn btn-outline btn-xs" onClick={() => onCopy(q)} title="คัดลอกเป็นใบเสนอราคาใหม่">คัดลอก</button>}
                     <button className="btn btn-secondary btn-xs" onClick={() => printQuotation(q, company, settings)}>PDF</button>
                     <SignedQuotationControl quotation={q} manageable={manageable} onChanged={onRefresh} />
-                    {manageable && <button className="btn btn-danger btn-xs" onClick={() => onDelete(q.id)}>ลบ</button>}
+                    {adminOnlyDelete(perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(q.id)}>ลบ</button>}
                   </td>
                 </tr>
               )

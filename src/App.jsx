@@ -64,7 +64,12 @@ function AppInner({ session }) {
       const map = {}
         ; (s || []).forEach(r => { map[r.key] = r.value })
       setSettings(map)
-      try { setProfile(await api.getMyProfile(session.user.id)) }
+      try {
+        const p = await api.getMyProfile(session.user.id)
+        setProfile(p)
+        // ฝ่ายบัญชีไม่มีเมนู "แดชบอร์ด" ให้เห็นแล้ว (ดู Sidebar.jsx) ต้องเปลี่ยนหน้าเริ่มต้นไม่ให้ไปโผล่ที่แดชบอร์ดตอน login
+        if (p?.role === 'finance') setView('finance-review')
+      }
       catch (e) { toast('โหลดข้อมูลผู้ใช้งานไม่สำเร็จ: ' + e.message, 'error') }
       setLoading(false)
     })()
@@ -386,7 +391,7 @@ function AppInner({ session }) {
             <Orders reloadKey={reloadKey} companies={data.companies} perm={perm} currentUser={currentUser} settings={settings} onAdd={actions.addOrder} onCancel={actions.cancelOrder} />
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
-          {view === 'products' && <Products />}
+          {view === 'products' && <Products perm={perm} />}
           {view === 'finance-review' && (isFinance || isAdmin) && (
             <FinanceReview reloadKey={reloadKey} currentUserName={currentUser.name} onApprove={actions.approvePayment} onNeedInfo={actions.needInfoPayment} onMismatch={actions.mismatchPayment} onReject={actions.rejectPayment} />
           )}
