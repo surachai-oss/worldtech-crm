@@ -3,7 +3,7 @@ import EditableSelect from './EditableSelect'
 import SearchableSelect from './SearchableSelect'
 import { useUi } from './UiContext'
 import { listProducts, listDealItems, listQuotationItems, computeDealTotals, getProductImageUrl } from '../lib/api'
-import { POSITION_OPTIONS, BUSINESS_TYPE_OTHER, BUSINESS_TYPE_OPTIONS, APPLIANCE_OPTIONS, PURCHASE_REASON_OPTIONS } from '../lib/leadOptions'
+import { POSITION_OPTIONS, BUSINESS_TYPE_OTHER, BUSINESS_TYPE_OPTIONS, APPLIANCE_OTHER, APPLIANCE_OPTIONS, PURCHASE_REASON_OPTIONS } from '../lib/leadOptions'
 
 function Field({ label, required, children }) {
   return (
@@ -129,10 +129,18 @@ export function LeadModal({ initial, isAdmin, onClose, onSave }) {
   const [f, setF] = useState(() => {
     const base = {
       subject: '', full_name: '', phone: '', email: '', position: '', business_type: '', businessTypeOther: '',
-      appliance_interest: [], purchase_reason: '', message: '', source: '', status: 'ติดต่อแล้ว'
+      appliance_interest: [], applianceOther: '', purchase_reason: '', message: '', source: '', status: 'ติดต่อแล้ว'
     }
     if (!initial) return base
-    return { ...base, ...initial, businessTypeOther: BUSINESS_TYPE_OPTIONS.includes(initial.business_type) ? '' : (initial.business_type || '') }
+    // ค่าเก่าที่เคยพิมพ์ระบุเอง (ไม่ตรงกับตัวเลือกคงที่) ให้ถือเป็น "อื่นๆ" แล้วเติมข้อความเดิมไว้ในช่องระบุ
+    const customAppliance = (initial.appliance_interest || []).filter(v => !APPLIANCE_OPTIONS.includes(v))
+    const knownAppliance = (initial.appliance_interest || []).filter(v => APPLIANCE_OPTIONS.includes(v))
+    return {
+      ...base, ...initial,
+      businessTypeOther: BUSINESS_TYPE_OPTIONS.includes(initial.business_type) ? '' : (initial.business_type || ''),
+      appliance_interest: customAppliance.length ? [...knownAppliance, APPLIANCE_OTHER] : knownAppliance,
+      applianceOther: customAppliance.join(', '),
+    }
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
 
@@ -142,10 +150,13 @@ export function LeadModal({ initial, isAdmin, onClose, onSave }) {
   }))
 
   const isOtherBusiness = f.business_type === BUSINESS_TYPE_OTHER || (f.businessTypeOther && !BUSINESS_TYPE_OPTIONS.includes(f.business_type))
+  const isOtherAppliance = f.appliance_interest.includes(APPLIANCE_OTHER)
 
   const submit = () => {
-    const { businessTypeOther, ...rest } = f
-    onSave({ ...rest, business_type: isOtherBusiness ? businessTypeOther.trim() : (f.business_type || null) })
+    const { businessTypeOther, applianceOther, ...rest } = f
+    const appliance_interest = f.appliance_interest.filter(v => v !== APPLIANCE_OTHER)
+    if (isOtherAppliance && applianceOther.trim()) appliance_interest.push(applianceOther.trim())
+    onSave({ ...rest, business_type: isOtherBusiness ? businessTypeOther.trim() : (f.business_type || null), appliance_interest })
   }
 
   return (
@@ -187,6 +198,9 @@ export function LeadModal({ initial, isAdmin, onClose, onSave }) {
             </label>
           ))}
         </div>
+        {isOtherAppliance && (
+          <input className="form-control" style={{ marginTop: 8 }} value={f.applianceOther} onChange={set('applianceOther')} placeholder="ระบุเครื่องใช้ไฟฟ้าที่สนใจ" />
+        )}
       </Field>
       <div className="form-row">
         <Field label="ที่มา">

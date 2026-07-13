@@ -13,6 +13,7 @@ export const BUSINESS_TYPE_OPTIONS = [
   BUSINESS_TYPE_OTHER
 ]
 
-export const APPLIANCE_OPTIONS = ['ตู้เย็น', 'ตู้แช่แข็ง', 'เครื่องชงกาแฟ', 'ทีวี', 'เครื่องฟอกอากาศ', 'เตาอบ', 'เครื่องผสมอาหาร']
+export const APPLIANCE_OTHER = 'อื่นๆ'
+export const APPLIANCE_OPTIONS = ['ตู้เย็น', 'ตู้แช่แข็ง', 'เครื่องชงกาแฟ', 'ทีวี', 'เครื่องฟอกอากาศ', 'เตาอบ', 'เครื่องผสมอาหาร', APPLIANCE_OTHER]
 
 export const PURCHASE_REASON_OPTIONS = ['สำหรับใช้เอง', 'สำหรับธุรกิจ']

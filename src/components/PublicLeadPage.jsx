@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { submitPublicLead } from '../lib/api'
-import { POSITION_OPTIONS, BUSINESS_TYPE_OTHER, BUSINESS_TYPE_OPTIONS, APPLIANCE_OPTIONS, PURCHASE_REASON_OPTIONS } from '../lib/leadOptions'
+import { POSITION_OPTIONS, BUSINESS_TYPE_OTHER, BUSINESS_TYPE_OPTIONS, APPLIANCE_OTHER, APPLIANCE_OPTIONS, PURCHASE_REASON_OPTIONS } from '../lib/leadOptions'
 import '../App.css'
 
 // หน้าฟอร์มลีดสาธารณะ — ไม่ต้อง login เอาลิงก์ไปแปะใน Facebook Ads/เว็บไซต์ได้เลย (เช่น /lead?src=facebook)
@@ -19,7 +19,7 @@ export default function PublicLeadPage() {
   const source = new URLSearchParams(window.location.search).get('src') || ''
   const [f, setF] = useState({
     full_name: '', phone: '', email: '', subject: '',
-    position: '', business_type: '', businessTypeOther: '', appliance_interest: [], purchase_reason: '', message: ''
+    position: '', business_type: '', businessTypeOther: '', appliance_interest: [], applianceOther: '', purchase_reason: '', message: ''
   })
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
@@ -34,18 +34,22 @@ export default function PublicLeadPage() {
   }))
 
   const isOtherBusiness = f.business_type === BUSINESS_TYPE_OTHER
+  const isOtherAppliance = f.appliance_interest.includes(APPLIANCE_OTHER)
 
   const submit = async (e) => {
     e.preventDefault()
     if (!f.subject.trim() || !f.full_name.trim() || !f.phone.trim()) { setError('กรุณากรอกหัวข้อ ชื่อ และเบอร์โทรศัพท์'); return }
     if (isOtherBusiness && !f.businessTypeOther.trim()) { setError('กรุณาระบุประเภทธุรกิจ'); return }
+    if (isOtherAppliance && !f.applianceOther.trim()) { setError('กรุณาระบุประเภทเครื่องใช้ไฟฟ้าที่สนใจ'); return }
     setSubmitting(true)
     setError('')
     try {
       const business_type = isOtherBusiness ? f.businessTypeOther.trim() : (f.business_type || null)
+      const appliance_interest = f.appliance_interest.filter(v => v !== APPLIANCE_OTHER)
+      if (isOtherAppliance) appliance_interest.push(f.applianceOther.trim())
       await submitPublicLead({
         subject: f.subject, full_name: f.full_name, phone: f.phone, email: f.email, message: f.message, source,
-        position: f.position || null, business_type, appliance_interest: f.appliance_interest, purchase_reason: f.purchase_reason || null
+        position: f.position || null, business_type, appliance_interest, purchase_reason: f.purchase_reason || null
       })
       setDone(true)
     } catch (err) {
@@ -121,6 +125,9 @@ export default function PublicLeadPage() {
                       </label>
                     ))}
                   </div>
+                  {isOtherAppliance && (
+                    <input className="form-control" style={{ marginTop: 8 }} value={f.applianceOther} onChange={set('applianceOther')} placeholder="ระบุเครื่องใช้ไฟฟ้าที่สนใจ" />
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">เหตุผลในการซื้อ</label>
