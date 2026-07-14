@@ -20,7 +20,8 @@ function slipKind(path) {
 // รูปแบบอ้างอิงจากเทมเพลตใบเสนอราคาเดิม (printQuotation.js) ให้หน้าตาเป็นชุดเดียวกัน
 // slip: { url, kind } จาก getPaymentSlipUrl + slipKind — หรือ null ถ้าไม่มีสลิปแนบ/โหลดไม่สำเร็จ
 // autoPrint: false ใช้ตอนแปลงเป็นรูปภาพ (downloadPaymentApprovalImage) — ไม่ต้องมีปุ่ม/สคริปต์เปิด print dialog ของเบราว์เซอร์
-export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl = '/worldtech-logo.png', slip = null, { autoPrint = true } = {}) {
+// order: เอกสารออเดอร์ที่ผูกกับคำขอนี้ (ต้องส่งเข้ามาจากหน้าที่มี order อยู่แล้ว) — ใช้ดึงชื่อเซลล์ผู้เปิดออเดอร์มาโชว์ กันหาไม่เจอเวลาเอกสารผิดพลาด
+export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl = '/worldtech-logo.png', slip = null, order = null, { autoPrint = true } = {}) {
   const name = settings.COMPANY_NAME || 'Worldtech Co., Ltd.'
   const address = settings.COMPANY_ADDRESS || ''
   const taxId = settings.COMPANY_TAX_ID || ''
@@ -99,6 +100,7 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
         <div><span class="k">ประเภทลูกค้า:</span> ${escapeHtml(pr.credit_type || '-')}</div>
         <div><span class="k">ประเภทการชำระ:</span> ${escapeHtml(pr.payment_type || '-')}</div>
         <div><span class="k">เลขที่ออเดอร์:</span> ${escapeHtml(pr.order_no || pr.order?.order_no || '-')}</div>
+        <div><span class="k">เซลล์ผู้เปิดออเดอร์:</span> ${escapeHtml(order?.sales_name || '-')}</div>
         <div><span class="k">เลขที่ PO:</span> ${escapeHtml(pr.po_reference || '-')}</div>
         <div><span class="k">วันที่คำขอ:</span> ${fmtDate(pr.request_date || pr.created_at)}</div>
         <div><span class="k">ผู้ส่งคำขอ:</span> ${escapeHtml(pr.requested_by_name || '-')}</div>
@@ -169,7 +171,7 @@ function waitForImages(el) {
 }
 
 // เปิดหน้าต่างใหม่ก่อน (sync ตอน click) กันโดน popup blocker แล้วค่อยโหลดรายการสินค้า async — แบบเดียวกับ printQuotation
-export async function printPaymentApproval(pr, settings = {}) {
+export async function printPaymentApproval(pr, settings = {}, order = null) {
   const w = window.open('', '_blank', 'width=800,height=1000')
   if (!w) { alert('เบราว์เซอร์บล็อกป๊อปอัป กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้'); return }
   w.document.write('<html><body style="font-family:sans-serif;padding:40px;text-align:center;color:#718096">กำลังโหลดข้อมูล...</body></html>')
@@ -183,7 +185,7 @@ export async function printPaymentApproval(pr, settings = {}) {
       catch { /* ข้ามส่วนสลิปไป */ }
     }
     const logoUrl = `${window.location.origin}/worldtech-logo.png`
-    const html = buildPaymentApprovalHtml(pr, settings, items, logoUrl, slip)
+    const html = buildPaymentApprovalHtml(pr, settings, items, logoUrl, slip, order)
     w.document.open()
     w.document.write(html)
     w.document.close()
@@ -197,7 +199,7 @@ export async function printPaymentApproval(pr, settings = {}) {
 // ดาวน์โหลดใบอนุมัติเป็นไฟล์รูปภาพ (PNG) — เนื้อหาเหมือน PDF ทุกอย่าง แค่เปลี่ยนสกุลไฟล์
 // เพราะระบบบัญชีภายนอกที่ต้องเอาไปแนบต่อรับแนบได้เฉพาะไฟล์รูปภาพเท่านั้น ไม่รับ PDF
 // เรนเดอร์เทมเพลตเดียวกันในกล่องที่ซ่อนไว้ในหน้าเดิมแล้วถ่ายภาพด้วย html2canvas (วิธีเดียวกับ renderQuotationPdfBlob)
-export async function downloadPaymentApprovalImage(pr, settings = {}) {
+export async function downloadPaymentApprovalImage(pr, settings = {}, order = null) {
   const items = await listPaymentItems(pr.id)
   let slip = null
   if (pr.slip_file_url) {
@@ -205,7 +207,7 @@ export async function downloadPaymentApprovalImage(pr, settings = {}) {
     catch { /* ข้ามส่วนสลิปไป */ }
   }
   const logoUrl = `${window.location.origin}/worldtech-logo.png`
-  const html = buildPaymentApprovalHtml(pr, settings, items, logoUrl, slip, { autoPrint: false })
+  const html = buildPaymentApprovalHtml(pr, settings, items, logoUrl, slip, order, { autoPrint: false })
   const parsed = new DOMParser().parseFromString(html, 'text/html')
 
   const container = document.createElement('div')

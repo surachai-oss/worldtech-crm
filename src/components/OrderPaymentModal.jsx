@@ -218,7 +218,7 @@ function PaymentRequestCard({ pr, order, settings, perm, currentUser, onEdit, on
   }
 
   const downloadImage = async () => {
-    try { await downloadPaymentApprovalImage(pr, settings) }
+    try { await downloadPaymentApprovalImage(pr, settings, order) }
     catch (e) { toast(lang === 'en' ? 'Failed to create image: ' + e.message : 'สร้างรูปภาพไม่สำเร็จ: ' + e.message, 'error') }
   }
 
@@ -256,7 +256,7 @@ function PaymentRequestCard({ pr, order, settings, perm, currentUser, onEdit, on
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {pr.slip_file_url && <button className="btn btn-outline btn-xs" onClick={viewSlip}>{t('ดูสลิป')}</button>}
           {editable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(pr)}>{t('แก้ไข')}</button>}
-          {APPROVED_STATES.includes(pr.status) && <button className="btn btn-outline btn-xs" onClick={() => printPaymentApproval(pr, settings)}>{t('ดาวน์โหลด PDF')}</button>}
+          {APPROVED_STATES.includes(pr.status) && <button className="btn btn-outline btn-xs" onClick={() => printPaymentApproval(pr, settings, order)}>{t('ดาวน์โหลด PDF')}</button>}
           {APPROVED_STATES.includes(pr.status) && <button className="btn btn-outline btn-xs" onClick={downloadImage}>{t('ดาวน์โหลดรูปภาพ')}</button>}
           {pr.status === PAYMENT_STATUS.DRAFT && owns && <button className="btn btn-danger btn-xs" onClick={doDelete} disabled={busy}>{t('ลบ')}</button>}
         </div>
