@@ -226,6 +226,9 @@ alter table payment_requests add column if not exists total_amount numeric defau
 alter table payment_requests add column if not exists finance_ref_no text;
 -- bill_no = เลขที่บิลของออเดอร์ที่เซลล์ต้องเปิดในระบบ กรอกเองแทนการผูก deal_id (ฟอร์มไม่ใช้ deal_id แล้ว แต่คงคอลัมน์เดิมไว้เผื่อข้อมูลเก่า)
 alter table payment_requests add column if not exists bill_no text;
+-- payment_method = วิธีการชำระ (โอนเงิน/เงินสด/เช็ค/บัตรเครดิต/เครดิตเทอม/อื่นๆ) เลือกหลังประเภทการชำระ — payment_method_other ใช้เมื่อเลือก "อื่นๆ โปรดระบุ"
+alter table payment_requests add column if not exists payment_method text;
+alter table payment_requests add column if not exists payment_method_other text;
 
 -- ===== PAYMENT ITEMS (รายการสินค้าในคำขอตรวจยอด) =====
 create table if not exists payment_items (
