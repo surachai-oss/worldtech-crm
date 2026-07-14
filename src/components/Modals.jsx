@@ -244,7 +244,8 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
   const [items, setItems] = useState(() => initial?.items?.length ? initial.items.map(it => ({ product_id: it.product_id || '', description: it.description || '', quantity: it.quantity, unit_price: it.unit_price })) : [{ ...EMPTY_ITEM }])
 
   // ตัวกรองประเภทลูกค้า (บุคคลธรรมดา/นิติบุคคล) ก่อนค้นหาบริษัท — แค่ช่วยแคบรายการให้หาง่ายขึ้น ไม่ใช่ฟิลด์ของดีล ไม่ถูกบันทึก
-  const [customerTypeFilter, setCustomerTypeFilter] = useState('')
+  // ตั้งค่าเริ่มต้นจาก customer_type ของบริษัทที่เลือกไว้แล้ว (ตอนแก้ไข) กันไม่ให้ดูเหมือนรีเซ็ตทุกครั้งที่เปิดหน้าแก้ไข
+  const [customerTypeFilter, setCustomerTypeFilter] = useState(() => companies.find(c => c.id === (initial?.company_id || defaultCompanyId))?.customer_type || '')
   const filteredCompanies = customerTypeFilter ? companies.filter(c => c.customer_type === customerTypeFilter) : companies
 
   useEffect(() => {
@@ -437,7 +438,8 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
   const [items, setItems] = useState(() => initial?.items?.length ? initial.items.map(it => ({ product_id: it.product_id || '', description: it.description || '', quantity: it.quantity, unit_price: it.unit_price })) : [{ ...EMPTY_QUOT_ITEM }])
 
   // ตัวกรองประเภทลูกค้า (บุคคลธรรมดา/นิติบุคคล) ก่อนค้นหาบริษัท — แค่ช่วยแคบรายการให้หาง่ายขึ้น ไม่ใช่ฟิลด์ของใบเสนอราคา ไม่ถูกบันทึก
-  const [customerTypeFilter, setCustomerTypeFilter] = useState('')
+  // ตั้งค่าเริ่มต้นจาก customer_type ของบริษัทที่เลือกไว้แล้ว (ตอนแก้ไข) กันไม่ให้ดูเหมือนรีเซ็ตทุกครั้งที่เปิดหน้าแก้ไข
+  const [customerTypeFilter, setCustomerTypeFilter] = useState(() => companies.find(c => c.id === (initial?.company_id || defaultCompanyId))?.customer_type || '')
   const filteredCompanies = customerTypeFilter ? companies.filter(c => c.customer_type === customerTypeFilter) : companies
 
   useEffect(() => {
