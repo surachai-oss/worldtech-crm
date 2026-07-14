@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchPaymentRequests, listPaymentItems, getPaymentSlipUrl, PAYMENT_STATUS_LIST } from '../lib/api'
+import { fetchPaymentRequests, listPaymentItems, getPaymentSlipUrl, PAYMENT_STATUS_LIST, PAYMENT_METHOD_OTHER } from '../lib/api'
 import { exportPaymentRequestsToExcel } from '../lib/importExport'
 import { fmtCurrency, fmtDate, paymentStatusLabel, paymentBadgeClass } from '../lib/format'
 import { useUi } from './UiContext'
@@ -63,6 +63,7 @@ function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMi
           <Row label={t('ลูกค้า')} value={pr.customer_name || pr.company?.name || '-'} />
           <Row label={t('ประเภทลูกค้า')} value={pr.credit_type || '-'} />
           <Row label={t('ประเภทการชำระ')} value={pr.payment_type || '-'} />
+          <Row label={t('วิธีการชำระ')} value={(pr.payment_method === PAYMENT_METHOD_OTHER ? pr.payment_method_other : pr.payment_method) || '-'} />
           <Row label={t('เลขที่ PO')} value={pr.po_reference || '-'} />
           <Row label={t('เลขที่ออเดอร์')} value={pr.order?.order_no || pr.order_no || '-'} />
           <Row label={t('ยอดไม่รวม VAT')} value={fmtCurrency(exVat)} />

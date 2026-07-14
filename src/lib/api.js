@@ -36,6 +36,10 @@ export const ACCOUNTING_DOC_STATUS_LIST = Object.values(ACCOUNTING_DOC_STATUS)
 // สถานะที่ยังไม่จบงาน ใช้คำนวณ "งานเกินกำหนด" ในสรุปหน้าเอกสารบัญชี
 const ACCOUNTING_DOC_OPEN_STATUSES = [ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO, ACCOUNTING_DOC_STATUS.PENDING_REVIEW, ACCOUNTING_DOC_STATUS.PENDING_ISSUE, ACCOUNTING_DOC_STATUS.PENDING_UPLOAD]
 
+// วิธีการชำระของคำขอตรวจยอด (payment_requests.payment_method) — ตัวเลือกคงที่ ไม่ใช่ picklist ที่แก้เองได้
+export const PAYMENT_METHOD_OTHER = 'อื่นๆ โปรดระบุ'
+export const PAYMENT_METHOD_OPTIONS = ['โอนเงิน', 'เงินสด', 'เช็ค', 'บัตรเครดิต', 'เครดิตเทอม', PAYMENT_METHOD_OTHER]
+
 export const DOC_TYPES = ['ใบแจ้งหนี้', 'ใบกำกับภาษี + ใบเสร็จรับเงิน', 'ใบเสร็จรับเงิน', 'เอกสารอื่นๆ']
 export const DOC_DELIVERY_METHODS = ['ส่งสำเนาทางอีเมล', 'ส่งตัวจริง', 'ส่งทั้งอีเมลและตัวจริง']
 export const DOC_PRIORITIES = ['ปกติ', 'ด่วน', 'ด่วนมาก / ลูกค้ารอใช้เอกสาร']

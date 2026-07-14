@@ -3,6 +3,7 @@ import {
   PAYMENT_STATUS, fetchPaymentRequestsByOrder, listPaymentItems, listOrderItems, listProducts, computeDealTotals,
   addPaymentRequestWithItems, updatePaymentRequestWithItems, submitPaymentRequest, uploadPaymentSlip, getPaymentSlipUrl,
   markPaymentOrderCreated, deletePaymentRequest, notifyFinancePaymentSubmitted,
+  PAYMENT_METHOD_OPTIONS, PAYMENT_METHOD_OTHER,
 } from '../lib/api'
 import { fmtCurrency, paymentStatusLabel, paymentBadgeClass } from '../lib/format'
 import { printPaymentApproval, downloadPaymentApprovalImage } from '../lib/printPaymentApproval'
@@ -42,6 +43,8 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
     request_date: (existing?.request_date || '').slice(0, 10) || todayStr(),
     po_reference: existing?.po_reference || '',
     payment_type: existing?.payment_type || 'ชำระเต็มจำนวน',
+    payment_method: existing?.payment_method || '',
+    payment_method_other: existing?.payment_method_other || '',
     slip_file_url: existing?.slip_file_url || '',
     remark: existing?.remark || '',
   }))
@@ -76,6 +79,7 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
   const totals = computeDealTotals(items.map(it => ({ quantity: it.quantity, unit_price: lineTotal(it) / (Number(it.quantity) || 1) })))
   const itemsTotal = items.reduce((s, it) => s + lineTotal(it), 0)
   const cleanItems = () => items.filter(it => it.product_name?.trim() || it.sku?.trim())
+  const isOtherPaymentMethod = f.payment_method === PAYMENT_METHOD_OTHER
 
   const buildFields = () => ({
     request_date: f.request_date || todayStr(),
@@ -85,6 +89,8 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
     quotation_id: order.quotation_id || null,
     po_reference: f.po_reference || null,
     payment_type: f.payment_type || null,
+    payment_method: f.payment_method || null,
+    payment_method_other: isOtherPaymentMethod ? (f.payment_method_other || null) : null,
     total_amount: itemsTotal,
     slip_file_url: f.slip_file_url || null,
     remark: f.remark || null,
@@ -181,9 +187,19 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
           <EditableSelect listKey="payment_types" value={f.payment_type} onChange={v => setF(s => ({ ...s, payment_type: v }))} isAdmin={isAdmin} />
         </div>
         <div className="form-group">
-          <label className="form-label">{t('เลขที่ PO')}</label>
-          <input className="form-control" value={f.po_reference} onChange={set('po_reference')} placeholder={t('ไม่บังคับ')} />
+          <label className="form-label">{t('วิธีการชำระ')}</label>
+          <select className="form-control" value={f.payment_method} onChange={set('payment_method')}>
+            <option value="">{t('-- เลือก --')}</option>
+            {PAYMENT_METHOD_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+          {isOtherPaymentMethod && (
+            <input className="form-control" style={{ marginTop: 8 }} value={f.payment_method_other} onChange={set('payment_method_other')} placeholder={t('ระบุวิธีการชำระ')} />
+          )}
         </div>
+      </div>
+      <div className="form-group">
+        <label className="form-label">{t('เลขที่ PO')}</label>
+        <input className="form-control" value={f.po_reference} onChange={set('po_reference')} placeholder={t('ไม่บังคับ')} />
       </div>
       <div className="form-group">
         <label className="form-label required">{t('สลิปการโอน')}</label>

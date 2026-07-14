@@ -1,6 +1,6 @@
 import html2canvas from 'html2canvas'
 import { fmtCurrency, fmtDate } from './format'
-import { listPaymentItems, getPaymentSlipUrl } from './api'
+import { listPaymentItems, getPaymentSlipUrl, PAYMENT_METHOD_OTHER } from './api'
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
@@ -99,6 +99,7 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
         <div><span class="k">ลูกค้า:</span> ${escapeHtml(pr.customer_name || '-')}</div>
         <div><span class="k">ประเภทลูกค้า:</span> ${escapeHtml(pr.credit_type || '-')}</div>
         <div><span class="k">ประเภทการชำระ:</span> ${escapeHtml(pr.payment_type || '-')}</div>
+        <div><span class="k">วิธีการชำระ:</span> ${escapeHtml((pr.payment_method === PAYMENT_METHOD_OTHER ? pr.payment_method_other : pr.payment_method) || '-')}</div>
         <div><span class="k">เลขที่ออเดอร์:</span> ${escapeHtml(pr.order_no || pr.order?.order_no || '-')}</div>
         <div><span class="k">เซลล์ผู้เปิดออเดอร์:</span> ${escapeHtml(order?.sales_name || '-')}</div>
         <div><span class="k">เลขที่ PO:</span> ${escapeHtml(pr.po_reference || '-')}</div>
