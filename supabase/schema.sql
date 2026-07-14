@@ -182,7 +182,7 @@ where q.product_id is not null
 -- status ขับด้วย workflow ในโค้ด (ไม่ใช่ picklist ที่แก้เองได้): Draft → Pending Finance Review → (Need More Info / Payment Mismatch / Rejected / Approved to Create Order) → Order Created
 create table if not exists payment_requests (
   id                   uuid primary key default uuid_generate_v4(),
-  pr_no                text unique,        -- เลขคำขอ เช่น PR-000001 (gen_pr_no())
+  pr_no                text unique,        -- เลขคำขอ เช่น RE6907013 (gen_pr_no()) — รูปแบบเดิม PR-000001 เลิกใช้แล้ว
   company_id           uuid references companies(id) on delete set null,
   customer_name        text,               -- snapshot ชื่อลูกค้า ณ ตอนสร้าง
   deal_id              uuid references deals(id) on delete set null,
@@ -516,11 +516,40 @@ create table if not exists notifications (
 );
 
 -- ===== helper: เลขคำขอตรวจยอด + เลขอ้างอิงการอนุมัติ =====
+-- pr_seq เดิม (PR-000001 นับต่อเนื่องไม่รีเซ็ต) เลิกใช้แล้ว แทนที่ด้วย gen_pr_no() รูปแบบใหม่ด้านล่าง — เก็บ sequence ไว้เฉยๆ ไม่ลบ กันพัง ไม่มีอะไรอ้างอิงแล้ว
 create sequence if not exists pr_seq start 1;
+
+-- เลขคำขอรูปแบบใหม่: RE{ปี พ.ศ. 2 หลัก}{เดือน 2 หลัก}{เลขวิ่ง 3 หลัก} เช่น RE6907013 = ปี 2569 เดือน 07 ลำดับที่ 013
+-- เลขวิ่งรีเซ็ตเป็น 001 ทุกเดือน (เหมือน gen_order_no ที่รีเซ็ตทุกปี) แยกตัวนับตามปี+เดือน — security definer bypass RLS บนตาราง counter เหมือน order_no_counters
+create table if not exists pr_no_counters (
+  year    int not null,
+  month   int not null,
+  counter int not null default 0,
+  primary key (year, month)
+);
+
+drop function if exists gen_pr_no();
 create or replace function gen_pr_no() returns text as $$
-declare n int;
-begin n := nextval('pr_seq'); return 'PR-' || lpad(n::text, 6, '0'); end;
-$$ language plpgsql;
+declare
+  buddhist_year int := extract(year from now())::int + 543;
+  cur_month int := extract(month from now())::int;
+  yy text := lpad((buddhist_year % 100)::text, 2, '0');
+  mm text := lpad(cur_month::text, 2, '0');
+  n int;
+begin
+  insert into pr_no_counters (year, month, counter) values (buddhist_year, cur_month, 1)
+  on conflict (year, month) do update set counter = pr_no_counters.counter + 1
+  returning counter into n;
+  return 'RE' || yy || mm || lpad(n::text, 3, '0');
+end;
+$$ language plpgsql security definer set search_path = public;
+grant execute on function gen_pr_no() to authenticated;
+
+-- migration ครั้งเดียว: เลข 001-012 ของเดือน ก.ค. 2569 (พ.ศ.) ถูกใช้นอกระบบไปแล้วก่อนมีฟีเจอร์นี้ — seed ตัวนับให้ต่อจาก 013
+-- และแก้เลขคำขอเดิม PR-000001 (ใบแรกที่สร้างในระบบ) ให้ตรงกับเลขที่ควรจะเป็นตามลำดับจริง
+insert into pr_no_counters (year, month, counter) values (2569, 7, 13)
+on conflict (year, month) do nothing;
+update payment_requests set pr_no = 'RE6907013' where pr_no = 'PR-000001';
 
 create sequence if not exists pay_app_seq start 1;
 create or replace function gen_approval_ref_no() returns text as $$
@@ -872,6 +901,7 @@ alter table accounting_document_files enable row level security;
 alter table orders       enable row level security;
 alter table order_items  enable row level security;
 alter table order_no_counters enable row level security; -- ไม่มี policy เลย = ปิดกั้นเข้าถึงตรงๆ ทุกทาง เข้าได้แค่ผ่าน gen_order_no() (security definer)
+alter table pr_no_counters enable row level security; -- เช่นเดียวกับ order_no_counters — เข้าได้แค่ผ่าน gen_pr_no() (security definer)
 
 -- ลบ policy แบบเก่า "authenticated ทำได้ทุกอย่าง" (ถ้ามีจากเวอร์ชันก่อนหน้า)
 drop policy if exists "allow all for authenticated" on companies;
