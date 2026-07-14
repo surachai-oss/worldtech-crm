@@ -5,7 +5,7 @@ import {
   markPaymentOrderCreated, deletePaymentRequest, notifyFinancePaymentSubmitted,
 } from '../lib/api'
 import { fmtCurrency, paymentStatusLabel, paymentBadgeClass } from '../lib/format'
-import { printPaymentApproval } from '../lib/printPaymentApproval'
+import { printPaymentApproval, downloadPaymentApprovalImage } from '../lib/printPaymentApproval'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import EditableSelect from './EditableSelect'
@@ -217,6 +217,11 @@ function PaymentRequestCard({ pr, order, settings, perm, currentUser, onEdit, on
     catch (e) { toast(lang === 'en' ? 'Failed to open slip: ' + e.message : 'เปิดสลิปไม่สำเร็จ: ' + e.message, 'error') }
   }
 
+  const downloadImage = async () => {
+    try { await downloadPaymentApprovalImage(pr, settings) }
+    catch (e) { toast(lang === 'en' ? 'Failed to create image: ' + e.message : 'สร้างรูปภาพไม่สำเร็จ: ' + e.message, 'error') }
+  }
+
   const owns = perm.isAdmin || perm.isFinance || pr.created_by === perm.userId || pr.created_by == null
   const editable = EDITABLE_STATUSES.includes(pr.status) && owns
 
@@ -252,6 +257,7 @@ function PaymentRequestCard({ pr, order, settings, perm, currentUser, onEdit, on
           {pr.slip_file_url && <button className="btn btn-outline btn-xs" onClick={viewSlip}>{t('ดูสลิป')}</button>}
           {editable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(pr)}>{t('แก้ไข')}</button>}
           {APPROVED_STATES.includes(pr.status) && <button className="btn btn-outline btn-xs" onClick={() => printPaymentApproval(pr, settings)}>{t('ดาวน์โหลด PDF')}</button>}
+          {APPROVED_STATES.includes(pr.status) && <button className="btn btn-outline btn-xs" onClick={downloadImage}>{t('ดาวน์โหลดรูปภาพ')}</button>}
           {pr.status === PAYMENT_STATUS.DRAFT && owns && <button className="btn btn-danger btn-xs" onClick={doDelete} disabled={busy}>{t('ลบ')}</button>}
         </div>
 

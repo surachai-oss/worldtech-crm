@@ -485,6 +485,7 @@ export const EN_DICT = {
   'เลขที่อนุมัติ': 'Approval No.',
   'ดูสลิป': 'View Slip',
   'ดาวน์โหลด PDF': 'Download PDF',
+  'ดาวน์โหลดรูปภาพ': 'Download Image',
 
   // ===== Import Modals =====
   'นำเข้าบริษัทลูกค้าจากไฟล์': 'Import Companies from File',

@@ -1,3 +1,4 @@
+import html2canvas from 'html2canvas'
 import { fmtCurrency, fmtDate } from './format'
 import { listPaymentItems, getPaymentSlipUrl } from './api'
 
@@ -18,7 +19,8 @@ function slipKind(path) {
 // ใบอนุมัติตรวจสอบยอดโอน — ให้ Sale ดาวน์โหลด/พิมพ์เป็น PDF แนบตอนเปิดออเดอร์ในระบบ (แสดงได้เฉพาะคำขอที่บัญชีอนุมัติแล้ว)
 // รูปแบบอ้างอิงจากเทมเพลตใบเสนอราคาเดิม (printQuotation.js) ให้หน้าตาเป็นชุดเดียวกัน
 // slip: { url, kind } จาก getPaymentSlipUrl + slipKind — หรือ null ถ้าไม่มีสลิปแนบ/โหลดไม่สำเร็จ
-export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl = '/worldtech-logo.png', slip = null) {
+// autoPrint: false ใช้ตอนแปลงเป็นรูปภาพ (downloadPaymentApprovalImage) — ไม่ต้องมีปุ่ม/สคริปต์เปิด print dialog ของเบราว์เซอร์
+export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl = '/worldtech-logo.png', slip = null, { autoPrint = true } = {}) {
   const name = settings.COMPANY_NAME || 'Worldtech Co., Ltd.'
   const address = settings.COMPANY_ADDRESS || ''
   const taxId = settings.COMPANY_TAX_ID || ''
@@ -148,13 +150,22 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
         </div>
       </div>
 
+      ${autoPrint ? `
       <div class="no-print" style="margin-top:24px;text-align:center">
         <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer">พิมพ์ / บันทึกเป็น PDF</button>
       </div>
       <script>window.onload = () => window.print();</script>
+      ` : ''}
     </body>
     </html>
   `
+}
+
+function waitForImages(el) {
+  return Promise.all(Array.from(el.querySelectorAll('img')).map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
+    img.addEventListener('load', resolve, { once: true })
+    img.addEventListener('error', resolve, { once: true })
+  })))
 }
 
 // เปิดหน้าต่างใหม่ก่อน (sync ตอน click) กันโดน popup blocker แล้วค่อยโหลดรายการสินค้า async — แบบเดียวกับ printQuotation
@@ -180,5 +191,49 @@ export async function printPaymentApproval(pr, settings = {}) {
     w.document.open()
     w.document.write(`<html><body style="font-family:sans-serif;padding:40px;text-align:center;color:#e53e3e">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(e.message)}</body></html>`)
     w.document.close()
+  }
+}
+
+// ดาวน์โหลดใบอนุมัติเป็นไฟล์รูปภาพ (PNG) — เนื้อหาเหมือน PDF ทุกอย่าง แค่เปลี่ยนสกุลไฟล์
+// เพราะระบบบัญชีภายนอกที่ต้องเอาไปแนบต่อรับแนบได้เฉพาะไฟล์รูปภาพเท่านั้น ไม่รับ PDF
+// เรนเดอร์เทมเพลตเดียวกันในกล่องที่ซ่อนไว้ในหน้าเดิมแล้วถ่ายภาพด้วย html2canvas (วิธีเดียวกับ renderQuotationPdfBlob)
+export async function downloadPaymentApprovalImage(pr, settings = {}) {
+  const items = await listPaymentItems(pr.id)
+  let slip = null
+  if (pr.slip_file_url) {
+    try { slip = { url: await getPaymentSlipUrl(pr.slip_file_url), kind: slipKind(pr.slip_file_url) } }
+    catch { /* ข้ามส่วนสลิปไป */ }
+  }
+  const logoUrl = `${window.location.origin}/worldtech-logo.png`
+  const html = buildPaymentApprovalHtml(pr, settings, items, logoUrl, slip, { autoPrint: false })
+  const parsed = new DOMParser().parseFromString(html, 'text/html')
+
+  const container = document.createElement('div')
+  container.style.position = 'fixed'
+  container.style.left = '0'
+  container.style.top = '0'
+  container.style.width = '210mm'
+  container.style.padding = '14mm'
+  container.style.boxSizing = 'border-box'
+  container.style.background = '#fff'
+  container.style.zIndex = '-9999'
+  container.style.pointerEvents = 'none'
+  const styleEl = document.createElement('style')
+  styleEl.textContent = parsed.querySelector('style')?.textContent || ''
+  container.appendChild(styleEl)
+  Array.from(parsed.body.childNodes).forEach(node => container.appendChild(node))
+  document.body.appendChild(container)
+
+  try {
+    await waitForImages(container)
+    await new Promise(r => requestAnimationFrame(r)) // รอ layout settle ก่อนถ่ายภาพ
+
+    const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+    const a = document.createElement('a')
+    a.href = canvas.toDataURL('image/png')
+    a.download = `${pr.approval_ref_no || pr.pr_no || 'payment-approval'}.png`
+    a.click()
+  } finally {
+    document.body.removeChild(container)
   }
 }

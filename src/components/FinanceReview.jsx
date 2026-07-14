@@ -15,7 +15,8 @@ function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMi
   const [items, setItems] = useState(null)
   const [remark, setRemark] = useState('')
   const [approverName, setApproverName] = useState(currentUserName || '')
-  const [financeRefNo, setFinanceRefNo] = useState('')
+  // เติมค่าจาก pr.finance_ref_no ถ้าเคยกรอกไว้แล้ว (เช่น กดอนุมัติไปแล้วกลับมาเปิดดูอีกครั้ง) กันดูเหมือนค่าที่กรอกไว้หายไป
+  const [financeRefNo, setFinanceRefNo] = useState(pr.finance_ref_no || '')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => { listPaymentItems(pr.id).then(setItems).catch(() => setItems([])) }, [pr.id])
