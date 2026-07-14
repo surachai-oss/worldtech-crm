@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import EditableSelect from './EditableSelect'
 import SearchableSelect from './SearchableSelect'
 import { useUi } from './UiContext'
+import { useLanguage } from './LanguageContext'
 import { listProducts, listDealItems, listQuotationItems, computeDealTotals, getProductImageUrl } from '../lib/api'
 import { POSITION_OPTIONS, BUSINESS_TYPE_OTHER, BUSINESS_TYPE_OPTIONS, APPLIANCE_OTHER, APPLIANCE_OPTIONS, PURCHASE_REASON_OPTIONS } from '../lib/leadOptions'
 
@@ -15,29 +16,31 @@ function Field({ label, required, children }) {
 }
 
 function CompanySelect({ companies, value, onChange }) {
+  const { lang } = useLanguage()
   return (
     <SearchableSelect
       options={companies}
       value={value}
       onChange={onChange}
-      placeholder="-- เลือกบริษัท (พิมพ์เพื่อค้นหา) --"
+      placeholder={lang === 'en' ? '-- Select a company (type to search) --' : '-- เลือกบริษัท (พิมพ์เพื่อค้นหา) --'}
       getOptionLabel={c => c.name}
     />
   )
 }
 
 function ModalShell({ title, onClose, onSave, saveLabel = 'บันทึก', children, wide }) {
+  const { t } = useLanguage()
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={wide ? { maxWidth: 720 } : undefined}>
         <div className="modal-header">
-          <div className="modal-title">{title}</div>
+          <div className="modal-title">{t(title)}</div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">{children}</div>
         <div className="modal-footer">
-          <button className="btn btn-outline" onClick={onClose}>ยกเลิก</button>
-          <button className="btn btn-primary" onClick={onSave}>{saveLabel}</button>
+          <button className="btn btn-outline" onClick={onClose}>{t('ยกเลิก')}</button>
+          <button className="btn btn-primary" onClick={onSave}>{t(saveLabel)}</button>
         </div>
       </div>
     </div>
@@ -45,6 +48,7 @@ function ModalShell({ title, onClose, onSave, saveLabel = 'บันทึก', 
 }
 
 export function CompanyModal({ initial, isAdmin, onClose, onSave }) {
+  const { t, lang } = useLanguage()
   const [f, setF] = useState(() => {
     const base = { name: '', customer_type: 'นิติบุคคล/บริษัท', industry: '', status: 'Active', phone: '', email: '', website: '', address: '', tax_id: '', owner: '', lead_source: '', credit_term: '', note: '' }
     return initial ? { ...base, ...initial } : base
@@ -59,66 +63,71 @@ export function CompanyModal({ initial, isAdmin, onClose, onSave }) {
 
   return (
     <ModalShell title={initial?.id ? 'แก้ไขลูกค้า' : 'เพิ่มลูกค้า'} onClose={onClose} onSave={() => onSave(f, files)}>
-      <Field label="ประเภทลูกค้า">
+      <Field label={t('ประเภทลูกค้า')}>
         <EditableSelect listKey="customer_types" value={f.customer_type} onChange={v => setF(s => ({ ...s, customer_type: v }))} isAdmin={isAdmin} />
       </Field>
-      <Field label={isIndividual ? 'ชื่อ-นามสกุล' : 'ชื่อบริษัท'} required>
-        <input className="form-control" value={f.name} onChange={set('name')} placeholder={isIndividual ? 'ชื่อ-นามสกุลลูกค้า' : 'บริษัท ตัวอย่าง จำกัด'} />
+      <Field label={isIndividual ? t('ชื่อ-นามสกุล') : t('ชื่อบริษัท')} required>
+        <input className="form-control" value={f.name} onChange={set('name')} placeholder={isIndividual ? t('ชื่อ-นามสกุลลูกค้า') : t('บริษัท ตัวอย่าง จำกัด')} />
       </Field>
-      <Field label="เอกสารแนบ (ภพ20, หนังสือรับรองบริษัท ฯลฯ)">
+      <Field label={t('เอกสารแนบ (ภพ20, หนังสือรับรองบริษัท ฯลฯ)')}>
         <input className="form-control" type="file" multiple onChange={onFilesChange} />
-        {files.length > 0 && <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>เลือกแล้ว {files.length} ไฟล์: {files.map(file => file.name).join(', ')}</div>}
+        {files.length > 0 && (
+          <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
+            {lang === 'en' ? `Selected ${files.length} file(s): ` : `เลือกแล้ว ${files.length} ไฟล์: `}{files.map(file => file.name).join(', ')}
+          </div>
+        )}
       </Field>
       <div className="form-row">
         {!isIndividual && (
-          <Field label="อุตสาหกรรม">
+          <Field label={t('อุตสาหกรรม')}>
             <EditableSelect listKey="industries" value={f.industry} onChange={v => setF(s => ({ ...s, industry: v }))} isAdmin={isAdmin} />
           </Field>
         )}
-        <Field label="สถานะ">
+        <Field label={t('สถานะ')}>
           <EditableSelect listKey="company_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} isAdmin={isAdmin} />
         </Field>
       </div>
       <div className="form-row">
-        <Field label="โทรศัพท์"><input className="form-control" value={f.phone || ''} onChange={set('phone')} placeholder="02-xxx-xxxx" /></Field>
-        <Field label="อีเมล"><input className="form-control" type="email" value={f.email || ''} onChange={set('email')} /></Field>
+        <Field label={t('โทรศัพท์')}><input className="form-control" value={f.phone || ''} onChange={set('phone')} placeholder="02-xxx-xxxx" /></Field>
+        <Field label={t('อีเมล')}><input className="form-control" type="email" value={f.email || ''} onChange={set('email')} /></Field>
       </div>
-      {!isIndividual && <Field label="เว็บไซต์"><input className="form-control" value={f.website || ''} onChange={set('website')} placeholder="https://www.company.com" /></Field>}
-      <Field label="ที่อยู่"><textarea className="form-control" rows={2} value={f.address || ''} onChange={set('address')} /></Field>
+      {!isIndividual && <Field label={t('เว็บไซต์')}><input className="form-control" value={f.website || ''} onChange={set('website')} placeholder="https://www.company.com" /></Field>}
+      <Field label={t('ที่อยู่')}><textarea className="form-control" rows={2} value={f.address || ''} onChange={set('address')} /></Field>
       <div className="form-row">
-        {!isIndividual && <Field label="เลขประจำตัวผู้เสียภาษี"><input className="form-control" value={f.tax_id || ''} onChange={set('tax_id')} placeholder="0-0000-00000-00-0" /></Field>}
-        <Field label="ผู้รับผิดชอบ"><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
+        {!isIndividual && <Field label={t('เลขประจำตัวผู้เสียภาษี')}><input className="form-control" value={f.tax_id || ''} onChange={set('tax_id')} placeholder="0-0000-00000-00-0" /></Field>}
+        <Field label={t('ผู้รับผิดชอบ')}><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
       </div>
-      <Field label="ที่มา">
-        <EditableSelect listKey="lead_sources" value={f.lead_source} onChange={v => setF(s => ({ ...s, lead_source: v }))} placeholder="-- ไม่ระบุ --" isAdmin={isAdmin} />
+      <Field label={t('ที่มา')}>
+        <EditableSelect listKey="lead_sources" value={f.lead_source} onChange={v => setF(s => ({ ...s, lead_source: v }))} placeholder={t('-- ไม่ระบุ --')} isAdmin={isAdmin} />
       </Field>
-      <Field label="เงื่อนไขเครดิต">
-        <EditableSelect listKey="credit_terms" value={f.credit_term} onChange={v => setF(s => ({ ...s, credit_term: v }))} placeholder="-- ไม่ใช่ลูกค้าเครดิต (เงินสด) --" isAdmin={isAdmin} />
+      <Field label={t('เงื่อนไขเครดิต')}>
+        <EditableSelect listKey="credit_terms" value={f.credit_term} onChange={v => setF(s => ({ ...s, credit_term: v }))} placeholder={t('-- ไม่ใช่ลูกค้าเครดิต (เงินสด) --')} isAdmin={isAdmin} />
       </Field>
-      <Field label="หมายเหตุ"><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
+      <Field label={t('หมายเหตุ')}><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
     </ModalShell>
   )
 }
 
 export function ContactModal({ initial, companies, defaultCompanyId, onClose, onSave }) {
+  const { t } = useLanguage()
   const [f, setF] = useState(() => initial || { company_id: defaultCompanyId || '', full_name: '', position: '', department: '', phone: '', email: '', line_id: '', note: '' })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
   return (
     <ModalShell title={initial?.id ? 'แก้ไขผู้ติดต่อ' : 'เพิ่มผู้ติดต่อ'} onClose={onClose} onSave={() => onSave(f)}>
-      <Field label="บริษัท"><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
+      <Field label={t('บริษัท')}><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
       <div className="form-row">
-        <Field label="ชื่อ-นามสกุล" required><input className="form-control" value={f.full_name} onChange={set('full_name')} /></Field>
-        <Field label="ตำแหน่ง"><input className="form-control" value={f.position || ''} onChange={set('position')} /></Field>
+        <Field label={t('ชื่อ-นามสกุล')} required><input className="form-control" value={f.full_name} onChange={set('full_name')} /></Field>
+        <Field label={t('ตำแหน่ง')}><input className="form-control" value={f.position || ''} onChange={set('position')} /></Field>
       </div>
       <div className="form-row">
-        <Field label="แผนก"><input className="form-control" value={f.department || ''} onChange={set('department')} /></Field>
+        <Field label={t('แผนก')}><input className="form-control" value={f.department || ''} onChange={set('department')} /></Field>
         <Field label="Line ID"><input className="form-control" value={f.line_id || ''} onChange={set('line_id')} /></Field>
       </div>
       <div className="form-row">
-        <Field label="โทรศัพท์"><input className="form-control" value={f.phone || ''} onChange={set('phone')} /></Field>
-        <Field label="อีเมล"><input className="form-control" type="email" value={f.email || ''} onChange={set('email')} /></Field>
+        <Field label={t('โทรศัพท์')}><input className="form-control" value={f.phone || ''} onChange={set('phone')} /></Field>
+        <Field label={t('อีเมล')}><input className="form-control" type="email" value={f.email || ''} onChange={set('email')} /></Field>
       </div>
-      <Field label="หมายเหตุ"><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
+      <Field label={t('หมายเหตุ')}><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
     </ModalShell>
   )
 }
@@ -126,6 +135,7 @@ export function ContactModal({ initial, companies, defaultCompanyId, onClose, on
 // ให้เซลล์กรอกผู้ติดต่อ/ลีดเองตอนลูกค้าทักมาเอง หรือได้นามบัตรมาจากงานอีเวนต์ ฯลฯ — ฟิลด์เดียวกับฟอร์มสาธารณะ /lead ทุกอย่าง
 // ต่างจากฟอร์มสาธารณะที่ status เริ่มที่ "ใหม่" เสมอ — ที่นี่ default เป็น "ติดต่อแล้ว" เพราะเซลล์คุยกับลูกค้าไปแล้วก่อนจะมากรอก แก้เป็นอย่างอื่นได้ถ้าไม่ตรง
 export function LeadModal({ initial, isAdmin, onClose, onSave }) {
+  const { t } = useLanguage()
   const [f, setF] = useState(() => {
     const base = {
       subject: '', full_name: '', phone: '', email: '', position: '', business_type: '', businessTypeOther: '',
@@ -162,35 +172,35 @@ export function LeadModal({ initial, isAdmin, onClose, onSave }) {
   return (
     <ModalShell title={initial?.id ? 'แก้ไขผู้ติดต่อ' : 'เพิ่มผู้ติดต่อ'} onClose={onClose} onSave={submit}>
       <div className="form-row">
-        <Field label="ชื่อ-นามสกุล" required><input className="form-control" value={f.full_name} onChange={set('full_name')} placeholder="เช่น สมชาย ใจดี" /></Field>
-        <Field label="เบอร์โทรศัพท์" required><input className="form-control" value={f.phone} onChange={set('phone')} placeholder="08x-xxx-xxxx" /></Field>
+        <Field label={t('ชื่อ-นามสกุล')} required><input className="form-control" value={f.full_name} onChange={set('full_name')} placeholder={t('เช่น สมชาย ใจดี')} /></Field>
+        <Field label={t('เบอร์โทรศัพท์')} required><input className="form-control" value={f.phone} onChange={set('phone')} placeholder="08x-xxx-xxxx" /></Field>
       </div>
-      <Field label="อีเมล"><input className="form-control" type="email" value={f.email || ''} onChange={set('email')} placeholder="ไม่บังคับ" /></Field>
-      <Field label="หัวข้อที่ติดต่อ" required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder="เช่น สอบถามราคาเครื่องฟอกอากาศ" /></Field>
+      <Field label={t('อีเมล')}><input className="form-control" type="email" value={f.email || ''} onChange={set('email')} placeholder={t('ไม่บังคับ')} /></Field>
+      <Field label={t('หัวข้อที่ติดต่อ')} required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder={t('เช่น สอบถามราคาเครื่องฟอกอากาศ')} /></Field>
       <div className="form-row">
-        <Field label="ตำแหน่ง">
+        <Field label={t('ตำแหน่ง')}>
           <select className="form-control" value={f.position || ''} onChange={set('position')}>
-            <option value="">-- เลือก --</option>
+            <option value="">{t('-- เลือก --')}</option>
             {POSITION_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
         </Field>
-        <Field label="เหตุผลในการซื้อ">
+        <Field label={t('เหตุผลในการซื้อ')}>
           <select className="form-control" value={f.purchase_reason || ''} onChange={set('purchase_reason')}>
-            <option value="">-- เลือก --</option>
+            <option value="">{t('-- เลือก --')}</option>
             {PURCHASE_REASON_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
         </Field>
       </div>
-      <Field label="ประเภทธุรกิจ">
+      <Field label={t('ประเภทธุรกิจ')}>
         <select className="form-control" value={f.business_type || ''} onChange={set('business_type')}>
-          <option value="">-- เลือก --</option>
+          <option value="">{t('-- เลือก --')}</option>
           {BUSINESS_TYPE_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}
         </select>
         {isOtherBusiness && (
-          <input className="form-control" style={{ marginTop: 8 }} value={f.businessTypeOther} onChange={set('businessTypeOther')} placeholder="ระบุประเภทธุรกิจ" />
+          <input className="form-control" style={{ marginTop: 8 }} value={f.businessTypeOther} onChange={set('businessTypeOther')} placeholder={t('ระบุประเภทธุรกิจ')} />
         )}
       </Field>
-      <Field label="ประเภทเครื่องใช้ไฟฟ้าที่สนใจ (เลือกได้หลายข้อ)">
+      <Field label={t('ประเภทเครื่องใช้ไฟฟ้าที่สนใจ (เลือกได้หลายข้อ)')}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
           {APPLIANCE_OPTIONS.map(v => (
             <label key={v} style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -199,18 +209,18 @@ export function LeadModal({ initial, isAdmin, onClose, onSave }) {
           ))}
         </div>
         {isOtherAppliance && (
-          <input className="form-control" style={{ marginTop: 8 }} value={f.applianceOther} onChange={set('applianceOther')} placeholder="ระบุเครื่องใช้ไฟฟ้าที่สนใจ" />
+          <input className="form-control" style={{ marginTop: 8 }} value={f.applianceOther} onChange={set('applianceOther')} placeholder={t('ระบุเครื่องใช้ไฟฟ้าที่สนใจ')} />
         )}
       </Field>
       <div className="form-row">
-        <Field label="ที่มา">
-          <EditableSelect listKey="lead_sources" value={f.source} onChange={v => setF(s => ({ ...s, source: v }))} placeholder="-- ไม่ระบุ --" isAdmin={isAdmin} />
+        <Field label={t('ที่มา')}>
+          <EditableSelect listKey="lead_sources" value={f.source} onChange={v => setF(s => ({ ...s, source: v }))} placeholder={t('-- ไม่ระบุ --')} isAdmin={isAdmin} />
         </Field>
-        <Field label="สถานะ">
+        <Field label={t('สถานะ')}>
           <EditableSelect listKey="lead_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} isAdmin={isAdmin} />
         </Field>
       </div>
-      <Field label="ข้อความเพิ่มเติม"><textarea className="form-control" rows={2} value={f.message || ''} onChange={set('message')} placeholder="ไม่บังคับ" /></Field>
+      <Field label={t('ข้อความเพิ่มเติม')}><textarea className="form-control" rows={2} value={f.message || ''} onChange={set('message')} placeholder={t('ไม่บังคับ')} /></Field>
     </ModalShell>
   )
 }
@@ -220,6 +230,7 @@ const EMPTY_ITEM = { product_id: '', description: '', quantity: 1, unit_price: '
 
 export function DealModal({ initial, companies, defaultCompanyId, defaultStage, isAdmin, onClose, onSave }) {
   const { toast } = useUi()
+  const { t, lang } = useLanguage()
   const [f, setF] = useState(() => {
     const base = { company_id: defaultCompanyId || '', name: '', stage: defaultStage || 'Lead', close_date: '', follow_up_date: '', source: '', owner: '', note: '' }
     if (!initial) return base
@@ -237,14 +248,14 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
   const filteredCompanies = customerTypeFilter ? companies.filter(c => c.customer_type === customerTypeFilter) : companies
 
   useEffect(() => {
-    listProducts().then(setProducts).catch(e => { toast('โหลดรายการสินค้าไม่สำเร็จ: ' + e.message, 'error'); setProducts([]) })
+    listProducts().then(setProducts).catch(e => { toast(lang === 'en' ? 'Failed to load products: ' + e.message : 'โหลดรายการสินค้าไม่สำเร็จ: ' + e.message, 'error'); setProducts([]) })
   }, [])
 
   useEffect(() => {
     if (!initial?.id) return
     listDealItems(initial.id)
       .then(rows => { if (rows.length) setItems(rows.map(r => ({ product_id: r.product_id || '', description: r.description || '', quantity: r.quantity, unit_price: r.unit_price }))) })
-      .catch(e => toast('โหลดรายการสินค้าของดีลไม่สำเร็จ: ' + e.message, 'error'))
+      .catch(e => toast(lang === 'en' ? "Failed to load the deal's line items: " + e.message : 'โหลดรายการสินค้าของดีลไม่สำเร็จ: ' + e.message, 'error'))
   }, [initial?.id])
 
   const updateItem = (i, patch) => setItems(rows => rows.map((r, idx) => idx === i ? { ...r, ...patch } : r))
@@ -268,29 +279,29 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
 
   return (
     <ModalShell title={initial?.id ? 'แก้ไขดีล' : 'เพิ่มดีล'} onClose={onClose} onSave={submit} wide>
-      <Field label="ประเภทลูกค้า">
-        <EditableSelect listKey="customer_types" value={customerTypeFilter} onChange={setCustomerTypeFilter} placeholder="-- ทุกประเภท (เลือกเพื่อกรองรายชื่อบริษัทด้านล่าง) --" isAdmin={isAdmin} />
+      <Field label={t('ประเภทลูกค้า')}>
+        <EditableSelect listKey="customer_types" value={customerTypeFilter} onChange={setCustomerTypeFilter} placeholder={t('-- ทุกประเภท (เลือกเพื่อกรองรายชื่อบริษัทด้านล่าง) --')} isAdmin={isAdmin} />
       </Field>
-      <Field label="บริษัท"><CompanySelect companies={filteredCompanies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
-      <Field label="ชื่อดีล" required><input className="form-control" value={f.name} onChange={set('name')} placeholder="โปรเจกต์ / สินค้าที่ขาย" /></Field>
+      <Field label={t('บริษัท')}><CompanySelect companies={filteredCompanies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
+      <Field label={t('ชื่อดีล')} required><input className="form-control" value={f.name} onChange={set('name')} placeholder={t('โปรเจกต์ / สินค้าที่ขาย')} /></Field>
       <div className="form-row">
         <Field label="Stage">
           <EditableSelect listKey="deal_stages" value={f.stage} onChange={v => setF(s => ({ ...s, stage: v }))} isAdmin={isAdmin} />
         </Field>
-        <Field label="ที่มาของดีล">
-          <EditableSelect listKey="deal_sources" value={f.source} onChange={v => setF(s => ({ ...s, source: v }))} placeholder="-- ไม่ระบุ --" isAdmin={isAdmin} />
+        <Field label={t('ที่มาของดีล')}>
+          <EditableSelect listKey="deal_sources" value={f.source} onChange={v => setF(s => ({ ...s, source: v }))} placeholder={t('-- ไม่ระบุ --')} isAdmin={isAdmin} />
         </Field>
       </div>
       <div className="form-row">
-        <Field label="วันที่คาดว่าปิดดีล"><input className="form-control" type="date" value={f.close_date || ''} onChange={set('close_date')} /></Field>
-        <Field label="วันที่ต้อง Follow up"><input className="form-control" type="date" value={f.follow_up_date || ''} onChange={set('follow_up_date')} /></Field>
+        <Field label={t('วันที่คาดว่าปิดดีล')}><input className="form-control" type="date" value={f.close_date || ''} onChange={set('close_date')} /></Field>
+        <Field label={t('วันที่ต้อง Follow up')}><input className="form-control" type="date" value={f.follow_up_date || ''} onChange={set('follow_up_date')} /></Field>
       </div>
-      <Field label="ผู้รับผิดชอบ"><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
+      <Field label={t('ผู้รับผิดชอบ')}><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
 
-      <Field label="รายการสินค้า (ราคาต่อหน่วยกรอกแบบรวม VAT แล้ว)">
+      <Field label={t('รายการสินค้า (ราคาต่อหน่วยกรอกแบบรวม VAT แล้ว)')}>
         <div className="table-wrap" style={{ marginBottom: 8 }}>
           <table>
-            <thead><tr><th>สินค้า / รายการ</th><th style={{ width: 90 }}>จำนวน</th><th style={{ width: 120 }}>ราคา/หน่วย</th><th style={{ width: 110 }}>รวม</th><th></th></tr></thead>
+            <thead><tr><th>{t('สินค้า / รายการ')}</th><th style={{ width: 90 }}>{t('จำนวน')}</th><th style={{ width: 120 }}>{t('ราคา/หน่วย')}</th><th style={{ width: 110 }}>{t('รวม')}</th><th></th></tr></thead>
             <tbody>
               {items.map((it, i) => {
                 const lineTotal = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0)
@@ -303,7 +314,7 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
                         onChange={v => onProductChange(i, v)}
                         freeText={it.description}
                         onFreeTextChange={v => updateItem(i, { description: v })}
-                        placeholder={products ? '-- พิมพ์ชื่อสินค้าเพื่อค้นหา หรือพิมพ์ชื่อรายการเอง --' : 'กำลังโหลด...'}
+                        placeholder={products ? t('-- พิมพ์ชื่อสินค้าเพื่อค้นหา หรือพิมพ์ชื่อรายการเอง --') : t('กำลังโหลด...')}
                         getOptionLabel={p => `${p.code} - ${p.name}`}
                         disabled={!products}
                       />
@@ -311,30 +322,31 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
                     <td><input className="form-control" type="number" min="0" value={it.quantity} onChange={e => updateItem(i, { quantity: e.target.value })} /></td>
                     <td><input className="form-control" type="number" min="0" value={it.unit_price} onChange={e => updateItem(i, { unit_price: e.target.value })} /></td>
                     <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{lineTotal.toLocaleString('th-TH')}</td>
-                    <td><button type="button" className="btn btn-danger btn-xs" onClick={() => removeItem(i)}>ลบ</button></td>
+                    <td><button type="button" className="btn btn-danger btn-xs" onClick={() => removeItem(i)}>{t('ลบ')}</button></td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
         </div>
-        <button type="button" className="btn btn-outline btn-sm" onClick={addItem}>+ เพิ่มรายการ</button>
+        <button type="button" className="btn btn-outline btn-sm" onClick={addItem}>{t('+ เพิ่มรายการ')}</button>
       </Field>
 
       <div className="card" style={{ marginTop: 4, marginBottom: 16 }}>
         <div className="card-body" style={{ display: 'flex', justifyContent: 'flex-end', gap: 24, fontSize: 13 }}>
-          <div>ไม่รวม VAT: <b>{totals.exVat.toLocaleString('th-TH')}</b></div>
+          <div>{t('ไม่รวม VAT')}: <b>{totals.exVat.toLocaleString('th-TH')}</b></div>
           <div>VAT 7%: <b>{totals.vatAmount.toLocaleString('th-TH')}</b></div>
-          <div>รวมทั้งสิ้น: <b style={{ color: 'var(--navy)' }}>{totals.subtotalIncVat.toLocaleString('th-TH')}</b></div>
+          <div>{t('รวมทั้งสิ้น')}: <b style={{ color: 'var(--navy)' }}>{totals.subtotalIncVat.toLocaleString('th-TH')}</b></div>
         </div>
       </div>
 
-      <Field label="หมายเหตุ"><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
+      <Field label={t('หมายเหตุ')}><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
     </ModalShell>
   )
 }
 
 export function ActivityModal({ companies, contacts, defaultCompanyId, currentUserName, isAdmin, onClose, onSave }) {
+  const { t, lang } = useLanguage()
   const [f, setF] = useState({
     company_id: defaultCompanyId || '', contact_id: '', type: '',
     subject: '', detail: '', activity_date: new Date().toISOString().split('T')[0], recorded_by: currentUserName || ''
@@ -343,27 +355,28 @@ export function ActivityModal({ companies, contacts, defaultCompanyId, currentUs
   const contactOptions = contacts.filter(c => c.company_id === f.company_id)
   return (
     <ModalShell title="บันทึกการติดต่อ" onClose={onClose} onSave={() => onSave(f)}>
-      <Field label="บริษัท"><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v, contact_id: '' }))} /></Field>
+      <Field label={t('บริษัท')}><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v, contact_id: '' }))} /></Field>
       <div className="form-row">
-        <Field label="ประเภทการติดต่อ" required>
+        <Field label={t('ประเภทการติดต่อ')} required>
           <EditableSelect listKey="activity_types" value={f.type} onChange={v => setF(s => ({ ...s, type: v }))} isAdmin={isAdmin} />
         </Field>
-        <Field label="วันที่"><input className="form-control" type="date" value={f.activity_date} onChange={set('activity_date')} /></Field>
+        <Field label={t('วันที่')}><input className="form-control" type="date" value={f.activity_date} onChange={set('activity_date')} /></Field>
       </div>
-      <Field label="หัวข้อ" required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder="สรุปการติดต่อสั้นๆ" /></Field>
-      <Field label="ผู้ติดต่อ">
+      <Field label={t('หัวข้อ')} required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder={t('สรุปการติดต่อสั้นๆ')} /></Field>
+      <Field label={lang === 'en' ? 'Contact' : 'ผู้ติดต่อ'}>
         <select className="form-control" value={f.contact_id} onChange={set('contact_id')}>
-          <option value="">-- ไม่ระบุ --</option>
+          <option value="">{t('-- ไม่ระบุ --')}</option>
           {contactOptions.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
         </select>
       </Field>
-      <Field label="รายละเอียด"><textarea className="form-control" rows={3} value={f.detail} onChange={set('detail')} placeholder="บันทึกรายละเอียดการสนทนา..." /></Field>
-      <Field label="ผู้บันทึก"><input className="form-control" value={f.recorded_by} onChange={set('recorded_by')} /></Field>
+      <Field label={t('รายละเอียด')}><textarea className="form-control" rows={3} value={f.detail} onChange={set('detail')} placeholder={t('บันทึกรายละเอียดการสนทนา...')} /></Field>
+      <Field label={t('ผู้บันทึก')}><input className="form-control" value={f.recorded_by} onChange={set('recorded_by')} /></Field>
     </ModalShell>
   )
 }
 
 export function TaskModal({ initial, companies, defaultCompanyId, currentUserName, isAdmin, onClose, onSave }) {
+  const { t } = useLanguage()
   const [f, setF] = useState(() => initial || {
     company_id: defaultCompanyId || '', subject: '', due_date: '', priority: 'ปกติ', status: 'รอดำเนินการ', owner: currentUserName || '', note: ''
   })
@@ -372,21 +385,21 @@ export function TaskModal({ initial, companies, defaultCompanyId, currentUserNam
   const submit = () => onSave({ ...f, due_date: f.due_date || null })
   return (
     <ModalShell title={initial?.id ? 'แก้ไขงาน' : 'เพิ่มงาน Follow-up'} onClose={onClose} onSave={submit}>
-      <Field label="บริษัท"><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
-      <Field label="หัวข้องาน" required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder="เช่น โทรติดตามใบเสนอราคา" /></Field>
+      <Field label={t('บริษัท')}><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
+      <Field label={t('หัวข้องาน')} required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder={t('เช่น โทรติดตามใบเสนอราคา')} /></Field>
       <div className="form-row">
-        <Field label="วันครบกำหนด"><input className="form-control" type="date" value={f.due_date || ''} onChange={set('due_date')} /></Field>
-        <Field label="ลำดับความสำคัญ">
+        <Field label={t('วันครบกำหนด')}><input className="form-control" type="date" value={f.due_date || ''} onChange={set('due_date')} /></Field>
+        <Field label={t('ลำดับความสำคัญ')}>
           <EditableSelect listKey="task_priorities" value={f.priority} onChange={v => setF(s => ({ ...s, priority: v }))} isAdmin={isAdmin} />
         </Field>
       </div>
       <div className="form-row">
-        <Field label="สถานะ">
+        <Field label={t('สถานะ')}>
           <EditableSelect listKey="task_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} isAdmin={isAdmin} />
         </Field>
-        <Field label="ผู้รับผิดชอบ"><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
+        <Field label={t('ผู้รับผิดชอบ')}><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
       </div>
-      <Field label="หมายเหตุ"><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
+      <Field label={t('หมายเหตุ')}><textarea className="form-control" rows={2} value={f.note || ''} onChange={set('note')} /></Field>
     </ModalShell>
   )
 }
@@ -403,6 +416,7 @@ const EMPTY_QUOT_ITEM = { product_id: '', description: '', quantity: 1, unit_pri
 
 export function QuotationModal({ initial, companies, defaultCompanyId, currentUserName, isAdmin, onClose, onSave }) {
   const { toast } = useUi()
+  const { t, lang } = useLanguage()
   const [f, setF] = useState(() => {
     const base = {
       company_id: defaultCompanyId || '', subject: '', status: 'Draft', sale_phone: '0918086924', proposer_name: currentUserName || '',
@@ -427,7 +441,7 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
   const filteredCompanies = customerTypeFilter ? companies.filter(c => c.customer_type === customerTypeFilter) : companies
 
   useEffect(() => {
-    listProducts().then(setProducts).catch(e => { toast('โหลดรายการสินค้าไม่สำเร็จ: ' + e.message, 'error'); setProducts([]) })
+    listProducts().then(setProducts).catch(e => { toast(lang === 'en' ? 'Failed to load products: ' + e.message : 'โหลดรายการสินค้าไม่สำเร็จ: ' + e.message, 'error'); setProducts([]) })
   }, [])
 
   useEffect(() => {
@@ -438,7 +452,7 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
         // ใบเสนอราคาเก่าก่อนมีรายการสินค้า (มีแค่ subject/value เดิม) — แปลงเป็นรายการเดียวให้ ไม่ให้มูลค่าหายตอนแก้ไขครั้งแรก
         else if (Number(initial.value) > 0) setItems([{ product_id: '', description: initial.subject || '', quantity: 1, unit_price: initial.value }])
       })
-      .catch(e => toast('โหลดรายการสินค้าของใบเสนอราคาไม่สำเร็จ: ' + e.message, 'error'))
+      .catch(e => toast(lang === 'en' ? "Failed to load the quotation's line items: " + e.message : 'โหลดรายการสินค้าของใบเสนอราคาไม่สำเร็จ: ' + e.message, 'error'))
   }, [initial?.id])
 
   const updateItem = (i, patch) => setItems(rows => rows.map((r, idx) => idx === i ? { ...r, ...patch } : r))
@@ -474,11 +488,11 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 14 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" className={`btn btn-sm ${!isCredit ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => { setIsCredit(false); setF(s => ({ ...s, credit_term: '', payment_due_date: '', payment_status: 'ยังไม่ชำระ' })) }}>ใบเสนอราคาแบบธรรมดา</button>
-          <button type="button" className={`btn btn-sm ${isCredit ? 'btn-primary' : 'btn-outline'}`} onClick={() => setIsCredit(true)}>ลูกค้าเครดิต</button>
+            onClick={() => { setIsCredit(false); setF(s => ({ ...s, credit_term: '', payment_due_date: '', payment_status: 'ยังไม่ชำระ' })) }}>{t('ใบเสนอราคาแบบธรรมดา')}</button>
+          <button type="button" className={`btn btn-sm ${isCredit ? 'btn-primary' : 'btn-outline'}`} onClick={() => setIsCredit(true)}>{t('ลูกค้าเครดิต')}</button>
         </div>
         <div>
-          <label className="form-label" style={{ textAlign: 'right', display: 'block' }}>วันที่</label>
+          <label className="form-label" style={{ textAlign: 'right', display: 'block' }}>{t('วันที่')}</label>
           <input className="form-control" type="date" style={{ width: 160 }} value={f.quot_date} onChange={set('quot_date')} />
         </div>
       </div>
@@ -486,37 +500,37 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
       {isCredit && (
         <>
           <div className="form-row">
-            <Field label="จำนวนวันเครดิต">
+            <Field label={t('จำนวนวันเครดิต')}>
               <EditableSelect listKey="credit_terms" value={f.credit_term} onChange={v => setF(s => ({ ...s, credit_term: v }))} isAdmin={isAdmin} />
             </Field>
-            <Field label="วันครบกำหนดชำระ">
+            <Field label={t('วันครบกำหนดชำระ')}>
               <input className="form-control" type="date" value={f.payment_due_date || ''} onChange={set('payment_due_date')} />
             </Field>
           </div>
-          <Field label="สถานะการชำระ">
+          <Field label={t('สถานะการชำระ')}>
             <EditableSelect listKey="payment_statuses" value={f.payment_status} onChange={v => setF(s => ({ ...s, payment_status: v }))} isAdmin={isAdmin} />
           </Field>
         </>
       )}
 
-      <Field label="ประเภทลูกค้า">
-        <EditableSelect listKey="customer_types" value={customerTypeFilter} onChange={setCustomerTypeFilter} placeholder="-- ทุกประเภท (เลือกเพื่อกรองรายชื่อบริษัทด้านล่าง) --" isAdmin={isAdmin} />
+      <Field label={t('ประเภทลูกค้า')}>
+        <EditableSelect listKey="customer_types" value={customerTypeFilter} onChange={setCustomerTypeFilter} placeholder={t('-- ทุกประเภท (เลือกเพื่อกรองรายชื่อบริษัทด้านล่าง) --')} isAdmin={isAdmin} />
       </Field>
-      <Field label="บริษัท">
+      <Field label={t('บริษัท')}>
         <CompanySelect companies={filteredCompanies} value={f.company_id} onChange={onCompanyChange} />
       </Field>
-      <Field label="หัวข้อใบเสนอราคา" required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder="ใบเสนอราคาสำหรับ..." /></Field>
+      <Field label={t('หัวข้อใบเสนอราคา')} required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder={t('ใบเสนอราคาสำหรับ...')} /></Field>
 
-      <Field label="รายการสินค้า (ราคาต่อหน่วยกรอกแบบรวม VAT แล้ว)">
+      <Field label={t('รายการสินค้า (ราคาต่อหน่วยกรอกแบบรวม VAT แล้ว)')}>
         <div className="table-wrap" style={{ marginBottom: 8 }}>
           <table>
             <thead>
               <tr>
                 <th style={{ width: 40 }}></th>
-                <th>สินค้า / รายการ</th>
-                <th style={{ width: 80 }}>จำนวน</th>
-                <th style={{ width: 120 }}>ราคา/หน่วย</th>
-                <th style={{ width: 110 }}>รวม</th>
+                <th>{t('สินค้า / รายการ')}</th>
+                <th style={{ width: 80 }}>{t('จำนวน')}</th>
+                <th style={{ width: 120 }}>{t('ราคา/หน่วย')}</th>
+                <th style={{ width: 110 }}>{t('รวม')}</th>
                 <th></th>
               </tr>
             </thead>
@@ -535,7 +549,7 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
                         onChange={v => onProductChange(i, v)}
                         freeText={it.description}
                         onFreeTextChange={v => updateItem(i, { description: v })}
-                        placeholder={products ? '-- พิมพ์ชื่อสินค้าเพื่อค้นหา หรือพิมพ์ชื่อรายการเอง --' : 'กำลังโหลด...'}
+                        placeholder={products ? t('-- พิมพ์ชื่อสินค้าเพื่อค้นหา หรือพิมพ์ชื่อรายการเอง --') : t('กำลังโหลด...')}
                         getOptionLabel={p => `${p.code} - ${p.name}`}
                         disabled={!products}
                       />
@@ -543,37 +557,37 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
                     <td><input className="form-control" type="number" min="0" value={it.quantity} onChange={e => updateItem(i, { quantity: e.target.value })} /></td>
                     <td><input className="form-control" type="number" min="0" value={it.unit_price} onChange={e => updateItem(i, { unit_price: e.target.value })} /></td>
                     <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{lineTotal.toLocaleString('th-TH')}</td>
-                    <td><button type="button" className="btn btn-danger btn-xs" onClick={() => removeItem(i)}>ลบ</button></td>
+                    <td><button type="button" className="btn btn-danger btn-xs" onClick={() => removeItem(i)}>{t('ลบ')}</button></td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
         </div>
-        <button type="button" className="btn btn-outline btn-sm" onClick={addItem}>+ เพิ่มรายการ</button>
+        <button type="button" className="btn btn-outline btn-sm" onClick={addItem}>{t('+ เพิ่มรายการ')}</button>
       </Field>
 
       <div className="card" style={{ marginTop: 4, marginBottom: 16 }}>
         <div className="card-body" style={{ display: 'flex', justifyContent: 'flex-end', gap: 24, fontSize: 13 }}>
-          <div>ไม่รวม VAT: <b>{totals.exVat.toLocaleString('th-TH')}</b></div>
+          <div>{t('ไม่รวม VAT')}: <b>{totals.exVat.toLocaleString('th-TH')}</b></div>
           <div>VAT 7%: <b>{totals.vatAmount.toLocaleString('th-TH')}</b></div>
-          <div>รวมทั้งสิ้น: <b style={{ color: 'var(--navy)' }}>{totals.subtotalIncVat.toLocaleString('th-TH')}</b></div>
+          <div>{t('รวมทั้งสิ้น')}: <b style={{ color: 'var(--navy)' }}>{totals.subtotalIncVat.toLocaleString('th-TH')}</b></div>
         </div>
       </div>
 
       <div className="form-row">
-        <Field label="สถานะ">
+        <Field label={t('สถานะ')}>
           <EditableSelect listKey="quot_statuses" value={f.status} onChange={v => setF(s => ({ ...s, status: v }))} isAdmin={isAdmin} />
         </Field>
-        <Field label="วันหมดอายุ"><input className="form-control" type="date" value={f.expire_date || ''} onChange={set('expire_date')} /></Field>
+        <Field label={t('วันหมดอายุ')}><input className="form-control" type="date" value={f.expire_date || ''} onChange={set('expire_date')} /></Field>
       </div>
       <div className="form-row">
-        <Field label="เบอร์ติดต่อเซลล์"><input className="form-control" value={f.sale_phone || ''} onChange={set('sale_phone')} placeholder="08x-xxx-xxxx" /></Field>
-        <Field label="ชื่อผู้เสนอราคา">
-          <input className="form-control" value={f.proposer_name || ''} onChange={set('proposer_name')} placeholder="ชื่อผู้ออกใบเสนอราคา — พิมพ์ไว้เหนือช่องลงชื่อตอนพิมพ์ ไม่ต้องเซ็นสด" />
+        <Field label={t('เบอร์ติดต่อเซลล์')}><input className="form-control" value={f.sale_phone || ''} onChange={set('sale_phone')} placeholder="08x-xxx-xxxx" /></Field>
+        <Field label={t('ชื่อผู้เสนอราคา')}>
+          <input className="form-control" value={f.proposer_name || ''} onChange={set('proposer_name')} placeholder={t('ชื่อผู้ออกใบเสนอราคา — พิมพ์ไว้เหนือช่องลงชื่อตอนพิมพ์ ไม่ต้องเซ็นสด')} />
         </Field>
       </div>
-      <Field label="หมายเหตุ"><textarea className="form-control" rows={6} value={f.note || ''} onChange={set('note')} /></Field>
+      <Field label={t('หมายเหตุ')}><textarea className="form-control" rows={6} value={f.note || ''} onChange={set('note')} /></Field>
     </ModalShell>
   )
 }

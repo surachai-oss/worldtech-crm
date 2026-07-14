@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { usePicklists } from './PicklistsContext'
 import { addPicklistValue, deletePicklistValue } from '../lib/api'
 import { useUi } from './UiContext'
+import { useLanguage } from './LanguageContext'
 
 // select ที่ผูกกับ picklists — ถ้า editable=true และ isAdmin=true จะมีปุ่ม "แก้ไข" ให้เพิ่ม/ลบตัวเลือกได้ทันที
 // (แบบเดียวกับ dropdown list ที่แก้ไขได้ใน Google Sheets) โดยไม่ต้องไปหน้าตั้งค่าแยก
@@ -9,6 +10,7 @@ import { useUi } from './UiContext'
 export default function EditableSelect({ listKey, value, onChange, placeholder = '-- เลือก --', editable = true, isAdmin = false, style }) {
   const { picklists, list, reload } = usePicklists()
   const { toast, confirm } = useUi()
+  const { t, lang } = useLanguage()
   const [open, setOpen] = useState(false)
   const [newVal, setNewVal] = useState('')
   const [busy, setBusy] = useState(false)
@@ -26,31 +28,31 @@ export default function EditableSelect({ listKey, value, onChange, placeholder =
       setNewVal('')
       await reload()
     } catch (e) {
-      toast('เพิ่มไม่สำเร็จ: ' + e.message, 'error')
+      toast(lang === 'en' ? 'Failed to add: ' + e.message : 'เพิ่มไม่สำเร็จ: ' + e.message, 'error')
     } finally {
       setBusy(false)
     }
   }
 
   const onDelete = async (row) => {
-    if (!(await confirm(`ลบ "${row.value}" ออกจากตัวเลือก?`))) return
+    if (!(await confirm(lang === 'en' ? `Remove "${row.value}" from the options?` : `ลบ "${row.value}" ออกจากตัวเลือก?`))) return
     try {
       await deletePicklistValue(row.id)
       if (value === row.value) onChange('')
       await reload()
     } catch (e) {
-      toast('ลบไม่สำเร็จ: ' + e.message, 'error')
+      toast(lang === 'en' ? 'Failed to delete: ' + e.message : 'ลบไม่สำเร็จ: ' + e.message, 'error')
     }
   }
 
   return (
     <div style={{ position: 'relative', display: 'flex', gap: 6, alignItems: 'center', ...style }}>
       <select className="form-control" style={{ flex: 1 }} value={value || ''} onChange={e => onChange(e.target.value)}>
-        <option value="">{placeholder}</option>
+        <option value="">{t(placeholder)}</option>
         {options.map(o => <option key={o}>{o}</option>)}
       </select>
       {canEditOptions && (
-        <button type="button" className="btn btn-outline btn-xs" onClick={() => setOpen(o => !o)} title="แก้ไขตัวเลือก">แก้ไข</button>
+        <button type="button" className="btn btn-outline btn-xs" onClick={() => setOpen(o => !o)} title={t('แก้ไขตัวเลือก')}>{t('แก้ไข')}</button>
       )}
       {canEditOptions && open && (
         <>
@@ -60,12 +62,12 @@ export default function EditableSelect({ listKey, value, onChange, placeholder =
               {rows.length ? rows.map(r => (
                 <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 6px', fontSize: 13 }}>
                   <span>{r.value}</span>
-                  <button type="button" className="btn btn-danger btn-xs" onClick={() => onDelete(r)}>ลบ</button>
+                  <button type="button" className="btn btn-danger btn-xs" onClick={() => onDelete(r)}>{t('ลบ')}</button>
                 </div>
-              )) : <div style={{ fontSize: 12, color: 'var(--text-light)', padding: 6 }}>ยังไม่มีตัวเลือก</div>}
+              )) : <div style={{ fontSize: 12, color: 'var(--text-light)', padding: 6 }}>{t('ยังไม่มีตัวเลือก')}</div>}
             </div>
             <div style={{ display: 'flex', gap: 4, padding: 6, borderTop: '1px solid var(--border)' }}>
-              <input className="form-control" style={{ fontSize: 12, padding: '4px 6px' }} placeholder="เพิ่มตัวเลือกใหม่" value={newVal}
+              <input className="form-control" style={{ fontSize: 12, padding: '4px 6px' }} placeholder={t('เพิ่มตัวเลือกใหม่')} value={newVal}
                 onChange={e => setNewVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && onAdd()} disabled={busy} />
               <button type="button" className="btn btn-primary btn-xs" onClick={onAdd} disabled={busy || !newVal.trim()}>+</button>
             </div>

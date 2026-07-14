@@ -7,6 +7,7 @@ import {
 import { fmtCurrency, paymentStatusLabel, paymentBadgeClass } from '../lib/format'
 import { printPaymentApproval } from '../lib/printPaymentApproval'
 import { useUi } from './UiContext'
+import { useLanguage } from './LanguageContext'
 import EditableSelect from './EditableSelect'
 import SearchableSelect from './SearchableSelect'
 
@@ -16,6 +17,7 @@ const EDITABLE_STATUSES = [PAYMENT_STATUS.DRAFT, PAYMENT_STATUS.NEED_INFO, PAYME
 const APPROVED_STATES = [PAYMENT_STATUS.APPROVED, PAYMENT_STATUS.ORDER_CREATED]
 
 // ป้ายประเภทลูกค้า (เครดิต/เงินสด) จากค่า credit_term ของบริษัท
+// หมายเหตุ: ข้อความนี้ถูกเก็บลง DB (credit_type) ด้วย จึงคงเป็นภาษาไทยเสมอไม่ขึ้นกับภาษา UI ที่เลือก (เหมือน pr.credit_type ใน FinanceReview.jsx ที่ไม่ผ่าน t())
 function creditLabel(term) {
   if (term === null || term === undefined || term === '' || Number(term) === 0) return 'ลูกค้าเงินสด'
   const days = Number(term)
@@ -34,6 +36,7 @@ function mapCopiedItems(rows) {
 // onSaved เรียกทั้งกรณีบันทึกร่างและส่งให้บัญชี — parent จะปิดฟอร์ม + โหลดคำขอใหม่
 function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, onClose, onSaved }) {
   const { toast, confirm } = useUi()
+  const { t, lang } = useLanguage()
   const company = companies.find(c => c.id === order.company_id)
   const [f, setF] = useState(() => ({
     request_date: (existing?.request_date || '').slice(0, 10) || todayStr(),
@@ -98,24 +101,24 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
 
   const saveDraft = async () => {
     setBusy(true)
-    try { await persist(); toast('บันทึกฉบับร่างแล้ว', 'success'); onSaved() }
-    catch (e) { toast('บันทึกไม่สำเร็จ: ' + e.message, 'error'); setBusy(false) }
+    try { await persist(); toast(t('บันทึกฉบับร่างแล้ว'), 'success'); onSaved() }
+    catch (e) { toast(lang === 'en' ? 'Save failed: ' + e.message : 'บันทึกไม่สำเร็จ: ' + e.message, 'error'); setBusy(false) }
   }
 
   const submit = async () => {
-    if (!cleanItems().length) { toast('ต้องมีรายการสินค้าอย่างน้อย 1 รายการ', 'error'); return }
-    if (!slipFile && !f.slip_file_url) { toast('กรุณาแนบสลิปการโอน', 'error'); return }
-    if (!(await confirm('ส่งคำขอให้บัญชีตรวจ? หลังส่งแล้วจะแก้ไขไม่ได้จนกว่าบัญชีจะตีกลับ'))) return
+    if (!cleanItems().length) { toast(t('ต้องมีรายการสินค้าอย่างน้อย 1 รายการ'), 'error'); return }
+    if (!slipFile && !f.slip_file_url) { toast(t('กรุณาแนบสลิปการโอน'), 'error'); return }
+    if (!(await confirm(t('ส่งคำขอให้บัญชีตรวจ? หลังส่งแล้วจะแก้ไขไม่ได้จนกว่าบัญชีจะตีกลับ')))) return
     setBusy(true)
     try {
       const pr = await persist()
       await submitPaymentRequest(pr.id, currentUser.name)
       notifyFinancePaymentSubmitted(pr.id).then(res => {
-        if (res?.inApp || res?.email) toast('แจ้งเตือนฝ่ายบัญชีแล้ว', 'success')
+        if (res?.inApp || res?.email) toast(t('แจ้งเตือนฝ่ายบัญชีแล้ว'), 'success')
       }).catch(() => {})
-      toast(existing?.id ? 'ส่งคำขอที่แก้ไขให้บัญชีแล้ว' : 'ส่งให้บัญชีตรวจแล้ว', 'success')
+      toast(existing?.id ? t('ส่งคำขอที่แก้ไขให้บัญชีแล้ว') : t('ส่งให้บัญชีตรวจแล้ว'), 'success')
       onSaved()
-    } catch (e) { toast('ส่งไม่สำเร็จ: ' + e.message, 'error'); setBusy(false) }
+    } catch (e) { toast(lang === 'en' ? 'Submit failed: ' + e.message : 'ส่งไม่สำเร็จ: ' + e.message, 'error'); setBusy(false) }
   }
 
   // บันทึกร่าง (ไม่ส่งบัญชี) ให้เฉพาะคำขอใหม่/ที่ยังเป็นร่าง — เคยส่งไปแล้ว (Need More Info/ยอดไม่ตรง) ต้องแก้แล้วส่งใหม่เท่านั้น
@@ -125,25 +128,25 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
     <div>
       {company && (
         <div style={{ marginBottom: 10, fontSize: 13, display: 'flex', gap: 16, alignItems: 'center' }}>
-          <span>บริษัท: <b>{order.customer_name || company.name}</b></span>
+          <span>{t('บริษัท')}: <b>{order.customer_name || company.name}</b></span>
           <span className={`badge ${creditLabel(company.credit_term).startsWith('ลูกค้าเครดิต') ? 'badge-orange' : 'badge-green'}`}>{creditLabel(company.credit_term)}</span>
         </div>
       )}
       <div className="form-group">
-        <label className="form-label">วันที่คำขอ</label>
+        <label className="form-label">{t('วันที่คำขอ')}</label>
         <input className="form-control" type="date" value={f.request_date} onChange={set('request_date')} style={{ maxWidth: 180 }} />
       </div>
 
-      <label className="form-label" style={{ marginTop: 4 }}>รายการสินค้า</label>
+      <label className="form-label" style={{ marginTop: 4 }}>{t('รายการสินค้า')}</label>
       <div className="table-wrap" style={{ marginBottom: 4 }}>
         <table>
           <thead>
             <tr>
-              <th>สินค้า / รายการ</th>
-              <th style={{ width: 70 }}>จำนวน</th>
-              <th style={{ width: 110 }}>ราคา/หน่วย</th>
-              <th style={{ width: 90 }}>ส่วนลด</th>
-              <th style={{ width: 100 }}>รวม</th>
+              <th>{t('สินค้า / รายการ')}</th>
+              <th style={{ width: 70 }}>{t('จำนวน')}</th>
+              <th style={{ width: 110 }}>{t('ราคา/หน่วย')}</th>
+              <th style={{ width: 90 }}>{t('ส่วนลด')}</th>
+              <th style={{ width: 100 }}>{t('รวม')}</th>
               <th></th>
             </tr>
           </thead>
@@ -151,51 +154,51 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
             {items.map((it, i) => (
               <tr key={i}>
                 <td>
-                  <SearchableSelect options={products || []} value={it.product_id} onChange={v => onProductChange(i, v)} freeText={it.product_name} onFreeTextChange={v => updateItem(i, { product_name: v })} placeholder={products ? '-- พิมพ์ชื่อสินค้า หรือพิมพ์เอง --' : 'กำลังโหลด...'} getOptionLabel={p => `${p.code} - ${p.name}`} disabled={!products} />
+                  <SearchableSelect options={products || []} value={it.product_id} onChange={v => onProductChange(i, v)} freeText={it.product_name} onFreeTextChange={v => updateItem(i, { product_name: v })} placeholder={products ? (lang === 'en' ? '-- Type a product name, or type your own --' : '-- พิมพ์ชื่อสินค้า หรือพิมพ์เอง --') : t('กำลังโหลด...')} getOptionLabel={p => `${p.code} - ${p.name}`} disabled={!products} />
                 </td>
                 <td><input className="form-control" type="number" min="0" value={it.quantity} onChange={e => updateItem(i, { quantity: e.target.value })} /></td>
                 <td><input className="form-control" type="number" min="0" value={it.unit_price} onChange={e => updateItem(i, { unit_price: e.target.value })} /></td>
                 <td><input className="form-control" type="number" min="0" value={it.discount} onChange={e => updateItem(i, { discount: e.target.value })} /></td>
                 <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{lineTotal(it).toLocaleString('th-TH')}</td>
-                <td><button type="button" className="btn btn-danger btn-xs" onClick={() => removeItem(i)}>ลบ</button></td>
+                <td><button type="button" className="btn btn-danger btn-xs" onClick={() => removeItem(i)}>{t('ลบ')}</button></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <button type="button" className="btn btn-outline btn-sm" onClick={addItem}>+ เพิ่มรายการ</button>
+      <button type="button" className="btn btn-outline btn-sm" onClick={addItem}>{t('+ เพิ่มรายการ')}</button>
       <div className="card" style={{ marginTop: 8, marginBottom: 14 }}>
         <div className="card-body" style={{ display: 'flex', justifyContent: 'flex-end', gap: 24, fontSize: 13 }}>
-          <div>ไม่รวม VAT: <b>{totals.exVat.toLocaleString('th-TH')}</b></div>
+          <div>{t('ไม่รวม VAT')}: <b>{totals.exVat.toLocaleString('th-TH')}</b></div>
           <div>VAT 7%: <b>{totals.vatAmount.toLocaleString('th-TH')}</b></div>
-          <div>รวมทั้งสิ้น: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(itemsTotal)}</b></div>
+          <div>{t('รวมทั้งสิ้น')}: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(itemsTotal)}</b></div>
         </div>
       </div>
 
       <div className="form-row">
         <div className="form-group">
-          <label className="form-label">ประเภทการชำระ</label>
+          <label className="form-label">{t('ประเภทการชำระ')}</label>
           <EditableSelect listKey="payment_types" value={f.payment_type} onChange={v => setF(s => ({ ...s, payment_type: v }))} isAdmin={isAdmin} />
         </div>
         <div className="form-group">
-          <label className="form-label">เลขที่ PO</label>
-          <input className="form-control" value={f.po_reference} onChange={set('po_reference')} placeholder="ไม่บังคับ" />
+          <label className="form-label">{t('เลขที่ PO')}</label>
+          <input className="form-control" value={f.po_reference} onChange={set('po_reference')} placeholder={t('ไม่บังคับ')} />
         </div>
       </div>
       <div className="form-group">
-        <label className="form-label required">สลิปการโอน</label>
+        <label className="form-label required">{t('สลิปการโอน')}</label>
         <input className="form-control" type="file" accept="image/*,.pdf" onChange={e => setSlipFile(e.target.files?.[0] || null)} />
-        {!slipFile && f.slip_file_url && <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>มีสลิปแนบอยู่แล้ว (เลือกไฟล์ใหม่เพื่อแทนที่)</div>}
+        {!slipFile && f.slip_file_url && <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('มีสลิปแนบอยู่แล้ว (เลือกไฟล์ใหม่เพื่อแทนที่)')}</div>}
       </div>
       <div className="form-group">
-        <label className="form-label">หมายเหตุ</label>
+        <label className="form-label">{t('หมายเหตุ')}</label>
         <textarea className="form-control" rows={2} value={f.remark} onChange={set('remark')} />
       </div>
 
       <div className="modal-footer" style={{ padding: '4px 0 0', flexWrap: 'wrap' }}>
-        <button className="btn btn-outline" onClick={onClose} disabled={busy}>ยกเลิก</button>
-        {showDraftBtn && <button className="btn btn-secondary" onClick={saveDraft} disabled={busy}>บันทึก (ฉบับร่าง)</button>}
-        <button className="btn btn-primary" onClick={submit} disabled={busy}>{existing?.id ? 'ส่งคำขอที่แก้ไข' : 'ส่งให้บัญชี'}</button>
+        <button className="btn btn-outline" onClick={onClose} disabled={busy}>{t('ยกเลิก')}</button>
+        {showDraftBtn && <button className="btn btn-secondary" onClick={saveDraft} disabled={busy}>{t('บันทึก (ฉบับร่าง)')}</button>}
+        <button className="btn btn-primary" onClick={submit} disabled={busy}>{existing?.id ? t('ส่งคำขอที่แก้ไข') : t('ส่งให้บัญชี')}</button>
       </div>
     </div>
   )
@@ -204,33 +207,34 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
 // แสดงคำขอ 1 ใบ พร้อมสถานะปัจจุบันจากฝั่งบัญชี + action ตามสถานะ (แก้ไข/ดูสลิป/ดาวน์โหลด PDF/ยืนยันเปิดออเดอร์/ลบ)
 function PaymentRequestCard({ pr, order, settings, perm, currentUser, onEdit, onChanged }) {
   const { toast, confirm } = useUi()
+  const { t, lang } = useLanguage()
   const [remark, setRemark] = useState('')
   const [busy, setBusy] = useState(false)
 
   const viewSlip = async () => {
-    if (!pr.slip_file_url) { toast('ยังไม่มีสลิปแนบ', 'info'); return }
+    if (!pr.slip_file_url) { toast(t('ยังไม่มีสลิปแนบ'), 'info'); return }
     try { window.open(await getPaymentSlipUrl(pr.slip_file_url), '_blank') }
-    catch (e) { toast('เปิดสลิปไม่สำเร็จ: ' + e.message, 'error') }
+    catch (e) { toast(lang === 'en' ? 'Failed to open slip: ' + e.message : 'เปิดสลิปไม่สำเร็จ: ' + e.message, 'error') }
   }
 
   const owns = perm.isAdmin || perm.isFinance || pr.created_by === perm.userId || pr.created_by == null
   const editable = EDITABLE_STATUSES.includes(pr.status) && owns
 
   const confirmOrder = async () => {
-    if (!(await confirm(`ยืนยันเปิดออเดอร์ ${order.order_no} ในระบบบัญชี?`))) return
+    if (!(await confirm(lang === 'en' ? `Confirm opening order ${order.order_no} in the accounting system?` : `ยืนยันเปิดออเดอร์ ${order.order_no} ในระบบบัญชี?`))) return
     setBusy(true)
     try {
       await markPaymentOrderCreated(pr.id, { orderNo: order.order_no, remark: remark.trim(), actorName: currentUser.name })
-      toast('บันทึกการเปิดออเดอร์แล้ว', 'success')
+      toast(t('บันทึกการเปิดออเดอร์แล้ว'), 'success')
       onChanged()
-    } catch (e) { toast('บันทึกไม่สำเร็จ: ' + e.message, 'error'); setBusy(false) }
+    } catch (e) { toast(lang === 'en' ? 'Save failed: ' + e.message : 'บันทึกไม่สำเร็จ: ' + e.message, 'error'); setBusy(false) }
   }
 
   const doDelete = async () => {
-    if (!(await confirm(`ลบคำขอ ${pr.pr_no}?`))) return
+    if (!(await confirm(lang === 'en' ? `Delete request ${pr.pr_no}?` : `ลบคำขอ ${pr.pr_no}?`))) return
     setBusy(true)
-    try { await deletePaymentRequest(pr.id); toast('ลบสำเร็จ', 'success'); onChanged() }
-    catch (e) { toast('ลบไม่สำเร็จ: ' + e.message, 'error'); setBusy(false) }
+    try { await deletePaymentRequest(pr.id); toast(t('ลบสำเร็จ'), 'success'); onChanged() }
+    catch (e) { toast(lang === 'en' ? 'Delete failed: ' + e.message : 'ลบไม่สำเร็จ: ' + e.message, 'error'); setBusy(false) }
   }
 
   return (
@@ -240,23 +244,23 @@ function PaymentRequestCard({ pr, order, settings, perm, currentUser, onEdit, on
           <div style={{ fontWeight: 600 }}>{pr.pr_no}</div>
           <span className={`badge ${paymentBadgeClass(pr.status)}`}>{paymentStatusLabel(pr.status)}</span>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>ยอดรวม: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(pr.total_amount)}</b></div>
-        {pr.finance_remark && <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>หมายเหตุจากบัญชี: {pr.finance_remark}</div>}
-        {pr.approval_ref_no && <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>เลขที่อนุมัติ: {pr.approval_ref_no}</div>}
+        <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>{t('ยอดรวม')}: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(pr.total_amount)}</b></div>
+        {pr.finance_remark && <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>{t('หมายเหตุจากบัญชี')}: {pr.finance_remark}</div>}
+        {pr.approval_ref_no && <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>{t('เลขที่อนุมัติ')}: {pr.approval_ref_no}</div>}
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {pr.slip_file_url && <button className="btn btn-outline btn-xs" onClick={viewSlip}>ดูสลิป</button>}
-          {editable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(pr)}>แก้ไข</button>}
-          {APPROVED_STATES.includes(pr.status) && <button className="btn btn-outline btn-xs" onClick={() => printPaymentApproval(pr, settings)}>ดาวน์โหลด PDF</button>}
-          {pr.status === PAYMENT_STATUS.DRAFT && owns && <button className="btn btn-danger btn-xs" onClick={doDelete} disabled={busy}>ลบ</button>}
+          {pr.slip_file_url && <button className="btn btn-outline btn-xs" onClick={viewSlip}>{t('ดูสลิป')}</button>}
+          {editable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(pr)}>{t('แก้ไข')}</button>}
+          {APPROVED_STATES.includes(pr.status) && <button className="btn btn-outline btn-xs" onClick={() => printPaymentApproval(pr, settings)}>{t('ดาวน์โหลด PDF')}</button>}
+          {pr.status === PAYMENT_STATUS.DRAFT && owns && <button className="btn btn-danger btn-xs" onClick={doDelete} disabled={busy}>{t('ลบ')}</button>}
         </div>
 
         {pr.status === PAYMENT_STATUS.APPROVED && owns && (
           <div style={{ marginTop: 10 }}>
-            <label className="form-label">หมายเหตุ (ไม่บังคับ)</label>
+            <label className="form-label">{t('หมายเหตุ (ไม่บังคับ)')}</label>
             <div style={{ display: 'flex', gap: 6 }}>
-              <input className="form-control" value={remark} onChange={e => setRemark(e.target.value)} placeholder="หมายเหตุ" />
-              <button className="btn btn-success btn-sm" onClick={confirmOrder} disabled={busy} style={{ whiteSpace: 'nowrap' }}>ยืนยันเปิดออเดอร์</button>
+              <input className="form-control" value={remark} onChange={e => setRemark(e.target.value)} placeholder={t('หมายเหตุ')} />
+              <button className="btn btn-success btn-sm" onClick={confirmOrder} disabled={busy} style={{ whiteSpace: 'nowrap' }}>{t('ยืนยันเปิดออเดอร์')}</button>
             </div>
           </div>
         )}
@@ -268,13 +272,14 @@ function PaymentRequestCard({ pr, order, settings, perm, currentUser, onEdit, on
 // ป็อปอัปหลักเปิดจากหน้า "ออเดอร์" — เซลล์สร้าง/แก้ไขคำขอตรวจยอด + ติดตามสถานะจากฝั่งบัญชีในที่เดียว (แทนที่การไปสร้างแยกที่หน้า "การเงิน")
 export default function OrderPaymentModal({ order, companies, perm, currentUser, settings, onClose }) {
   const { toast } = useUi()
+  const { t, lang } = useLanguage()
   const [requests, setRequests] = useState(null)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)
 
   const load = () => {
     if (!order?.id) { setRequests([]); return }
-    fetchPaymentRequestsByOrder(order.id).then(setRequests).catch(e => toast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error'))
+    fetchPaymentRequestsByOrder(order.id).then(setRequests).catch(e => toast(lang === 'en' ? 'Failed to load data: ' + e.message : 'โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error'))
   }
   useEffect(() => { load() }, [order?.id])
 
@@ -288,18 +293,18 @@ export default function OrderPaymentModal({ order, companies, perm, currentUser,
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={{ maxWidth: 760 }}>
         <div className="modal-header">
-          <div className="modal-title">คำขอตรวจยอด · {order.order_no}</div>
+          <div className="modal-title">{t('คำขอตรวจยอด')} · {order.order_no}</div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           {requests === null ? (
-            <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-light)' }}>กำลังโหลด...</div>
+            <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-light)' }}>{t('กำลังโหลด...')}</div>
           ) : (
             <>
               {requests.map(pr => (
                 editing?.id === pr.id
                   ? <div className="card" key={pr.id} style={{ marginBottom: 10 }}><div className="card-body">
-                      <div style={{ fontWeight: 600, marginBottom: 8 }}>แก้ไขคำขอ: {pr.pr_no}</div>
+                      <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('แก้ไขคำขอ')}: {pr.pr_no}</div>
                       <PaymentRequestForm order={order} companies={companies} existing={pr} currentUser={currentUser} isAdmin={perm.isAdmin} onClose={() => setEditing(null)} onSaved={onSaved} />
                     </div></div>
                   : <PaymentRequestCard key={pr.id} pr={pr} order={order} settings={settings} perm={perm} currentUser={currentUser} onEdit={startEdit} onChanged={load} />
@@ -307,16 +312,16 @@ export default function OrderPaymentModal({ order, companies, perm, currentUser,
 
               {!hasLiveRequest && !editing && (formOpen ? (
                 <div className="card"><div className="card-body">
-                  <div style={{ fontWeight: 600, marginBottom: 8 }}>สร้างคำขอตรวจยอด</div>
+                  <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('สร้างคำขอตรวจยอด')}</div>
                   <PaymentRequestForm order={order} companies={companies} existing={null} currentUser={currentUser} isAdmin={perm.isAdmin} onClose={() => setFormOpen(false)} onSaved={onSaved} />
                 </div></div>
               ) : (
-                <button className="btn btn-primary btn-sm" onClick={() => setFormOpen(true)}>+ สร้างคำขอตรวจยอด</button>
+                <button className="btn btn-primary btn-sm" onClick={() => setFormOpen(true)}>{t('+ สร้างคำขอตรวจยอด')}</button>
               ))}
             </>
           )}
         </div>
-        <div className="modal-footer"><button className="btn btn-outline" onClick={onClose}>ปิด</button></div>
+        <div className="modal-footer"><button className="btn btn-outline" onClick={onClose}>{t('ปิด')}</button></div>
       </div>
     </div>
   )

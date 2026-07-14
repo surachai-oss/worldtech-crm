@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { bulkImportProducts } from '../lib/api'
 import { downloadProductTemplate, parseProductImportFile, PRODUCT_IMPORT_COLUMNS } from '../lib/importExport'
 import { useUi } from './UiContext'
+import { useLanguage } from './LanguageContext'
 
 export default function ImportProductsModal({ existingProducts, onClose, onImported }) {
   const { toast } = useUi()
+  const { t, lang } = useLanguage()
   const [parsed, setParsed] = useState(null) // { validRows, invalidRows }
   const [fileName, setFileName] = useState('')
   const [importing, setImporting] = useState(false)
@@ -18,7 +20,7 @@ export default function ImportProductsModal({ existingProducts, onClose, onImpor
       const existingCodes = new Set(existingProducts.map(p => p.code.trim().toLowerCase()))
       setParsed(await parseProductImportFile(file, existingCodes))
     } catch (err) {
-      toast('อ่านไฟล์ไม่สำเร็จ: ' + err.message, 'error')
+      toast(lang === 'en' ? 'Failed to read file: ' + err.message : 'อ่านไฟล์ไม่สำเร็จ: ' + err.message, 'error')
     }
   }
 
@@ -27,11 +29,11 @@ export default function ImportProductsModal({ existingProducts, onClose, onImpor
     setImporting(true)
     try {
       await bulkImportProducts(parsed.validRows)
-      toast(`นำเข้าสำเร็จ ${parsed.validRows.length} รายการ`, 'success')
+      toast(lang === 'en' ? `Imported ${parsed.validRows.length} record(s) successfully` : `นำเข้าสำเร็จ ${parsed.validRows.length} รายการ`, 'success')
       onImported()
       onClose()
     } catch (err) {
-      toast('นำเข้าไม่สำเร็จ: ' + err.message, 'error')
+      toast(lang === 'en' ? 'Import failed: ' + err.message : 'นำเข้าไม่สำเร็จ: ' + err.message, 'error')
     } finally {
       setImporting(false)
     }
@@ -41,20 +43,20 @@ export default function ImportProductsModal({ existingProducts, onClose, onImpor
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={{ maxWidth: 640 }}>
         <div className="modal-header">
-          <div className="modal-title">นำเข้าสินค้าจากไฟล์</div>
+          <div className="modal-title">{t('นำเข้าสินค้าจากไฟล์')}</div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           {!parsed ? (
             <>
               <div style={{ fontSize: 13, marginBottom: 12 }}>
-                1) ดาวน์โหลด Template  2) กรอกข้อมูลใน Excel  3) อัปโหลดไฟล์ .xlsx กลับมาที่นี่
+                {t('1) ดาวน์โหลด Template  2) กรอกข้อมูลใน Excel  3) อัปโหลดไฟล์ .xlsx กลับมาที่นี่')}
               </div>
               <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} onClick={downloadProductTemplate}>
-                ดาวน์โหลด Template (.xlsx)
+                {t('ดาวน์โหลด Template (.xlsx)')}
               </button>
               <div className="form-group">
-                <label className="form-label">อัปโหลดไฟล์ (.xlsx)</label>
+                <label className="form-label">{t('อัปโหลดไฟล์ (.xlsx)')}</label>
                 <input className="form-control" type="file" accept=".xlsx" onChange={onFileChange} />
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-light)' }}>
@@ -63,16 +65,16 @@ export default function ImportProductsModal({ existingProducts, onClose, onImpor
             </>
           ) : (
             <>
-              <div style={{ fontSize: 13, marginBottom: 8 }}>ไฟล์: <b>{fileName}</b></div>
+              <div style={{ fontSize: 13, marginBottom: 8 }}>{t('ไฟล์:')} <b>{fileName}</b></div>
               <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-                <span style={{ color: 'var(--success)', fontWeight: 600 }}>ถูกต้อง {parsed.validRows.length} รายการ</span>
-                {parsed.invalidRows.length > 0 && <span style={{ color: 'var(--danger)', fontWeight: 600 }}>ผิดพลาด {parsed.invalidRows.length} รายการ</span>}
+                <span style={{ color: 'var(--success)', fontWeight: 600 }}>{lang === 'en' ? `Valid: ${parsed.validRows.length} record(s)` : `ถูกต้อง ${parsed.validRows.length} รายการ`}</span>
+                {parsed.invalidRows.length > 0 && <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{lang === 'en' ? `Errors: ${parsed.invalidRows.length} record(s)` : `ผิดพลาด ${parsed.invalidRows.length} รายการ`}</span>}
               </div>
               {parsed.invalidRows.length > 0 && (
                 <div className="card" style={{ marginBottom: 12, maxHeight: 140, overflow: 'auto' }}>
                   <div className="table-wrap">
                     <table>
-                      <thead><tr><th>แถวที่</th><th>ปัญหา</th></tr></thead>
+                      <thead><tr><th>{t('แถวที่')}</th><th>{t('ปัญหา')}</th></tr></thead>
                       <tbody>
                         {parsed.invalidRows.map((r, i) => (
                           <tr key={i}><td>{r.row}</td><td style={{ color: 'var(--danger)', fontSize: 12 }}>{r.errors.join(', ')}</td></tr>
@@ -86,7 +88,7 @@ export default function ImportProductsModal({ existingProducts, onClose, onImpor
                 <div className="card" style={{ maxHeight: 220, overflow: 'auto' }}>
                   <div className="table-wrap">
                     <table>
-                      <thead><tr><th>รหัสสินค้า</th><th>ชื่อสินค้า</th></tr></thead>
+                      <thead><tr><th>{t('รหัสสินค้า')}</th><th>{t('ชื่อสินค้า')}</th></tr></thead>
                       <tbody>
                         {parsed.validRows.slice(0, 20).map((r, i) => (
                           <tr key={i}><td>{r.code}</td><td>{r.name}</td></tr>
@@ -94,18 +96,18 @@ export default function ImportProductsModal({ existingProducts, onClose, onImpor
                       </tbody>
                     </table>
                   </div>
-                  {parsed.validRows.length > 20 && <div style={{ fontSize: 11, color: 'var(--text-light)', padding: 8 }}>...และอีก {parsed.validRows.length - 20} รายการ</div>}
+                  {parsed.validRows.length > 20 && <div style={{ fontSize: 11, color: 'var(--text-light)', padding: 8 }}>{lang === 'en' ? `...and ${parsed.validRows.length - 20} more` : `...และอีก ${parsed.validRows.length - 20} รายการ`}</div>}
                 </div>
               )}
-              <button className="btn btn-outline btn-sm" style={{ marginTop: 12 }} onClick={() => { setParsed(null); setFileName('') }}>เลือกไฟล์ใหม่</button>
+              <button className="btn btn-outline btn-sm" style={{ marginTop: 12 }} onClick={() => { setParsed(null); setFileName('') }}>{t('เลือกไฟล์ใหม่')}</button>
             </>
           )}
         </div>
         <div className="modal-footer">
-          <button className="btn btn-outline" onClick={onClose}>ยกเลิก</button>
+          <button className="btn btn-outline" onClick={onClose}>{t('ยกเลิก')}</button>
           {parsed && (
             <button className="btn btn-primary" onClick={confirmImport} disabled={importing || !parsed.validRows.length}>
-              {importing ? 'กำลังนำเข้า...' : `นำเข้า ${parsed.validRows.length} รายการ`}
+              {importing ? t('กำลังนำเข้า...') : (lang === 'en' ? `Import ${parsed.validRows.length} record(s)` : `นำเข้า ${parsed.validRows.length} รายการ`)}
             </button>
           )}
         </div>
