@@ -307,6 +307,16 @@ export const updateTask = (id, d) => supabase.from('tasks').update(d).eq('id', i
 export const deleteTask = (id) => supabase.from('tasks').delete().eq('id', id).then(handle)
 export const completeTask = (id) => updateTask(id, { status: 'เสร็จสิ้น' })
 
+// สร้าง/อัปเดตงานติดตามให้ตรงกับ follow_up_date ของดีลเสมอ — มีงานที่ยังไม่เสร็จ/ยกเลิกผูกกับดีลนี้อยู่แล้วก็แค่อัปเดตวันที่ใหม่ ไม่สร้างซ้ำ
+// กันงานหลุดเวลาเซลล์เลื่อนวันนัด follow up ในดีล ไม่ต้องไปกรอกซ้ำที่หน้า "งานติดตาม" เอง
+export async function syncDealFollowUpTask(deal, followUpDate, ownerName, createdBy) {
+  const openTasks = await supabase.from('tasks').select('id').eq('deal_id', deal.id)
+    .neq('status', 'เสร็จสิ้น').neq('status', 'ยกเลิก')
+    .order('created_at', { ascending: false }).then(handle)
+  if (openTasks.length) return updateTask(openTasks[0].id, { due_date: followUpDate })
+  return addTask({ company_id: deal.company_id || null, deal_id: deal.id, subject: `ติดตามดีล: ${deal.name}`, due_date: followUpDate, owner: ownerName, created_by: createdBy })
+}
+
 // ===== QUOTATIONS =====
 async function genQuotNo() {
   const { data, error } = await supabase.rpc('gen_quot_no')
@@ -892,6 +902,19 @@ export async function addOrderWithItems(fields, items) {
 export async function cancelOrder(id, reason, actorName) {
   const order = await supabase.from('orders').update({ status: ORDER_STATUS.CANCELLED, cancelled_at: new Date().toISOString(), cancel_reason: reason }).eq('id', id).select().single().then(handle)
   await writeAuditLog({ entity_type: 'order', entity_id: id, action: 'cancel', actor_name: actorName, detail: reason })
+  // ออเดอร์ถูกยกเลิก -> ยกเลิกคำขอเอกสารบัญชีที่ยังไม่จบงานของออเดอร์นี้ไปด้วย กันบัญชีเห็นสถานะค้าง (เช่น "รอบัญชีตรวจสอบ") ทั้งที่ออเดอร์ไม่มีแล้ว
+  // ทำแบบ best-effort — ถ้าพลาด (เช่น ติด RLS ของคำขอที่ไม่ใช่ของเซลล์คนนี้) ไม่ให้กระทบการยกเลิกออเดอร์ที่สำเร็จไปแล้ว
+  try {
+    const openDocReqs = await supabase.from('accounting_document_requests').select('id, sales_note')
+      .eq('order_id', id).neq('document_status', ACCOUNTING_DOC_STATUS.COMPLETED).neq('document_status', ACCOUNTING_DOC_STATUS.CANCELLED)
+      .then(handle)
+    for (const req of openDocReqs) {
+      await supabase.from('accounting_document_requests').update({
+        document_status: ACCOUNTING_DOC_STATUS.CANCELLED, cancelled_at: new Date().toISOString(),
+        sales_note: [req.sales_note, `ยกเลิกอัตโนมัติ: ออเดอร์นี้ถูกยกเลิกแล้ว (${reason})`].filter(Boolean).join(' / '),
+      }).eq('id', req.id).then(handle)
+    }
+  } catch { /* ไม่บล็อกผลการยกเลิกออเดอร์ */ }
   return order
 }
 

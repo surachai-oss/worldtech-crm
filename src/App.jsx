@@ -249,11 +249,18 @@ function AppInner({ session }) {
     if (!f.name?.trim()) { toast('กรุณากรอกชื่อดีล', 'error'); return }
     if (!f.company_id) { toast('กรุณาเลือกบริษัท', 'error'); return }
     if (f.id) {
-      await run(() => api.updateDealWithItems(f.id, f, items), 'อัปเดตดีลสำเร็จ')
+      await run(async () => {
+        const deal = await api.updateDealWithItems(f.id, f, items)
+        // มีวันที่ follow up = สร้าง/อัปเดตงานติดตามให้ตรงกันเสมอ กันงานหลุดเวลาเซลล์เลื่อนนัด
+        if (f.follow_up_date) await api.syncDealFollowUpTask(deal, f.follow_up_date, f.owner || currentUser.name, session.user.id)
+        return deal
+      }, 'อัปเดตดีลสำเร็จ')
     } else {
       await run(async () => {
         const deal = await api.addDealWithItems({ ...f, created_by: session.user.id }, items)
         if (linkQuotationId) await api.updateQuotation(linkQuotationId, { deal_id: deal.id })
+        if (f.follow_up_date) await api.syncDealFollowUpTask(deal, f.follow_up_date, f.owner || currentUser.name, session.user.id)
+        return deal
       }, 'เพิ่มดีลสำเร็จ')
     }
   }
