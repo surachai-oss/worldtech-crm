@@ -69,6 +69,10 @@ create table if not exists deals (
 alter table deals add column if not exists follow_up_date date;
 alter table deals add column if not exists source text;
 
+-- ส่วนลดท้ายบิล — discount_type: 'เปอร์เซ็นต์' หรือ 'จำนวนเงิน', deals.value คือมูลค่าหลังหักส่วนลดแล้ว (คำนวณฝั่ง frontend)
+alter table deals add column if not exists discount_type text;
+alter table deals add column if not exists discount_value numeric default 0;
+
 -- ===== PRODUCTS (รายการสินค้า สำหรับเลือกใส่ในรายการของดีล — รหัส+ชื่อเท่านั้น ไม่เก็บราคา กรอกราคาต่อหน่วยเองทุกครั้งตอนสร้างดีล) =====
 create table if not exists products (
   id          uuid primary key default uuid_generate_v4(),
@@ -126,6 +130,10 @@ create table if not exists quotations (
   note          text,
   created_at    timestamptz default now()
 );
+
+-- ส่วนลดท้ายบิล — discount_type: 'เปอร์เซ็นต์' หรือ 'จำนวนเงิน', quotations.value คือมูลค่าหลังหักส่วนลดแล้ว (คำนวณฝั่ง frontend)
+alter table quotations add column if not exists discount_type text;
+alter table quotations add column if not exists discount_value numeric default 0;
 
 -- product_id/quantity/unit_price บนตาราง quotations เอง (ใบเสนอราคามีได้แค่ 1 รายการ) — เก็บไว้เป็นข้อมูลเก่า
 -- ไม่ใช้แล้วตั้งแต่เปลี่ยนมาใช้ตาราง quotation_items ด้านล่างที่รองรับหลายรายการต่อใบ (ดู migration ท้ายบล็อกนี้)
@@ -290,6 +298,10 @@ alter table orders add column if not exists remark text;
 -- order_type = ประเภทออเดอร์ที่เซลล์เลือกก่อนรันเลข ('ปกติ' รันเป็น WT, 'Grade B' รันเป็น GB) — ดู gen_order_no() ด้านล่าง
 alter table orders add column if not exists order_type text not null default 'ปกติ' check (order_type in ('ปกติ', 'Grade B'));
 
+-- ส่วนลดท้ายบิล (ตอนสร้างออเดอร์เท่านั้น เพราะแก้ไขทีหลังไม่ได้) — discount_type: 'เปอร์เซ็นต์' หรือ 'จำนวนเงิน', value คือ orders.value หลังหักส่วนลดแล้ว
+alter table orders add column if not exists discount_type text;
+alter table orders add column if not exists discount_value numeric default 0;
+
 -- ===== ORDER ITEMS (snapshot รายการสินค้าจากใบเสนอราคา ณ ตอนเปิดออเดอร์ — ไม่ผูกสดกับ quotation_items เพราะใบเสนอราคาแก้ไขทีหลังได้ แต่ออเดอร์ต้องคงข้อมูล ณ วันที่เปิดไว้) =====
 create table if not exists order_items (
   id           uuid primary key default uuid_generate_v4(),
@@ -369,7 +381,9 @@ begin
     new.company_phone is distinct from old.company_phone or
     new.company_email is distinct from old.company_email or
     new.remark is distinct from old.remark or
-    new.order_type is distinct from old.order_type
+    new.order_type is distinct from old.order_type or
+    new.discount_type is distinct from old.discount_type or
+    new.discount_value is distinct from old.discount_value
   ) then
     raise exception 'ออเดอร์ที่บันทึกแล้วแก้ไขไม่ได้ ถ้าลงข้อมูลผิดต้องยกเลิกแล้วเปิดออเดอร์ใหม่';
   end if;
