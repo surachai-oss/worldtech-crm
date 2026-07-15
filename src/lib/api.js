@@ -142,8 +142,9 @@ export async function fetchTasksPage({ page = 0, status = '', priority = '', q =
 export async function fetchQuotationsTotal({ status = '', q = '', dateFrom = '', dateTo = '', creditType = '' } = {}) {
   let query = supabase.from('quotations').select('value')
   if (status) query = query.eq('status', status)
-  if (creditType === 'credit') query = query.not('credit_term', 'is', null)
-  else if (creditType === 'normal') query = query.is('credit_term', null)
+  // credit_term ของใบเสนอราคาที่ไม่ใช่เครดิตถูกเก็บเป็น '' (ไม่ใช่ null) มาตั้งแต่ต้น (ดู QuotationModal) — เช็คทั้งสองแบบกันฟิลเตอร์พลาด
+  if (creditType === 'credit') query = query.not('credit_term', 'is', null).neq('credit_term', '')
+  else if (creditType === 'normal') query = query.or('credit_term.is.null,credit_term.eq.')
   const sq = safeLike(q)
   if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
   if (dateFrom) query = query.gte('quot_date', dateFrom)
@@ -156,8 +157,9 @@ export async function fetchQuotationsTotal({ status = '', q = '', dateFrom = '',
 export async function fetchQuotationsPage({ page = 0, status = '', q = '', dateFrom = '', dateTo = '', creditType = '' } = {}) {
   let query = supabase.from('quotations').select('*, company:companies(id,name,address,tax_id,phone,created_by,credit_term), product:products(id,code,name,image_path)', { count: 'exact' }).order('created_at', { ascending: false })
   if (status) query = query.eq('status', status)
-  if (creditType === 'credit') query = query.not('credit_term', 'is', null)
-  else if (creditType === 'normal') query = query.is('credit_term', null)
+  // credit_term ของใบเสนอราคาที่ไม่ใช่เครดิตถูกเก็บเป็น '' (ไม่ใช่ null) มาตั้งแต่ต้น (ดู QuotationModal) — เช็คทั้งสองแบบกันฟิลเตอร์พลาด
+  if (creditType === 'credit') query = query.not('credit_term', 'is', null).neq('credit_term', '')
+  else if (creditType === 'normal') query = query.or('credit_term.is.null,credit_term.eq.')
   const sq = safeLike(q)
   if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
   if (dateFrom) query = query.gte('quot_date', dateFrom)
@@ -356,7 +358,8 @@ export const listQuotationItems = (quotationId) =>
 export async function addQuotationWithItems(fields, items) {
   const totals = computeDealTotals(items, { type: fields.discount_type, value: fields.discount_value })
   const quot_no = await genQuotNo()
-  const quot = await supabase.from('quotations').insert({ ...fields, quot_no, value: totals.grandTotal }).select().single().then(handle)
+  // credit_term ว่างเก็บเป็น null เสมอ (ไม่ใช่ '') กันฟิลเตอร์ประเภทลูกค้าใน fetchQuotationsPage/Total พลาด
+  const quot = await supabase.from('quotations').insert({ ...fields, credit_term: fields.credit_term || null, quot_no, value: totals.grandTotal }).select().single().then(handle)
   if (items?.length) {
     const rows = items.map((it, i) => ({
       quotation_id: quot.id, product_id: it.product_id, description: it.description, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
@@ -369,7 +372,7 @@ export async function addQuotationWithItems(fields, items) {
 // แก้ไขใบเสนอราคา — ลบรายการเดิมทั้งหมดแล้วใส่ชุดใหม่ทั้งหมด (แบบเดียวกับดีล)
 export async function updateQuotationWithItems(id, fields, items) {
   const totals = computeDealTotals(items, { type: fields.discount_type, value: fields.discount_value })
-  const quot = await updateQuotation(id, { ...fields, value: totals.grandTotal })
+  const quot = await updateQuotation(id, { ...fields, credit_term: fields.credit_term || null, value: totals.grandTotal })
   await supabase.from('quotation_items').delete().eq('quotation_id', id).then(handle)
   if (items?.length) {
     const rows = items.map((it, i) => ({
