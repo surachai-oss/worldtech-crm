@@ -15,6 +15,7 @@ export const PAYMENT_STATUS = {
   REJECTED: 'Rejected',
   APPROVED: 'Approved to Create Order',
   ORDER_CREATED: 'Order Created',
+  CANCELLED: 'Cancelled', // ออเดอร์ที่ผูกอยู่ถูกยกเลิกไปก่อนจะดำเนินการต่อ (ดู cancelOrder ใน api.js)
 }
 export const PAYMENT_STATUS_LIST = Object.values(PAYMENT_STATUS)
 
@@ -916,6 +917,19 @@ export async function cancelOrder(id, reason, actorName) {
         document_status: ACCOUNTING_DOC_STATUS.CANCELLED, cancelled_at: new Date().toISOString(),
         sales_note: [req.sales_note, `ยกเลิกอัตโนมัติ: ออเดอร์นี้ถูกยกเลิกแล้ว (${reason})`].filter(Boolean).join(' / '),
       }).eq('id', req.id).then(handle)
+    }
+  } catch { /* ไม่บล็อกผลการยกเลิกออเดอร์ */ }
+  // เช่นเดียวกัน — ยกเลิกคำขอตรวจสอบยอดโอนที่ยังไม่จบงานของออเดอร์นี้ กันบัญชีเห็นสถานะ "รอบัญชีตรวจ" ค้างอยู่ทั้งที่ออเดอร์ไม่มีแล้ว
+  try {
+    const openPayReqs = await supabase.from('payment_requests').select('id, remark')
+      .eq('order_id', id)
+      .neq('status', PAYMENT_STATUS.REJECTED).neq('status', PAYMENT_STATUS.ORDER_CREATED).neq('status', PAYMENT_STATUS.CANCELLED)
+      .then(handle)
+    for (const pr of openPayReqs) {
+      await supabase.from('payment_requests').update({
+        status: PAYMENT_STATUS.CANCELLED,
+        remark: [pr.remark, `ยกเลิกอัตโนมัติ: ออเดอร์นี้ถูกยกเลิกแล้ว (${reason})`].filter(Boolean).join(' / '),
+      }).eq('id', pr.id).then(handle)
     }
   } catch { /* ไม่บล็อกผลการยกเลิกออเดอร์ */ }
   return order

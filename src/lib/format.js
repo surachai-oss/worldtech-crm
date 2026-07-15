@@ -53,6 +53,7 @@ const PAYMENT_STATUS_META = {
   'Rejected': { label: 'ปฏิเสธ', cls: 'badge-red' },
   'Approved to Create Order': { label: 'อนุมัติ — เปิดออเดอร์ได้', cls: 'badge-green' },
   'Order Created': { label: 'เปิดออเดอร์แล้ว', cls: 'badge-navy' },
+  'Cancelled': { label: 'ยกเลิก', cls: 'badge-red' },
 }
 export function paymentStatusLabel(s) { return PAYMENT_STATUS_META[s]?.label || s }
 export function paymentBadgeClass(s) { return PAYMENT_STATUS_META[s]?.cls || 'badge-gray' }
