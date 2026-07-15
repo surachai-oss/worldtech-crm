@@ -164,6 +164,9 @@ alter table quotations add column if not exists payment_status text default 'ย
 -- เก็บค่าไว้ที่ใบเสนอราคาแทนที่จะอ้างอิงจาก companies.credit_term ตรงๆ เพราะเงื่อนไขบริษัทอาจเปลี่ยนทีหลัง แต่ใบเก่าต้องคงข้อมูล ณ วันที่ออกไว้ — ค่านี้พิมพ์โชว์ในใบเสนอราคาด้วย
 alter table quotations add column if not exists credit_term text;
 
+-- quotation_id บนงานติดตาม — ให้เซลล์ผูกงานติดตามกับใบเสนอราคาที่ส่งไปได้ (เช่น ติดตามว่าราคาที่เสนอผ่านหรือไม่ อยู่ขั้นตอนไหน)
+alter table tasks add column if not exists quotation_id uuid references quotations(id) on delete set null;
+
 -- ===== QUOTATION ITEMS (รายการสินค้าในใบเสนอราคา — ใบเสนอราคาหนึ่งมีได้หลายรายการ เหมือนดีล) =====
 -- description = ชื่อรายการที่แสดงจริง (เติมจากชื่อสินค้าเวลาเลือก แต่แก้ไขเองได้ เผื่อรายการที่ไม่มีในรายการสินค้า)
 -- unit_price ถือว่ารวม VAT แล้วเหมือนกับดีล — quotations.value คำนวณจากผลรวมรายการเหล่านี้ที่ฝั่ง frontend
