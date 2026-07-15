@@ -365,7 +365,8 @@ export function ActivityModal({ companies, contacts, defaultCompanyId, lead, cur
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
   const contactOptions = contacts.filter(c => c.company_id === f.company_id)
-  const submit = () => onSave({ ...f, lead_id: lead?.id || null })
+  // company_id/contact_id เป็น uuid ในฐานข้อมูล ส่ง '' ไปตรงๆ จะพัง (invalid input syntax for type uuid) ต้องแปลงเป็น null ก่อนเสมอ
+  const submit = () => onSave({ ...f, company_id: f.company_id || null, contact_id: f.contact_id || null, lead_id: lead?.id || null })
   return (
     <ModalShell title="บันทึกการติดต่อ" onClose={onClose} onSave={submit}>
       {lead

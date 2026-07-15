@@ -9,31 +9,33 @@ import Pagination from './Pagination'
 
 export default function Tasks({ perm, reloadKey, onNavCompany, onAdd, onEdit, onComplete, onDelete }) {
   const { toast } = useUi()
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const { list } = usePicklists()
   const [status, setStatus] = useState('')
   const [priority, setPriority] = useState('')
   const [q, setQ] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
   const [page, setPage] = useState(0)
   const [rows, setRows] = useState([])
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState({ pending: 0, overdue: 0, done: 0 })
 
-  useEffect(() => { setPage(0) }, [status, priority, q])
+  useEffect(() => { setPage(0) }, [status, priority, q, fromDate, toDate])
 
   useEffect(() => {
     let alive = true
     setLoading(true)
     const t = setTimeout(() => {
-      fetchTasksPage({ page, status, priority, q }).then(r => {
+      fetchTasksPage({ page, status, priority, q, dateFrom: fromDate, dateTo: toDate }).then(r => {
         if (!alive) return
         setRows(r.rows); setCount(r.count)
       }).catch(e => { if (alive) toast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'error') })
         .finally(() => { if (alive) setLoading(false) })
     }, 250)
     return () => { alive = false; clearTimeout(t) }
-  }, [page, status, priority, q, reloadKey])
+  }, [page, status, priority, q, fromDate, toDate, reloadKey])
 
   useEffect(() => {
     let alive = true
@@ -62,6 +64,12 @@ export default function Tasks({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
           {list('task_priorities').map(p => <option key={p}>{p}</option>)}
         </select>
         <input className="filter-input" placeholder={t('ค้นหา...')} value={q} onChange={e => setQ(e.target.value)} />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
+          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title={lang === 'en' ? 'Due date from' : 'วันครบกำหนด ตั้งแต่'} />
+          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ถึง')}</span>
+          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title={lang === 'en' ? 'Due date to' : 'วันครบกำหนด ถึง'} />
+          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>{t('ล้าง')}</button>}
+        </div>
       </div>
       <div className="card list-card">
         <div className="table-wrap">

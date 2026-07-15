@@ -121,12 +121,14 @@ export async function fetchTaskCounts() {
   return { pending: pending.count || 0, overdue: overdue.count || 0, done: done.count || 0 }
 }
 
-export async function fetchTasksPage({ page = 0, status = '', priority = '', q = '' } = {}) {
+export async function fetchTasksPage({ page = 0, status = '', priority = '', q = '', dateFrom = '', dateTo = '' } = {}) {
   let query = supabase.from('tasks').select('*, company:companies(id,name)', { count: 'exact' }).order('due_date', { ascending: true })
   if (status) query = query.eq('status', status)
   if (priority) query = query.eq('priority', priority)
   const sq = safeLike(q)
   if (sq) query = query.ilike('subject', `%${sq}%`)
+  if (dateFrom) query = query.gte('due_date', dateFrom)
+  if (dateTo) query = query.lte('due_date', dateTo)
   const { data, error, count } = await query.range(...range(page))
   if (error) throw error
   return { rows: data, count, pageSize: PAGE_SIZE }
