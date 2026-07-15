@@ -198,7 +198,7 @@ function TasksTab({ tasks, perm, onAdd, onEdit, onComplete, onDelete }) {
   const { t } = useLanguage()
   return (
     <>
-      <div className="section-header"><div className="section-title">{t('งาน Follow-up')}</div><button className="btn btn-primary btn-sm" onClick={onAdd}>{t('+ เพิ่มงาน')}</button></div>
+      <div className="section-header"><div className="section-title">{t('งานติดตาม')}</div><button className="btn btn-primary btn-sm" onClick={onAdd}>{t('+ เพิ่มงาน')}</button></div>
       <div className="card"><div className="table-wrap">
         {tasks.length ? (
           <table>

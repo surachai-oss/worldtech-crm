@@ -20,7 +20,7 @@ export const EN_DICT = {
   'สินค้า': 'Products',
   'ติดตาม': 'Follow-up',
   'ประวัติการติดต่อ': 'Activity History',
-  'งาน Follow-up': 'Follow-up Tasks',
+  'งานติดตาม': 'Follow-up Tasks',
   'การเงิน': 'Finance',
   'ตรวจสอบยอดโอน': 'Payment Review',
   'เอกสารบัญชี': 'Accounting Documents',
@@ -218,9 +218,11 @@ export const EN_DICT = {
   'ประวัติการติดต่อ': 'Activity History',
   '+ บันทึกการติดต่อ': '+ Log Activity',
   'ยังไม่มีการบันทึกกิจกรรม': 'No activities logged yet',
+  'วันที่ติดตาม': 'Follow-up Date',
+  'ถ้ากรอก ระบบจะสร้างงานติดตามในวันที่นี้ให้อัตโนมัติ ไม่ต้องไปกรอกซ้ำที่หน้างานติดตาม': "If filled in, a follow-up task will be created for this date automatically — no need to re-enter it on the Follow-up Tasks page",
 
   // ===== Tasks =====
-  'งาน Follow-up': 'Follow-up Tasks',
+  'งานติดตาม': 'Follow-up Tasks',
   '+ เพิ่มงาน': '+ Add Task',
   'รอดำเนินการ': 'Pending',
   'เกินกำหนด': 'Overdue',
@@ -406,7 +408,7 @@ export const EN_DICT = {
 
   // ===== Modals.jsx: Tasks =====
   'แก้ไขงาน': 'Edit Task',
-  'เพิ่มงาน Follow-up': 'Add Follow-up Task',
+  'เพิ่มงานติดตาม': 'Add Follow-up Task',
   'หัวข้องาน': 'Task Subject',
   'เช่น โทรติดตามใบเสนอราคา': 'e.g. Call to follow up on quotation',
   'ลำดับความสำคัญ': 'Priority Level',

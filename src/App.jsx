@@ -26,7 +26,7 @@ import './App.css'
 
 const TITLES = {
   dashboard: 'แดชบอร์ด', companies: 'บริษัทลูกค้า', 'company-detail': 'รายละเอียดบริษัท',
-  deals: 'ดีลการขาย', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา', orders: 'ออเดอร์',
+  deals: 'ดีลการขาย', tasks: 'งานติดตาม', quotations: 'ใบเสนอราคา', orders: 'ออเดอร์',
   users: 'ผู้ใช้งาน', products: 'สินค้า', leads: 'ผู้ติดต่อ',
   'finance-review': 'ตรวจสอบยอดโอน', 'accounting-documents': 'เอกสารบัญชี'
 }
@@ -262,7 +262,21 @@ function AppInner({ session }) {
     if (!f.subject?.trim()) { toast('กรุณากรอกหัวข้อ', 'error'); return }
     // ผูกได้ทั้งกับบริษัท (ทางเดิม) หรือกับลีดโดยตรง (บันทึกจากหน้าผู้ติดต่อ ก่อนแปลงเป็นลูกค้า) — ต้องมีอย่างน้อยหนึ่งอย่าง
     if (!f.company_id && !f.lead_id) { toast('กรุณาเลือกบริษัท', 'error'); return }
-    await run(() => api.addActivity(f), 'บันทึกสำเร็จ')
+    // follow_up_date/lead_status เป็นแค่ input ช่วยของ ActivityModal ไม่ใช่คอลัมน์จริงของ activities ต้องตัดออกก่อนบันทึก
+    const { follow_up_date, lead_status, ...activityFields } = f
+    await run(async () => {
+      const saved = await api.addActivity(activityFields)
+      // กรอกวันที่ติดตามมา = สร้างงานติดตามให้อัตโนมัติ กันต้องไปกรอกซ้ำที่หน้า "งานติดตาม" เอง
+      if (follow_up_date) {
+        await api.addTask({
+          company_id: activityFields.company_id || null, lead_id: activityFields.lead_id || null,
+          subject: `ติดตาม: ${activityFields.subject}`, due_date: follow_up_date,
+          owner: activityFields.recorded_by || currentUser.name, created_by: session.user.id,
+        })
+      }
+      if (activityFields.lead_id && lead_status) await api.updateLead(activityFields.lead_id, { status: lead_status })
+      return saved
+    }, 'บันทึกสำเร็จ')
   }
   const saveTask = async (f) => {
     closeModal()

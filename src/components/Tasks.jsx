@@ -44,7 +44,7 @@ export default function Tasks({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
   return (
     <div className="list-view">
       <div className="section-header">
-        <div className="section-title">{t('งาน Follow-up')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} {t('รายการ')})</span></div>
+        <div className="section-title">{t('งานติดตาม')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} {t('รายการ')})</span></div>
         <button className="btn btn-primary" onClick={onAdd}>{t('+ เพิ่มงาน')}</button>
       </div>
       <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 14 }}>

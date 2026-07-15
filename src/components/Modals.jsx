@@ -354,11 +354,14 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
 
 // lead: เปิดจากหน้า "ผู้ติดต่อ" (Leads.jsx) — บันทึกผูกกับลีดโดยตรง (lead_id) แทนการเลือกบริษัท เพราะลีดอาจยังไม่ถูกแปลงเป็นลูกค้า
 // ถ้าลีดนี้แปลงเป็นลูกค้าแล้ว (มี converted_company_id) จะผูก company_id ให้ด้วยอัตโนมัติ ไปโผล่ในแท็บกิจกรรมของบริษัทนั้นด้วย
+// follow_up_date: ถ้ากรอก จะสร้างงานติดตาม (tasks) ให้อัตโนมัติตอนบันทึก (ดู saveActivity ใน App.jsx) — ไม่ต้องไปกรอกซ้ำที่หน้า "งานติดตาม"
+// lead_status: แก้สถานะของลีดได้จากที่นี่เลย (เฉพาะตอนเปิดจากหน้าผู้ติดต่อ) ไม่ต้องปิด popup แล้วไปเลือกที่ตารางแยกอีกที
 export function ActivityModal({ companies, contacts, defaultCompanyId, lead, currentUserName, isAdmin, onClose, onSave }) {
   const { t, lang } = useLanguage()
   const [f, setF] = useState({
     company_id: defaultCompanyId || lead?.converted_company_id || '', contact_id: '', type: '',
-    subject: lead?.subject || '', detail: '', activity_date: new Date().toISOString().split('T')[0], recorded_by: currentUserName || ''
+    subject: lead?.subject || '', detail: '', activity_date: new Date().toISOString().split('T')[0], recorded_by: currentUserName || '',
+    follow_up_date: '', lead_status: lead?.status || ''
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
   const contactOptions = contacts.filter(c => c.company_id === f.company_id)
@@ -383,6 +386,15 @@ export function ActivityModal({ companies, contacts, defaultCompanyId, lead, cur
           </select>
         </Field>
       )}
+      {lead && (
+        <Field label={t('สถานะ')}>
+          <EditableSelect listKey="lead_statuses" value={f.lead_status} onChange={v => setF(s => ({ ...s, lead_status: v }))} isAdmin={isAdmin} />
+        </Field>
+      )}
+      <Field label={t('วันที่ติดตาม')}>
+        <input className="form-control" type="date" value={f.follow_up_date} onChange={set('follow_up_date')} />
+        <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('ถ้ากรอก ระบบจะสร้างงานติดตามในวันที่นี้ให้อัตโนมัติ ไม่ต้องไปกรอกซ้ำที่หน้างานติดตาม')}</div>
+      </Field>
       <Field label={t('รายละเอียด')}><textarea className="form-control" rows={3} value={f.detail} onChange={set('detail')} placeholder={t('บันทึกรายละเอียดการสนทนา...')} /></Field>
       <Field label={t('ผู้บันทึก')}><input className="form-control" value={f.recorded_by} onChange={set('recorded_by')} /></Field>
     </ModalShell>
@@ -398,7 +410,7 @@ export function TaskModal({ initial, companies, defaultCompanyId, currentUserNam
   // due_date ไม่บังคับ ถ้าไม่ได้กรอก/เคลียร์ทิ้งจะได้ "" มา ต้องแปลงเป็น null ก่อนส่ง ไม่งั้น Postgres ปฏิเสธ (invalid input syntax for type date)
   const submit = () => onSave({ ...f, due_date: f.due_date || null })
   return (
-    <ModalShell title={initial?.id ? 'แก้ไขงาน' : 'เพิ่มงาน Follow-up'} onClose={onClose} onSave={submit}>
+    <ModalShell title={initial?.id ? 'แก้ไขงาน' : 'เพิ่มงานติดตาม'} onClose={onClose} onSave={submit}>
       <Field label={t('บริษัท')}><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
       <Field label={t('หัวข้องาน')} required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder={t('เช่น โทรติดตามใบเสนอราคา')} /></Field>
       <div className="form-row">

@@ -128,14 +128,7 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onCreateCo
                 {rows.map(l => (
                   <tr key={l.id}>
                     <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{l.subject}</td>
-                    <td style={{ fontSize: 12 }}>
-                      <button
-                        type="button"
-                        onClick={() => onLogActivity(l)}
-                        title={t('ประวัติการติดต่อ')}
-                        style={{ background: 'none', border: 'none', padding: 0, color: 'var(--navy)', fontWeight: 600, textDecoration: 'underline', cursor: 'pointer', fontSize: 12 }}
-                      >{l.full_name}</button>
-                    </td>
+                    <td style={{ fontSize: 12 }}>{l.full_name}</td>
                     <td style={{ fontSize: 12 }}>{l.phone}{l.email ? <div style={{ color: 'var(--text-light)' }}>{l.email}</div> : null}</td>
                     <td style={{ fontSize: 12 }}>{l.position || '-'}{l.business_type ? <div style={{ color: 'var(--text-light)' }}>{l.business_type}</div> : null}</td>
                     <td style={{ fontSize: 12 }}>{(l.appliance_interest?.length ? l.appliance_interest.join(', ') : l.interested_product) || '-'}</td>
@@ -144,6 +137,7 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onCreateCo
                     <td><EditableSelect listKey="lead_statuses" value={l.status} onChange={v => onStatusChange(l.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 150 }} /></td>
                     <td style={{ fontSize: 12 }}>{fmtDate(l.created_at)}</td>
                     <td className="td-actions">
+                      <button className="btn btn-outline btn-xs" onClick={() => onLogActivity(l)}>{t('ประวัติการติดต่อ')}</button>
                       {l.converted_company_id
                         ? <button className="btn btn-outline btn-xs" onClick={() => onNavCompany(l.converted_company_id)}>{t('ลูกค้า:')} {l.company?.name || '-'}</button>
                         : <button className="btn btn-secondary btn-xs" onClick={() => onCreateCompany(l)}>{t('สร้างเป็นลูกค้า')}</button>}
