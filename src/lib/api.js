@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient'
+import { toLocalDateStr } from './format'
 
 // ===== CONSTANTS (ค่าคงที่ระบบที่ไม่ให้ผู้ใช้แก้เอง) =====
 // รายการ dropdown อื่นๆ (สถานะ, stage, ประเภท ฯลฯ) ย้ายไปเป็น picklists ที่แก้ไขได้ในแอปแล้ว — ดู PicklistsContext
@@ -481,8 +482,30 @@ export const adminDeleteUser = (userId, accessToken) =>
 
 // ===== DASHBOARD (คำนวณฝั่ง client จาก getAllData) =====
 // stages: รายชื่อ deal stage ปัจจุบัน (จาก picklists) — ใช้แค่จัดกลุ่มตาราง Pipeline ให้ตรงกับ stage ที่มีจริงตอนนี้
-export function computeDashboard(data, stages = []) {
-  const { companies, deals, tasks, activities, quotations } = data
+// filters: { dateFrom, dateTo, creditType } — creditType: '' ทั้งหมด | 'normal' เงินสด | 'credit' เครดิต (อิง companies.credit_term)
+// กรองทุกส่วนของแดชบอร์ดตาม filters เดียวกัน ก่อนคำนวณสรุปทั้งหมด (ไม่ใช่แค่ Pipeline เหมือนเดิม)
+export function computeDashboard(data, stages = [], filters = {}) {
+  const { dateFrom, dateTo, creditType } = filters
+  const companyById = new Map(data.companies.map(c => [c.id, c]))
+  const matchesCredit = (companyId) => {
+    if (!creditType) return true
+    const hasCredit = !!companyById.get(companyId)?.credit_term
+    return creditType === 'credit' ? hasCredit : !hasCredit
+  }
+  const inRange = (ds) => {
+    if (!ds) return true
+    const d = toLocalDateStr(ds)
+    if (dateFrom && d < dateFrom) return false
+    if (dateTo && d > dateTo) return false
+    return true
+  }
+
+  const companies = data.companies.filter(c => matchesCredit(c.id) && inRange(c.created_at))
+  const deals = data.deals.filter(d => matchesCredit(d.company_id) && inRange(d.created_at))
+  const tasks = data.tasks.filter(t => matchesCredit(t.company_id) && inRange(t.due_date || t.created_at))
+  const activities = data.activities.filter(a => matchesCredit(a.company_id) && inRange(a.activity_date || a.created_at))
+  const quotations = data.quotations.filter(q => matchesCredit(q.company_id) && inRange(q.quot_date))
+
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
   const activeCompanies = companies.filter(c => c.status === 'Active').length
@@ -538,7 +561,9 @@ export function computeDashboard(data, stages = []) {
       totalQuotations: quotations.length,
       pendingPayments: pendingPaymentsAll.length, overduePayments
     },
-    stageData, recentActivities, upcomingTasks, topDeals, pendingPayments: pendingPaymentsAll.slice(0, 8)
+    stageData, recentActivities, upcomingTasks, topDeals, pendingPayments: pendingPaymentsAll.slice(0, 8),
+    // รายการที่กรองตาม filters แล้ว (ทั้งชุด ไม่ตัด) ให้ป็อปอัปรายละเอียดของแต่ละการ์ดใช้ต่อ
+    companies, deals, tasks, activities, quotations
   }
 }
 

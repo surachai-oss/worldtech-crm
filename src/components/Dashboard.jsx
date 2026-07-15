@@ -53,24 +53,17 @@ export default function Dashboard({ data, onNav }) {
   const { t, lang } = useLanguage()
   const { list } = usePicklists()
   const stages = list('deal_stages')
-  const d = computeDashboard(data, stages)
-  const s = d.summary
 
-  // ตัวกรองวันที่ของ Pipeline (กรองดีลตามวันที่สร้าง) — แยกอิสระจากส่วนอื่นของแดชบอร์ด
-  const [pipeFrom, setPipeFrom] = useState('')
-  const [pipeTo, setPipeTo] = useState('')
+  // ฟิลเตอร์ส่วนกลางของทั้งหน้าแดชบอร์ด (วันที่ + ประเภทลูกค้า) — มีผลกับทุกการ์ด/กราฟในหน้านี้
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
+  const [filterCreditType, setFilterCreditType] = useState('')
   const [detail, setDetail] = useState(null) // key ของการ์ดที่กดเปิดป็อปอัป
 
-  const pipeDeals = data.deals.filter(dl => {
-    const c = toLocalDateStr(dl.created_at)
-    if (pipeFrom && c < pipeFrom) return false
-    if (pipeTo && c > pipeTo) return false
-    return true
-  })
-  const pipeStage = {}
-  stages.forEach(st => { pipeStage[st] = { count: 0, value: 0 } })
-  pipeDeals.forEach(dl => { if (pipeStage[dl.stage]) { pipeStage[dl.stage].count++; pipeStage[dl.stage].value += Number(dl.value) || 0 } })
-  const pipeTotal = stages.reduce((sum, st) => sum + (pipeStage[st]?.count || 0), 0)
+  const d = computeDashboard(data, stages, { dateFrom: filterFrom, dateTo: filterTo, creditType: filterCreditType })
+  const s = d.summary
+
+  const pipeTotal = stages.reduce((sum, st) => sum + (d.stageData[st]?.count || 0), 0)
 
   const coName = (id) => data.companies.find(c => c.id === id)?.name || '-'
 
@@ -80,32 +73,32 @@ export default function Dashboard({ data, onNav }) {
       case 'companies': return {
         title: 'บริษัท Active',
         columns: [{ key: 'name', label: 'บริษัท' }, { key: 'industry', label: 'อุตสาหกรรม' }, { key: 'status', label: 'สถานะ' }],
-        rows: data.companies.filter(c => c.status === 'Active').map(c => ({ ...c, _date: toLocalDateStr(c.created_at) }))
+        rows: d.companies.filter(c => c.status === 'Active').map(c => ({ ...c, _date: toLocalDateStr(c.created_at) }))
       }
       case 'openDeals': return {
         title: 'ดีลที่ดำเนินการ', sum: true,
         columns: [{ key: 'name', label: 'ดีล' }, { key: 'company', label: 'บริษัท', render: r => coName(r.company_id) }, { key: 'stage', label: 'Stage' }, { key: 'value', label: 'มูลค่า', render: r => fmtCurrency(r.value) }],
-        rows: data.deals.filter(dl => dl.stage !== 'Closed Won' && dl.stage !== 'Closed Lost').map(dl => ({ ...dl, _date: toLocalDateStr(dl.created_at), _value: Number(dl.value) || 0 }))
+        rows: d.deals.filter(dl => dl.stage !== 'Closed Won' && dl.stage !== 'Closed Lost').map(dl => ({ ...dl, _date: toLocalDateStr(dl.created_at), _value: Number(dl.value) || 0 }))
       }
       case 'wonDeals': return {
         title: 'ปิดดีลสำเร็จ', sum: true,
         columns: [{ key: 'name', label: 'ดีล' }, { key: 'company', label: 'บริษัท', render: r => coName(r.company_id) }, { key: 'close_date', label: 'วันปิด', render: r => fmtDate(r.close_date) }, { key: 'value', label: 'มูลค่า', render: r => fmtCurrency(r.value) }],
-        rows: data.deals.filter(dl => dl.stage === 'Closed Won').map(dl => ({ ...dl, _date: dl.close_date || toLocalDateStr(dl.created_at), _value: Number(dl.value) || 0 }))
+        rows: d.deals.filter(dl => dl.stage === 'Closed Won').map(dl => ({ ...dl, _date: dl.close_date || toLocalDateStr(dl.created_at), _value: Number(dl.value) || 0 }))
       }
       case 'overdueTasks': return {
         title: 'งานเกินกำหนด',
         columns: [{ key: 'subject', label: 'งาน' }, { key: 'company', label: 'บริษัท', render: r => coName(r.company_id) }, { key: 'due_date', label: 'ครบกำหนด', render: r => fmtDate(r.due_date) }, { key: 'priority', label: 'ลำดับ' }],
-        rows: data.tasks.filter(t => t.status !== 'เสร็จสิ้น' && t.due_date && isOverdue(t.due_date)).map(t => ({ ...t, _date: t.due_date }))
+        rows: d.tasks.filter(t => t.status !== 'เสร็จสิ้น' && t.due_date && isOverdue(t.due_date)).map(t => ({ ...t, _date: t.due_date }))
       }
       case 'quotations': return {
         title: 'ใบเสนอราคา', sum: true,
         columns: [{ key: 'quot_no', label: 'เลขที่' }, { key: 'company', label: 'บริษัท', render: r => coName(r.company_id) }, { key: 'status', label: 'สถานะ' }, { key: 'value', label: 'มูลค่า', render: r => fmtCurrency(r.value) }],
-        rows: data.quotations.map(q => ({ ...q, _date: q.quot_date, _value: Number(q.value) || 0 }))
+        rows: d.quotations.map(q => ({ ...q, _date: q.quot_date, _value: Number(q.value) || 0 }))
       }
       case 'pendingPayments': return {
         title: 'ต้องตามเก็บเงิน (ลูกค้าเครดิต)', sum: true,
         columns: [{ key: 'quot_no', label: 'เลขที่' }, { key: 'company', label: 'บริษัท', render: r => coName(r.company_id) }, { key: 'payment_due_date', label: 'ครบกำหนด', render: r => fmtDate(r.payment_due_date) }, { key: 'value', label: 'มูลค่า', render: r => fmtCurrency(r.value) }],
-        rows: data.quotations.filter(q => q.payment_status && q.payment_status !== 'ชำระแล้ว' && q.payment_due_date).map(q => ({ ...q, _date: q.payment_due_date, _value: Number(q.value) || 0 }))
+        rows: d.quotations.filter(q => q.payment_status && q.payment_status !== 'ชำระแล้ว' && q.payment_due_date).map(q => ({ ...q, _date: q.payment_due_date, _value: Number(q.value) || 0 }))
       }
       default: return null
     }
@@ -122,6 +115,18 @@ export default function Dashboard({ data, onNav }) {
 
   return (
     <div>
+      <div className="filter-bar">
+        <input className="filter-input" type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} title={lang === 'en' ? 'From' : 'ตั้งแต่'} />
+        <span style={{ fontSize: 12, color: 'var(--text-light)', alignSelf: 'center' }}>{t('ถึง')}</span>
+        <input className="filter-input" type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} title={t('ถึง')} />
+        <select className="filter-select" value={filterCreditType} onChange={e => setFilterCreditType(e.target.value)}>
+          <option value="">{t('ทุกประเภทลูกค้า')}</option>
+          <option value="normal">{t('ลูกค้าธรรมดา')}</option>
+          <option value="credit">{t('ลูกค้าเครดิต')}</option>
+        </select>
+        {(filterFrom || filterTo || filterCreditType) && <button className="btn btn-outline btn-sm" onClick={() => { setFilterFrom(''); setFilterTo(''); setFilterCreditType('') }}>{t('ล้าง')}</button>}
+      </div>
+
       <div className="kpi-grid">
         {kpis.map(k => (
           <div className={`kpi-card ${k.cls}`} key={k.key} style={{ cursor: 'pointer' }} onClick={() => setDetail(k.key)} title={t('กดเพื่อดูรายละเอียด')}>
@@ -136,19 +141,13 @@ export default function Dashboard({ data, onNav }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         <div className="card">
-          <div className="card-header" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <div className="card-header">
             <div className="card-title">Pipeline</div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
-              <input className="filter-input" type="date" value={pipeFrom} onChange={e => setPipeFrom(e.target.value)} title={lang === 'en' ? 'Deal created from' : 'วันที่สร้างดีล ตั้งแต่'} />
-              <span style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ถึง')}</span>
-              <input className="filter-input" type="date" value={pipeTo} onChange={e => setPipeTo(e.target.value)} title={lang === 'en' ? 'Deal created to' : 'วันที่สร้างดีล ถึง'} />
-              {(pipeFrom || pipeTo) && <button className="btn btn-outline btn-sm" onClick={() => { setPipeFrom(''); setPipeTo('') }}>{t('ล้าง')}</button>}
-            </div>
           </div>
           <div className="card-body">
             <div className="pipeline-bar">
               {stages.map(st => {
-                const cnt = pipeStage[st]?.count || 0
+                const cnt = d.stageData[st]?.count || 0
                 const pct = pipeTotal ? (cnt / pipeTotal * 100) : 0
                 return <div key={st} className="pipeline-seg" title={`${st}: ${cnt}`} style={{ width: pct + '%', background: stageColor(st), minWidth: cnt > 0 ? 4 : 0 }} />
               })}
@@ -158,7 +157,7 @@ export default function Dashboard({ data, onNav }) {
                 <thead><tr><th>Stage</th><th style={{ textAlign: 'center' }}>{t('จำนวน')}</th><th style={{ textAlign: 'right' }}>{t('มูลค่า')}</th></tr></thead>
                 <tbody>
                   {stages.map(st => {
-                    const info = pipeStage[st] || { count: 0, value: 0 }
+                    const info = d.stageData[st] || { count: 0, value: 0 }
                     return (
                       <tr key={st}>
                         <td><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: stageColor(st), marginRight: 6 }} />{st}</td>
