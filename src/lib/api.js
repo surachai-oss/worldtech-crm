@@ -122,7 +122,8 @@ export async function fetchTaskCounts() {
 }
 
 export async function fetchTasksPage({ page = 0, status = '', priority = '', q = '', dateFrom = '', dateTo = '' } = {}) {
-  let query = supabase.from('tasks').select('*, company:companies(id,name)', { count: 'exact' }).order('due_date', { ascending: true })
+  // lead: งานที่ผูกกับลีดโดยตรง (ยังไม่แปลงเป็นลูกค้า) — โชว์ชื่อ/เบอร์ลีดแทนบริษัท กันเซลล์ไม่รู้ว่าต้องติดตามใคร
+  let query = supabase.from('tasks').select('*, company:companies(id,name), lead:leads(id,full_name,phone)', { count: 'exact' }).order('due_date', { ascending: true })
   if (status) query = query.eq('status', status)
   if (priority) query = query.eq('priority', priority)
   const sq = safeLike(q)

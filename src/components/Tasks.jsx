@@ -75,7 +75,7 @@ export default function Tasks({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>{t('งาน')}</th><th>{t('บริษัท')}</th><th>{t('วันครบกำหนด')}</th><th>{t('ลำดับ')}</th><th>{t('สถานะ')}</th><th>{t('ผู้รับผิดชอบ')}</th><th>{t('การจัดการ')}</th></tr></thead>
+              <thead><tr><th>{t('งาน')}</th><th>{t('บริษัท/ผู้ติดต่อ')}</th><th>{t('วันครบกำหนด')}</th><th>{t('ลำดับ')}</th><th>{t('สถานะ')}</th><th>{t('ผู้รับผิดชอบ')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(task => {
                   const ov = task.status !== 'เสร็จสิ้น' && isOverdue(task.due_date)
@@ -83,7 +83,13 @@ export default function Tasks({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
                   return (
                     <tr key={task.id} style={{ background: ov ? '#fff5f5' : td ? '#fffbeb' : undefined }}>
                       <td><div style={{ fontWeight: 500 }}>{task.subject}</div>{task.note && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{task.note}</div>}</td>
-                      <td>{task.company ? <a onClick={() => onNavCompany(task.company.id)} style={{ fontSize: 12 }}>{task.company.name}</a> : '-'}</td>
+                      <td style={{ fontSize: 12 }}>
+                        {task.company
+                          ? <a onClick={() => onNavCompany(task.company.id)}>{task.company.name}</a>
+                          : task.lead
+                            ? <div>{task.lead.full_name}{task.lead.phone && <div style={{ color: 'var(--text-light)' }}>{task.lead.phone}</div>}</div>
+                            : '-'}
+                      </td>
                       <td className={ov ? 'overdue' : td ? 'due-today' : ''} style={{ fontSize: 12 }}>{fmtDate(task.due_date)}</td>
                       <td>{task.priority || '-'}</td>
                       <td><span className={`badge ${statusBadgeClass(task.status)}`}>{task.status}</span></td>

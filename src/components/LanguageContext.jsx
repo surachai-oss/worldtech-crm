@@ -56,6 +56,7 @@ export const EN_DICT = {
   'ไม่มีข้อมูล': 'No data',
   'แจ้งเตือน': 'Notifications',
   'บริษัท': 'Company',
+  'บริษัท/ผู้ติดต่อ': 'Company/Contact',
   'ลูกค้า': 'Customer',
   'มูลค่า': 'Value',
   'รวม': 'Total',

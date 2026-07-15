@@ -200,7 +200,7 @@ function DetailModal({ req, currentUserName, onClose, onChanged }) {
   )
 }
 
-export default function AccountingDocuments({ reloadKey, currentUserName }) {
+export default function AccountingDocuments({ reloadKey, currentUserName, perm, onDelete }) {
   const { toast } = useUi()
   const { t, lang } = useLanguage()
   const [status, setStatus] = useState('')
@@ -285,6 +285,7 @@ export default function AccountingDocuments({ reloadKey, currentUserName }) {
                     <td style={{ fontSize: 12 }}>{req.original_tracking_no || '-'}</td>
                     <td className="td-actions">
                       <button className="btn btn-outline btn-xs" onClick={() => setDetailReq(req)}>{t('ดูรายละเอียด')}</button>
+                      {perm?.isAdmin && <button className="btn btn-danger btn-xs" onClick={() => onDelete(req.id)}>{t('ลบ')}</button>}
                     </td>
                   </tr>
                 ))}

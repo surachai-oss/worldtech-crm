@@ -122,7 +122,7 @@ function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMi
   )
 }
 
-export default function FinanceReview({ reloadKey, currentUserName, onApprove, onNeedInfo, onMismatch, onReject }) {
+export default function FinanceReview({ reloadKey, currentUserName, perm, onApprove, onNeedInfo, onMismatch, onReject, onDelete }) {
   const { toast } = useUi()
   const { t, lang } = useLanguage()
   const [status, setStatus] = useState('') // ค่าเริ่มต้นแสดงทุกสถานะ
@@ -184,7 +184,10 @@ export default function FinanceReview({ reloadKey, currentUserName, onApprove, o
                     <td style={{ fontWeight: 600 }}>{fmtCurrency(pr.total_amount)}</td>
                     <td><span className={`badge ${paymentBadgeClass(pr.status)}`}>{paymentStatusLabel(pr.status)}</span></td>
                     <td style={{ fontSize: 12 }}>{pr.requested_by_name || '-'}</td>
-                    <td className="td-actions"><button className="btn btn-secondary btn-xs" onClick={() => setReview(pr)}>{t('ตรวจสอบ')}</button></td>
+                    <td className="td-actions">
+                      <button className="btn btn-secondary btn-xs" onClick={() => setReview(pr)}>{t('ตรวจสอบ')}</button>
+                      {perm?.isAdmin && <button className="btn btn-danger btn-xs" onClick={() => onDelete(pr.id)}>{t('ลบ')}</button>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

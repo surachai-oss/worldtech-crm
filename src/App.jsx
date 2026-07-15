@@ -202,6 +202,16 @@ function AppInner({ session }) {
     needInfoPayment: async (pr, remark) => { await run(() => api.requestMorePaymentInfo(pr.id, { remark, reviewerName: currentUser.name }), 'ส่งกลับให้แก้ไขแล้ว') },
     mismatchPayment: async (pr, remark) => { await run(() => api.markPaymentMismatch(pr.id, { remark, reviewerName: currentUser.name }), 'ทำเครื่องหมายยอดไม่ตรงแล้ว') },
     rejectPayment: async (pr, remark) => { await run(() => api.rejectPaymentRequest(pr.id, { remark, reviewerName: currentUser.name }), 'ปฏิเสธคำขอแล้ว') },
+    // ลบคำขอตรวจสอบยอดโอน — เฉพาะแอดมิน (ปุ่มถูกซ่อนจากคนอื่นแล้วฝั่ง UI แต่กันไว้อีกชั้นด้วย confirm)
+    deletePaymentRequestRow: async (id) => {
+      if (!(await confirm('ลบคำขอตรวจสอบยอดโอนนี้? ลบแล้วกู้คืนไม่ได้'))) return
+      await run(() => api.deletePaymentRequest(id), 'ลบสำเร็จ')
+    },
+    // ลบคำขอเอกสารบัญชี — เฉพาะแอดมิน
+    deleteAccountingDocRequestRow: async (id) => {
+      if (!(await confirm('ลบคำขอเอกสารบัญชีนี้? ลบแล้วกู้คืนไม่ได้'))) return
+      await run(() => api.deleteAccountingDocRequest(id), 'ลบสำเร็จ')
+    },
 
     // ===== Orders (รันเลขออเดอร์เพื่อเปิดบิลในระบบบัญชีอื่น) =====
     addOrder: () => setModal({ type: 'order', payload: {} }),
@@ -414,10 +424,10 @@ function AppInner({ session }) {
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products perm={perm} />}
           {view === 'finance-review' && (isFinance || isAdmin) && (
-            <FinanceReview reloadKey={reloadKey} currentUserName={currentUser.name} onApprove={actions.approvePayment} onNeedInfo={actions.needInfoPayment} onMismatch={actions.mismatchPayment} onReject={actions.rejectPayment} />
+            <FinanceReview reloadKey={reloadKey} currentUserName={currentUser.name} perm={perm} onApprove={actions.approvePayment} onNeedInfo={actions.needInfoPayment} onMismatch={actions.mismatchPayment} onReject={actions.rejectPayment} onDelete={actions.deletePaymentRequestRow} />
           )}
           {view === 'accounting-documents' && (isFinance || isAdmin) && (
-            <AccountingDocuments reloadKey={reloadKey} currentUserName={currentUser.name} />
+            <AccountingDocuments reloadKey={reloadKey} currentUserName={currentUser.name} perm={perm} onDelete={actions.deleteAccountingDocRequestRow} />
           )}
         </div>
       </div>
