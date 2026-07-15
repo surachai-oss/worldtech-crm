@@ -225,12 +225,18 @@ export const VAT_RATE = 0.07
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
-// items: [{ quantity, unit_price }] -> { subtotalIncVat, exVat, vatAmount } (ทุกค่ารวม VAT อยู่แล้วในราคาต่อหน่วย)
-export function computeDealTotals(items) {
+// items: [{ quantity, unit_price }] -> { subtotalIncVat, discountAmount, grandTotal, exVat, vatAmount } (ทุกค่ารวม VAT อยู่แล้วในราคาต่อหน่วย)
+// discount: { type: 'เปอร์เซ็นต์' | 'จำนวนเงิน', value } ส่วนลดท้ายบิล (ไม่บังคับ) — exVat/vatAmount คำนวณจาก grandTotal (หลังหักส่วนลด) เพื่อให้ตรงยอดที่ลูกค้าต้องจ่ายจริง
+export function computeDealTotals(items, discount = null) {
   const subtotalIncVat = round2((items || []).reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0))
-  const exVat = round2(subtotalIncVat / (1 + VAT_RATE))
-  const vatAmount = round2(subtotalIncVat - exVat)
-  return { subtotalIncVat, exVat, vatAmount }
+  const dv = Number(discount?.value) || 0
+  // ต้องเลือกประเภทส่วนลดด้วย (ไม่ใช่แค่มี value ค้างอยู่) ไม่งั้นจะเข้าใจผิดว่าเป็นส่วนลดแบบจำนวนเงินเสมอ
+  let discountAmount = (dv > 0 && discount?.type) ? (discount.type === 'เปอร์เซ็นต์' ? round2(subtotalIncVat * dv / 100) : round2(dv)) : 0
+  discountAmount = Math.min(discountAmount, subtotalIncVat)
+  const grandTotal = round2(subtotalIncVat - discountAmount)
+  const exVat = round2(grandTotal / (1 + VAT_RATE))
+  const vatAmount = round2(grandTotal - exVat)
+  return { subtotalIncVat, discountAmount, grandTotal, exVat, vatAmount }
 }
 
 export const listDealItems = (dealId) =>
@@ -239,8 +245,8 @@ export const listDealItems = (dealId) =>
 
 // สร้างดีล + รายการสินค้าในทีเดียว — มูลค่ารวม (value) คำนวณจาก items ให้อัตโนมัติ
 export async function addDealWithItems(dealFields, items) {
-  const totals = computeDealTotals(items)
-  const deal = await addDeal({ ...dealFields, value: totals.subtotalIncVat })
+  const totals = computeDealTotals(items, { type: dealFields.discount_type, value: dealFields.discount_value })
+  const deal = await addDeal({ ...dealFields, value: totals.grandTotal })
   if (items?.length) {
     const rows = items.map((it, i) => ({
       deal_id: deal.id, product_id: it.product_id, description: it.description, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
@@ -252,8 +258,8 @@ export async function addDealWithItems(dealFields, items) {
 
 // แก้ไขดีล — ลบรายการเดิมทั้งหมดแล้วใส่ชุดใหม่ทั้งหมด (ง่ายกว่า diff รายแถว และจำนวนรายการต่อดีลน้อยอยู่แล้ว)
 export async function updateDealWithItems(id, dealFields, items) {
-  const totals = computeDealTotals(items)
-  const deal = await updateDeal(id, { ...dealFields, value: totals.subtotalIncVat })
+  const totals = computeDealTotals(items, { type: dealFields.discount_type, value: dealFields.discount_value })
+  const deal = await updateDeal(id, { ...dealFields, value: totals.grandTotal })
   await supabase.from('deal_items').delete().eq('deal_id', id).then(handle)
   if (items?.length) {
     const rows = items.map((it, i) => ({
@@ -332,9 +338,9 @@ export const listQuotationItems = (quotationId) =>
 
 // สร้างใบเสนอราคา + รายการสินค้าในทีเดียว — value คำนวณจาก items ให้อัตโนมัติ
 export async function addQuotationWithItems(fields, items) {
-  const totals = computeDealTotals(items)
+  const totals = computeDealTotals(items, { type: fields.discount_type, value: fields.discount_value })
   const quot_no = await genQuotNo()
-  const quot = await supabase.from('quotations').insert({ ...fields, quot_no, value: totals.subtotalIncVat }).select().single().then(handle)
+  const quot = await supabase.from('quotations').insert({ ...fields, quot_no, value: totals.grandTotal }).select().single().then(handle)
   if (items?.length) {
     const rows = items.map((it, i) => ({
       quotation_id: quot.id, product_id: it.product_id, description: it.description, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
@@ -346,8 +352,8 @@ export async function addQuotationWithItems(fields, items) {
 
 // แก้ไขใบเสนอราคา — ลบรายการเดิมทั้งหมดแล้วใส่ชุดใหม่ทั้งหมด (แบบเดียวกับดีล)
 export async function updateQuotationWithItems(id, fields, items) {
-  const totals = computeDealTotals(items)
-  const quot = await updateQuotation(id, { ...fields, value: totals.subtotalIncVat })
+  const totals = computeDealTotals(items, { type: fields.discount_type, value: fields.discount_value })
+  const quot = await updateQuotation(id, { ...fields, value: totals.grandTotal })
   await supabase.from('quotation_items').delete().eq('quotation_id', id).then(handle)
   if (items?.length) {
     const rows = items.map((it, i) => ({
@@ -863,10 +869,10 @@ export async function fetchActiveOrderQuotationIds() {
 // สร้างออเดอร์ + snapshot รายการสินค้า — fields.order_no ต้องรันมาจาก genOrderNo() แล้วตอนเปิดฟอร์ม, sales_id/sales_name มาจากผู้ใช้ที่ล็อกอินอยู่เสมอ (ตั้งจากฝั่งแอป ไม่ให้แก้เอง)
 // ถ้าใบเสนอราคานี้ถูกใช้เปิดออเดอร์ Active ไปแล้ว unique index ฝั่ง DB จะ reject การ insert — ดักจับแล้วแปลงเป็นข้อความที่เข้าใจง่าย
 export async function addOrderWithItems(fields, items) {
-  const totals = computeDealTotals(items)
+  const totals = computeDealTotals(items, { type: fields.discount_type, value: fields.discount_value })
   let order
   try {
-    order = await supabase.from('orders').insert({ ...fields, value: totals.subtotalIncVat, status: ORDER_STATUS.ACTIVE }).select().single().then(handle)
+    order = await supabase.from('orders').insert({ ...fields, value: totals.grandTotal, status: ORDER_STATUS.ACTIVE }).select().single().then(handle)
   } catch (e) {
     if (e.code === '23505') throw new Error('ใบเสนอราคานี้ถูกใช้เปิดออเดอร์ไปแล้ว กรุณาเลือกใบอื่น หรือรีเฟรชแล้วลองใหม่')
     throw e

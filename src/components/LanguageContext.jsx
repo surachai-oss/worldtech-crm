@@ -488,6 +488,9 @@ export const EN_DICT = {
   'ดาวน์โหลดรูปภาพ': 'Download Image',
   'วิธีการชำระ': 'Payment Method',
   'ระบุวิธีการชำระ': 'Specify payment method',
+  'ส่วนลดท้ายบิล': 'Bill Discount',
+  'เปอร์เซ็นต์': 'Percent',
+  'จำนวนเงิน': 'Fixed Amount',
 
   // ===== Import Modals =====
   'นำเข้าบริษัทลูกค้าจากไฟล์': 'Import Companies from File',

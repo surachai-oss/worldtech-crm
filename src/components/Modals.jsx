@@ -4,6 +4,7 @@ import SearchableSelect from './SearchableSelect'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import { listProducts, listDealItems, listQuotationItems, computeDealTotals, getProductImageUrl } from '../lib/api'
+import DiscountField from './DiscountField'
 import { POSITION_OPTIONS, BUSINESS_TYPE_OTHER, BUSINESS_TYPE_OPTIONS, APPLIANCE_OTHER, APPLIANCE_OPTIONS, PURCHASE_REASON_OPTIONS } from '../lib/leadOptions'
 
 function Field({ label, required, children }) {
@@ -232,7 +233,7 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
   const { toast } = useUi()
   const { t, lang } = useLanguage()
   const [f, setF] = useState(() => {
-    const base = { company_id: defaultCompanyId || '', name: '', stage: defaultStage || 'Lead', close_date: '', follow_up_date: '', source: '', owner: '', note: '' }
+    const base = { company_id: defaultCompanyId || '', name: '', stage: defaultStage || 'Lead', close_date: '', follow_up_date: '', source: '', owner: '', note: '', discount_type: '', discount_value: 0 }
     if (!initial) return base
     const { items: _seedItems, ...rest } = initial // items เป็นแค่ค่าตั้งต้นสำหรับ seed ไม่ใช่คอลัมน์ในตาราง deals ตัดออกก่อนเก็บใน f
     return { ...base, ...rest }
@@ -269,7 +270,7 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
     updateItem(i, { product_id: productId, description: p ? p.name : items[i].description })
   }
 
-  const totals = computeDealTotals(items)
+  const totals = computeDealTotals(items, { type: f.discount_type, value: f.discount_value })
 
   // แถวที่ไม่ได้เลือกสินค้าและไม่ได้พิมพ์ชื่อรายการเอง ถือว่าเป็นช่องว่างที่ยังไม่ได้ใช้ ตัดทิ้งก่อนบันทึก
   // close_date/follow_up_date ไม่บังคับ ถ้าไม่ได้กรอก/เคลียร์ทิ้งจะได้ "" มา ต้องแปลงเป็น null ก่อนส่ง ไม่งั้น Postgres ปฏิเสธ (invalid input syntax for type date)
@@ -333,11 +334,16 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
         <button type="button" className="btn btn-outline btn-sm" onClick={addItem}>{t('+ เพิ่มรายการ')}</button>
       </Field>
 
+      <Field label={t('ส่วนลดท้ายบิล')}>
+        <DiscountField type={f.discount_type} value={f.discount_value} onChangeType={v => setF(s => ({ ...s, discount_type: v }))} onChangeValue={v => setF(s => ({ ...s, discount_value: v }))} />
+      </Field>
+
       <div className="card" style={{ marginTop: 4, marginBottom: 16 }}>
         <div className="card-body" style={{ display: 'flex', justifyContent: 'flex-end', gap: 24, fontSize: 13 }}>
           <div>{t('ไม่รวม VAT')}: <b>{totals.exVat.toLocaleString('th-TH')}</b></div>
           <div>VAT 7%: <b>{totals.vatAmount.toLocaleString('th-TH')}</b></div>
-          <div>{t('รวมทั้งสิ้น')}: <b style={{ color: 'var(--navy)' }}>{totals.subtotalIncVat.toLocaleString('th-TH')}</b></div>
+          {totals.discountAmount > 0 && <div>{t('ส่วนลด')}: <b style={{ color: 'var(--danger)' }}>-{totals.discountAmount.toLocaleString('th-TH')}</b></div>}
+          <div>{t('รวมทั้งสิ้น')}: <b style={{ color: 'var(--navy)' }}>{totals.grandTotal.toLocaleString('th-TH')}</b></div>
         </div>
       </div>
 
@@ -422,7 +428,7 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
     const base = {
       company_id: defaultCompanyId || '', subject: '', status: 'Draft', sale_phone: '0918086924', proposer_name: currentUserName || '',
       quot_date: new Date().toISOString().split('T')[0], expire_date: '', note: DEFAULT_QUOTATION_NOTE, deal_id: null,
-      credit_term: '', payment_due_date: '', payment_status: 'ยังไม่ชำระ'
+      credit_term: '', payment_due_date: '', payment_status: 'ยังไม่ชำระ', discount_type: '', discount_value: 0
     }
     if (!initial) return base
     // items เป็นแค่ค่าตั้งต้นสำหรับ seed ไม่ใช่คอลัมน์ในตาราง quotations, company/product เป็น relation ที่ join มาตอน select (ไม่ใช่คอลัมน์จริง) — ต้องตัดออกก่อนเก็บใน f ไม่งั้น update จะพังเพราะ Supabase หาคอลัมน์ชื่อนี้ไม่เจอ
@@ -468,7 +474,7 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
     if (p && items.length === 1) setF(s => ({ ...s, subject: s.subject || p.name }))
   }
 
-  const totals = computeDealTotals(items)
+  const totals = computeDealTotals(items, { type: f.discount_type, value: f.discount_value })
 
   // เลือกบริษัทแล้วเช็คว่าบริษัทนี้ตั้งเงื่อนไขเครดิตไว้ไหม — ถ้ามีและยังไม่ได้เลือกเครดิตเอง ช่วยสลับโหมดเป็นเครดิตให้อัตโนมัติ (แก้กลับเป็นธรรมดาได้ถ้าใบนี้ไม่ต้องการ)
   const onCompanyChange = (companyId) => {
@@ -569,11 +575,16 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
         <button type="button" className="btn btn-outline btn-sm" onClick={addItem}>{t('+ เพิ่มรายการ')}</button>
       </Field>
 
+      <Field label={t('ส่วนลดท้ายบิล')}>
+        <DiscountField type={f.discount_type} value={f.discount_value} onChangeType={v => setF(s => ({ ...s, discount_type: v }))} onChangeValue={v => setF(s => ({ ...s, discount_value: v }))} />
+      </Field>
+
       <div className="card" style={{ marginTop: 4, marginBottom: 16 }}>
         <div className="card-body" style={{ display: 'flex', justifyContent: 'flex-end', gap: 24, fontSize: 13 }}>
           <div>{t('ไม่รวม VAT')}: <b>{totals.exVat.toLocaleString('th-TH')}</b></div>
           <div>VAT 7%: <b>{totals.vatAmount.toLocaleString('th-TH')}</b></div>
-          <div>{t('รวมทั้งสิ้น')}: <b style={{ color: 'var(--navy)' }}>{totals.subtotalIncVat.toLocaleString('th-TH')}</b></div>
+          {totals.discountAmount > 0 && <div>{t('ส่วนลด')}: <b style={{ color: 'var(--danger)' }}>-{totals.discountAmount.toLocaleString('th-TH')}</b></div>}
+          <div>{t('รวมทั้งสิ้น')}: <b style={{ color: 'var(--navy)' }}>{totals.grandTotal.toLocaleString('th-TH')}</b></div>
         </div>
       </div>
 

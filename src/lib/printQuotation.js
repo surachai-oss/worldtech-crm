@@ -25,7 +25,11 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
   // ใบเสนอราคาเก่าที่ไม่มีรายการสินค้าเลย (ก่อนมีระบบรายการหลายชิ้น) — ใช้ subject/value เดิมเป็นรายการเดียว
   const rows = items.length ? items : [{ description: quot.subject, quantity: 1, unit_price: Number(quot.value) || 0, imageUrl: null }]
 
-  const value = round2(rows.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0))
+  const subtotal = round2(rows.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0))
+  // ส่วนลดท้ายบิล (ถ้ามี) — exVat/vatAmount คำนวณจากยอดหลังหักส่วนลดแล้ว ให้ตรงกับยอดที่ลูกค้าต้องจ่ายจริง (เหมือน computeDealTotals ใน api.js)
+  const dv = Number(quot.discount_value) || 0
+  const discountAmount = (dv > 0 && quot.discount_type) ? Math.min(quot.discount_type === 'เปอร์เซ็นต์' ? round2(subtotal * dv / 100) : round2(dv), subtotal) : 0
+  const value = round2(subtotal - discountAmount)
   const exVat = round2(value / (1 + VAT_RATE))
   const vatAmount = round2(value - exVat)
 
@@ -158,6 +162,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
         <div class="totals-box">
           <div class="row"><span>จำนวนเงินรวมก่อน Vat</span><span>${fmtCurrency(exVat)}</span></div>
           <div class="row"><span>Vat 7%</span><span>${fmtCurrency(vatAmount)}</span></div>
+          ${discountAmount > 0 ? `<div class="row"><span>ส่วนลด${quot.discount_type === 'เปอร์เซ็นต์' ? ` (${quot.discount_value}%)` : ''}</span><span>-${fmtCurrency(discountAmount)}</span></div>` : ''}
           <div class="row grand"><span>จำนวนเงินที่ต้องชำระ</span><span>${fmtCurrency(value)}</span></div>
         </div>
       </div>

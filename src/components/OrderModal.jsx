@@ -4,6 +4,7 @@ import { fmtCurrency } from '../lib/format'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import SearchableSelect from './SearchableSelect'
+import DiscountField from './DiscountField'
 
 const EMPTY_ITEM = { product_id: '', description: '', quantity: 1, unit_price: '' }
 
@@ -35,6 +36,8 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
   const [shippingContactName, setShippingContactName] = useState('')
   const [shippingContactPhone, setShippingContactPhone] = useState('')
   const [remark, setRemark] = useState('')
+  const [discountType, setDiscountType] = useState('')
+  const [discountValue, setDiscountValue] = useState(0)
   const [usedQuotationIds, setUsedQuotationIds] = useState(null)
   const [products, setProducts] = useState(null)
 
@@ -57,6 +60,7 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
     if (!quotId) {
       setCompanyId(''); setCustomerName(''); setQuotNo('')
       setCompanyInfo({ tax_id: '', address: '', phone: '', email: '' })
+      setDiscountType(''); setDiscountValue(0)
       return
     }
     const quot = quotations.find(q => q.id === quotId)
@@ -65,6 +69,8 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
     setCustomerName(company?.name || '')
     setQuotNo(quot?.quot_no || '')
     setCompanyInfo({ tax_id: company?.tax_id || '', address: company?.address || '', phone: company?.phone || '', email: company?.email || '' })
+    // คัดลอกส่วนลดท้ายบิลจากใบเสนอราคามาให้ด้วย (แก้ไขต่อได้ก่อนบันทึก) เพราะใบเสนอราคา/ออเดอร์เชื่อมกัน
+    setDiscountType(quot?.discount_type || ''); setDiscountValue(quot?.discount_value || 0)
     try {
       const rows = await listQuotationItems(quotId)
       if (rows.length) setItems(mapCopiedItems(rows))
@@ -79,7 +85,7 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
     updateItem(i, { product_id: productId, description: p ? p.name : items[i].description })
   }
 
-  const totals = computeDealTotals(items)
+  const totals = computeDealTotals(items, { type: discountType, value: discountValue })
   const cleanItems = items.filter(it => it.description?.trim())
 
   const submit = async () => {
@@ -103,6 +109,7 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
       shipping_address: shippingAddress.trim(), shipping_contact_name: shippingContactName.trim() || null,
       shipping_contact_phone: shippingContactPhone.trim() || null, remark: remark.trim() || null,
       sales_id: currentUser.id, sales_name: currentUser.name,
+      discount_type: discountType || null, discount_value: discountValue || 0,
     }, cleanItems)
   }
 
@@ -181,11 +188,18 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
             </table>
           </div>
           <button type="button" className="btn btn-outline btn-sm" onClick={addItem}>{t('+ เพิ่มรายการ')}</button>
+
+          <div className="form-group" style={{ marginTop: 12 }}>
+            <label className="form-label">{t('ส่วนลดท้ายบิล')}</label>
+            <DiscountField type={discountType} value={discountValue} onChangeType={setDiscountType} onChangeValue={setDiscountValue} />
+          </div>
+
           <div className="card" style={{ marginTop: 8, marginBottom: 14 }}>
             <div className="card-body" style={{ display: 'flex', justifyContent: 'flex-end', gap: 24, fontSize: 13 }}>
               <div>{t('ไม่รวม VAT')}: <b>{totals.exVat.toLocaleString('th-TH')}</b></div>
               <div>VAT 7%: <b>{totals.vatAmount.toLocaleString('th-TH')}</b></div>
-              <div>{t('รวมทั้งสิ้น')}: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(totals.subtotalIncVat)}</b></div>
+              {totals.discountAmount > 0 && <div>{t('ส่วนลด')}: <b style={{ color: 'var(--danger)' }}>-{totals.discountAmount.toLocaleString('th-TH')}</b></div>}
+              <div>{t('รวมทั้งสิ้น')}: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(totals.grandTotal)}</b></div>
             </div>
           </div>
 
@@ -245,6 +259,7 @@ export function OrderDetailModal({ order, items, onClose, onCancel }) {
       <span style={{ color: 'var(--text-light)' }}>{label}</span><span style={{ fontWeight: 500, textAlign: 'right' }}>{value}</span>
     </div>
   )
+  const itemsSubtotal = (items || []).reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0)
 
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
@@ -283,7 +298,13 @@ export function OrderDetailModal({ order, items, onClose, onCancel }) {
               </tbody>
             </table>
           </div>
-          <div style={{ textAlign: 'right', marginTop: 8, fontSize: 13 }}>{t('ยอดรวม')}: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(order.value)}</b></div>
+          {Number(order.discount_value) > 0 && (
+            <div style={{ textAlign: 'right', marginTop: 8, fontSize: 13, color: 'var(--danger)' }}>
+              {t('ส่วนลด')} ({order.discount_type === 'เปอร์เซ็นต์' ? `${order.discount_value}%` : fmtCurrency(order.discount_value)}):
+              {' '}-{fmtCurrency(itemsSubtotal - Number(order.value))}
+            </div>
+          )}
+          <div style={{ textAlign: 'right', marginTop: 4, fontSize: 13 }}>{t('ยอดรวม')}: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(order.value)}</b></div>
 
           {order.status === 'Active' && (
             showCancelForm ? (
