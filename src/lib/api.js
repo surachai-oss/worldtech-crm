@@ -125,7 +125,9 @@ export async function fetchTaskCounts() {
 export async function fetchTasksPage({ page = 0, status = '', priority = '', q = '', dateFrom = '', dateTo = '' } = {}) {
   // lead: งานที่ผูกกับลีดโดยตรง (ยังไม่แปลงเป็นลูกค้า) — โชว์ชื่อ/เบอร์ลีดแทนบริษัท กันเซลล์ไม่รู้ว่าต้องติดตามใคร
   let query = supabase.from('tasks').select('*, company:companies(id,name), lead:leads(id,full_name,phone)', { count: 'exact' }).order('due_date', { ascending: true })
+  // ค่าเริ่มต้น ("ทุกสถานะ") ไม่โชว์งานที่จบไปแล้ว (เสร็จสิ้น/ยกเลิก) — หน้านี้ไว้ให้เซลล์ดูงานที่ต้องทำ ไม่ใช่ประวัติ อยากดูงานที่จบแล้วก็เลือกสถานะนั้นตรงๆ ในฟิลเตอร์ได้
   if (status) query = query.eq('status', status)
+  else query = query.neq('status', 'เสร็จสิ้น').neq('status', 'ยกเลิก')
   if (priority) query = query.eq('priority', priority)
   const sq = safeLike(q)
   if (sq) query = query.ilike('subject', `%${sq}%`)

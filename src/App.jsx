@@ -288,6 +288,8 @@ function AppInner({ session }) {
         await api.addTask({
           company_id: activityFields.company_id || null, lead_id: activityFields.lead_id || null,
           subject: `ติดตาม: ${activityFields.subject}`, due_date: follow_up_date,
+          // เก็บรายละเอียดที่บันทึกไว้ตอนติดต่อมาด้วย ไม่งั้นเปิดงานติดตามแล้วไม่รู้ว่าต้องทำอะไรต่อ
+          note: activityFields.detail || null,
           owner: activityFields.recorded_by || currentUser.name, created_by: session.user.id,
         })
       }
