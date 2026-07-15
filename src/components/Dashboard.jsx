@@ -196,7 +196,7 @@ export default function Dashboard({ data, onNav }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <div className="card">
-          <div className="card-header"><div className="card-title">{t('กิจกรรมล่าสุด')}</div><button className="btn btn-outline btn-sm" onClick={() => onNav('activities')}>{t('ดูทั้งหมด')}</button></div>
+          <div className="card-header"><div className="card-title">{t('กิจกรรมล่าสุด')}</div></div>
           <div className="card-body" style={{ padding: '0 16px' }}>
             <div className="activity-feed">
               {d.recentActivities.length ? d.recentActivities.map(a => (

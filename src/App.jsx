@@ -9,7 +9,6 @@ import Dashboard from './components/Dashboard'
 import Companies from './components/Companies'
 import CompanyDetail from './components/CompanyDetail'
 import Deals from './components/Deals'
-import Activities from './components/Activities'
 import Tasks from './components/Tasks'
 import Quotations from './components/Quotations'
 import Orders from './components/Orders'
@@ -27,7 +26,7 @@ import './App.css'
 
 const TITLES = {
   dashboard: 'แดชบอร์ด', companies: 'บริษัทลูกค้า', 'company-detail': 'รายละเอียดบริษัท',
-  deals: 'ดีลการขาย', activities: 'ประวัติการติดต่อ', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา', orders: 'ออเดอร์',
+  deals: 'ดีลการขาย', tasks: 'งาน Follow-up', quotations: 'ใบเสนอราคา', orders: 'ออเดอร์',
   users: 'ผู้ใช้งาน', products: 'สินค้า', leads: 'ผู้ติดต่อ',
   'finance-review': 'ตรวจสอบยอดโอน', 'accounting-documents': 'เอกสารบัญชี'
 }
@@ -126,6 +125,8 @@ function AppInner({ session }) {
       await run(() => api.updateDealStage(id, stage), 'เปลี่ยน Stage สำเร็จ')
     },
     addActivity: (companyId) => setModal({ type: 'activity', payload: { defaultCompanyId: companyId } }),
+    // บันทึกการติดต่อจากหน้า "ผู้ติดต่อ" — ผูกกับลีดโดยตรง (lead_id) ไม่บังคับต้องมีบริษัท เพราะบางลีดยังไม่ถูกแปลงเป็นลูกค้า
+    logLeadActivity: (lead) => setModal({ type: 'activity', payload: { lead } }),
     deleteActivity: async (id) => {
       if (!(await confirm('ลบบันทึกการติดต่อนี้?'))) return
       await run(() => api.deleteActivity(id), 'ลบสำเร็จ')
@@ -259,7 +260,8 @@ function AppInner({ session }) {
   const saveActivity = async (f) => {
     closeModal()
     if (!f.subject?.trim()) { toast('กรุณากรอกหัวข้อ', 'error'); return }
-    if (!f.company_id) { toast('กรุณาเลือกบริษัท', 'error'); return }
+    // ผูกได้ทั้งกับบริษัท (ทางเดิม) หรือกับลีดโดยตรง (บันทึกจากหน้าผู้ติดต่อ ก่อนแปลงเป็นลูกค้า) — ต้องมีอย่างน้อยหนึ่งอย่าง
+    if (!f.company_id && !f.lead_id) { toast('กรุณาเลือกบริษัท', 'error'); return }
     await run(() => api.addActivity(f), 'บันทึกสำเร็จ')
   }
   const saveTask = async (f) => {
@@ -317,7 +319,6 @@ function AppInner({ session }) {
   const addBtnMap = {
     companies: () => actions.editCompany(null),
     deals: () => actions.addDeal(null),
-    activities: () => actions.addActivity(null),
     tasks: () => actions.addTask(null),
     quotations: () => actions.addQuotation(null),
   }
@@ -375,13 +376,10 @@ function AppInner({ session }) {
             />
           )}
           {view === 'leads' && (
-            <Leads perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={actions.addLead} onCreateCompany={actions.convertLeadToCompany} onStatusChange={actions.leadStatus} onDelete={actions.deleteLead} />
+            <Leads perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={actions.addLead} onCreateCompany={actions.convertLeadToCompany} onStatusChange={actions.leadStatus} onDelete={actions.deleteLead} onLogActivity={actions.logLeadActivity} />
           )}
           {view === 'deals' && (
             <Deals perm={perm} deals={data.deals} companies={data.companies} quotations={data.quotations} onAdd={() => actions.addDeal(null)} onAddStage={actions.addDealStage} onEdit={actions.editDeal} onDelete={actions.deleteDeal} onMoveStage={actions.moveDealStage} onCreateQuotation={actions.createQuotationFromDeal} />
-          )}
-          {view === 'activities' && (
-            <Activities perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addActivity(null)} onDelete={actions.deleteActivity} />
           )}
           {view === 'tasks' && (
             <Tasks perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addTask(null)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />
@@ -406,7 +404,7 @@ function AppInner({ session }) {
       {modal?.type === 'company' && <CompanyModal initial={modal.payload?.initial} isAdmin={isAdmin} onClose={closeModal} onSave={saveCompany} />}
       {modal?.type === 'contact' && <ContactModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} onClose={closeModal} onSave={saveContact} />}
       {modal?.type === 'deal' && <DealModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} defaultStage={modal.payload?.defaultStage} isAdmin={isAdmin} onClose={closeModal} onSave={saveDeal} />}
-      {modal?.type === 'activity' && <ActivityModal companies={data.companies} contacts={data.contacts} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveActivity} />}
+      {modal?.type === 'activity' && <ActivityModal companies={data.companies} contacts={data.contacts} defaultCompanyId={modal.payload?.defaultCompanyId} lead={modal.payload?.lead} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveActivity} />}
       {modal?.type === 'task' && <TaskModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveTask} />}
       {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
       {modal?.type === 'lead' && <LeadModal initial={modal.payload?.initial} isAdmin={isAdmin} onClose={closeModal} onSave={saveLead} />}

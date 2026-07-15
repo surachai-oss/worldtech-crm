@@ -1,11 +1,11 @@
 import { useLanguage } from './LanguageContext'
 
+// "ประวัติการติดต่อ" ไม่ใช่เมนูแยกแล้ว — ย้ายไปเป็นปุ่มต่อแถวในหน้า "ผู้ติดต่อ" แทน (ดู Leads.jsx) กันมีทางเข้าซ้ำ
 const NAV = [
   { section: 'หลัก', items: [{ id: 'dashboard', label: 'แดชบอร์ด' }] },
-  { section: 'ข้อมูลลูกค้า', items: [{ id: 'companies', label: 'บริษัทลูกค้า' }, { id: 'leads', label: 'ผู้ติดต่อ' }] },
+  { section: 'ข้อมูลลูกค้า', items: [{ id: 'companies', label: 'บริษัทลูกค้า' }, { id: 'leads', label: 'ผู้ติดต่อ' }, { id: 'tasks', label: 'งาน Follow-up' }] },
   { section: 'การขาย', items: [{ id: 'deals', label: 'ดีลการขาย' }, { id: 'quotations', label: 'ใบเสนอราคา' }, { id: 'orders', label: 'ออเดอร์' }] },
   { section: 'ข้อมูลสินค้า', items: [{ id: 'products', label: 'สินค้า' }] },
-  { section: 'ติดตาม', items: [{ id: 'activities', label: 'ประวัติการติดต่อ' }, { id: 'tasks', label: 'งาน Follow-up' }] },
 ]
 const ADMIN_SECTION = { section: 'ผู้ดูแลระบบ', items: [
   { id: 'users', label: 'ผู้ใช้งาน' },

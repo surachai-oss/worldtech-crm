@@ -9,7 +9,7 @@ import EditableSelect from './EditableSelect'
 import Pagination from './Pagination'
 import ImportLeadsModal from './ImportLeadsModal'
 
-export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onCreateCompany, onStatusChange, onDelete }) {
+export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onCreateCompany, onStatusChange, onDelete, onLogActivity }) {
   const { toast } = useUi()
   const { t, lang } = useLanguage()
   const { list } = usePicklists()
@@ -137,6 +137,7 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onCreateCo
                     <td><EditableSelect listKey="lead_statuses" value={l.status} onChange={v => onStatusChange(l.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 150 }} /></td>
                     <td style={{ fontSize: 12 }}>{fmtDate(l.created_at)}</td>
                     <td className="td-actions">
+                      <button className="btn btn-outline btn-xs" onClick={() => onLogActivity(l)}>{t('ประวัติการติดต่อ')}</button>
                       {l.converted_company_id
                         ? <button className="btn btn-outline btn-xs" onClick={() => onNavCompany(l.converted_company_id)}>{t('ลูกค้า:')} {l.company?.name || '-'}</button>
                         : <button className="btn btn-secondary btn-xs" onClick={() => onCreateCompany(l)}>{t('สร้างเป็นลูกค้า')}</button>}

@@ -352,17 +352,22 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
   )
 }
 
-export function ActivityModal({ companies, contacts, defaultCompanyId, currentUserName, isAdmin, onClose, onSave }) {
+// lead: เปิดจากหน้า "ผู้ติดต่อ" (Leads.jsx) — บันทึกผูกกับลีดโดยตรง (lead_id) แทนการเลือกบริษัท เพราะลีดอาจยังไม่ถูกแปลงเป็นลูกค้า
+// ถ้าลีดนี้แปลงเป็นลูกค้าแล้ว (มี converted_company_id) จะผูก company_id ให้ด้วยอัตโนมัติ ไปโผล่ในแท็บกิจกรรมของบริษัทนั้นด้วย
+export function ActivityModal({ companies, contacts, defaultCompanyId, lead, currentUserName, isAdmin, onClose, onSave }) {
   const { t, lang } = useLanguage()
   const [f, setF] = useState({
-    company_id: defaultCompanyId || '', contact_id: '', type: '',
-    subject: '', detail: '', activity_date: new Date().toISOString().split('T')[0], recorded_by: currentUserName || ''
+    company_id: defaultCompanyId || lead?.converted_company_id || '', contact_id: '', type: '',
+    subject: lead?.subject || '', detail: '', activity_date: new Date().toISOString().split('T')[0], recorded_by: currentUserName || ''
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
   const contactOptions = contacts.filter(c => c.company_id === f.company_id)
+  const submit = () => onSave({ ...f, lead_id: lead?.id || null })
   return (
-    <ModalShell title="บันทึกการติดต่อ" onClose={onClose} onSave={() => onSave(f)}>
-      <Field label={t('บริษัท')}><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v, contact_id: '' }))} /></Field>
+    <ModalShell title="บันทึกการติดต่อ" onClose={onClose} onSave={submit}>
+      {lead
+        ? <Field label={lang === 'en' ? 'Contact' : 'ผู้ติดต่อ'}><input className="form-control" value={lead.full_name} disabled /></Field>
+        : <Field label={t('บริษัท')}><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v, contact_id: '' }))} /></Field>}
       <div className="form-row">
         <Field label={t('ประเภทการติดต่อ')} required>
           <EditableSelect listKey="activity_types" value={f.type} onChange={v => setF(s => ({ ...s, type: v }))} isAdmin={isAdmin} />
@@ -370,12 +375,14 @@ export function ActivityModal({ companies, contacts, defaultCompanyId, currentUs
         <Field label={t('วันที่')}><input className="form-control" type="date" value={f.activity_date} onChange={set('activity_date')} /></Field>
       </div>
       <Field label={t('หัวข้อ')} required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder={t('สรุปการติดต่อสั้นๆ')} /></Field>
-      <Field label={lang === 'en' ? 'Contact' : 'ผู้ติดต่อ'}>
-        <select className="form-control" value={f.contact_id} onChange={set('contact_id')}>
-          <option value="">{t('-- ไม่ระบุ --')}</option>
-          {contactOptions.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-        </select>
-      </Field>
+      {!lead && (
+        <Field label={lang === 'en' ? 'Contact' : 'ผู้ติดต่อ'}>
+          <select className="form-control" value={f.contact_id} onChange={set('contact_id')}>
+            <option value="">{t('-- ไม่ระบุ --')}</option>
+            {contactOptions.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+          </select>
+        </Field>
+      )}
       <Field label={t('รายละเอียด')}><textarea className="form-control" rows={3} value={f.detail} onChange={set('detail')} placeholder={t('บันทึกรายละเอียดการสนทนา...')} /></Field>
       <Field label={t('ผู้บันทึก')}><input className="form-control" value={f.recorded_by} onChange={set('recorded_by')} /></Field>
     </ModalShell>
