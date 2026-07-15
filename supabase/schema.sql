@@ -597,6 +597,14 @@ alter table leads add column if not exists business_type text;         -- ปร
 alter table leads add column if not exists appliance_interest text[];  -- ประเภทเครื่องใช้ไฟฟ้าที่สนใจ เลือกได้หลายข้อ
 alter table leads add column if not exists purchase_reason text;       -- เหตุผลในการซื้อ: สำหรับใช้เอง/สำหรับธุรกิจ
 
+-- lead_id = ผูกกิจกรรมกับลีดโดยตรง สำหรับบันทึกการติดต่อจากหน้า "ผู้ติดต่อ" ก่อนที่ลีดจะถูกแปลงเป็นลูกค้า (ตอนนั้นยังไม่มี company_id ให้ผูก)
+-- ถ้าลีดถูกแปลงเป็นลูกค้าแล้วตอนบันทึก จะผูก company_id ควบคู่ไปด้วย (ดู ActivityModal) ไปโผล่ในแท็บกิจกรรมของบริษัทนั้นเลย ไม่ต้องแบ็กฟิลทีหลัง
+alter table activities add column if not exists lead_id uuid references leads(id) on delete cascade;
+
+-- lead_id บนงาน Follow-up เช่นกัน — ตอนบันทึกประวัติการติดต่อถ้าเซลล์กรอกวันที่ติดตาม จะสร้างงานนี้ให้อัตโนมัติ (ดู saveActivity ใน App.jsx) ไม่ต้องเข้าไปกรอกซ้ำที่หน้า "งานติดตาม"
+-- ไม่ต้องแก้ RLS เพิ่ม เพราะ policy ของ tasks ใช้ created_by ไม่ได้อิงจาก company_id เหมือน activities
+alter table tasks add column if not exists lead_id uuid references leads(id) on delete cascade;
+
 -- ===== SETTINGS =====
 create table if not exists settings (
   key    text primary key,
@@ -678,6 +686,10 @@ on conflict (list_key, value) do nothing;
 
 insert into picklists (list_key, value, sort_order)
 select 'lead_statuses', v, i from unnest(array['ใหม่', 'ติดต่อแล้ว', 'ปิดเป็นลูกค้าแล้ว', 'ไม่สนใจ']) with ordinality as t(v, i)
+on conflict (list_key, value) do nothing;
+
+-- เพิ่มทีหลัง: ให้เลือกได้ตอนบันทึกประวัติการติดต่อว่ายังต้องติดตามต่อ (คู่กับงาน Follow-up ที่สร้างอัตโนมัติ)
+insert into picklists (list_key, value, sort_order) values ('lead_statuses', 'งานติดตาม', 5)
 on conflict (list_key, value) do nothing;
 
 insert into picklists (list_key, value, sort_order)
@@ -1008,12 +1020,15 @@ create policy "contacts all" on contacts for all using (
     and (is_admin() or c.created_by = auth.uid() or c.created_by is null))
 );
 
+-- lead_id ผูกกับ leads ที่เปิดให้ authenticated ทุกคนเข้าถึงอยู่แล้ว (ดู "leads select/insert/update" ด้านล่าง) จึงให้สิทธิ์แบบเดียวกันสำหรับกิจกรรมที่ผูกกับลีดโดยตรง (ยังไม่มี company_id)
 drop policy if exists "activities all" on activities;
 create policy "activities all" on activities for all using (
-  exists (select 1 from companies c where c.id = activities.company_id
+  (activities.lead_id is not null and auth.role() = 'authenticated')
+  or exists (select 1 from companies c where c.id = activities.company_id
     and (is_admin() or c.created_by = auth.uid() or c.created_by is null))
 ) with check (
-  exists (select 1 from companies c where c.id = activities.company_id
+  (activities.lead_id is not null and auth.role() = 'authenticated')
+  or exists (select 1 from companies c where c.id = activities.company_id
     and (is_admin() or c.created_by = auth.uid() or c.created_by is null))
 );
 
