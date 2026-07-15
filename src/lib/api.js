@@ -172,8 +172,11 @@ export async function fetchQuotationsPage({ page = 0, status = '', q = '', dateF
 
 // สรุปจำนวน+มูลค่าใบเสนอราคาแยกตามสถานะ (ไม่กรองด้วย status เอง เพราะต้องการเห็นทุกสถานะพร้อมกัน)
 // คืนค่าเป็น { [status]: { count, total } }
-export async function fetchQuotationsSummary({ q = '', dateFrom = '', dateTo = '' } = {}) {
+export async function fetchQuotationsSummary({ q = '', dateFrom = '', dateTo = '', creditType = '' } = {}) {
   let query = supabase.from('quotations').select('status, value')
+  // credit_term ของใบเสนอราคาที่ไม่ใช่เครดิตถูกเก็บเป็น '' (ไม่ใช่ null) มาตั้งแต่ต้น (ดู QuotationModal) — เช็คทั้งสองแบบกันฟิลเตอร์พลาด
+  if (creditType === 'credit') query = query.not('credit_term', 'is', null).neq('credit_term', '')
+  else if (creditType === 'normal') query = query.or('credit_term.is.null,credit_term.eq.')
   const sq = safeLike(q)
   if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
   if (dateFrom) query = query.gte('quot_date', dateFrom)

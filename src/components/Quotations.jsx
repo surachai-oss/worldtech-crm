@@ -40,7 +40,7 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
         .finally(() => { if (alive) setLoading(false) })
       fetchQuotationsTotal({ status, q, dateFrom: fromDate, dateTo: toDate, creditType }).then(sum => { if (alive) setTotal(sum) }).catch(() => {})
       // สรุปยอดแยกตามสถานะ ไม่กรองด้วย status เอง เพราะต้องการเห็นทุกสถานะพร้อมกันเสมอ
-      fetchQuotationsSummary({ q, dateFrom: fromDate, dateTo: toDate }).then(s => { if (alive) setSummary(s) }).catch(() => {})
+      fetchQuotationsSummary({ q, dateFrom: fromDate, dateTo: toDate, creditType }).then(s => { if (alive) setSummary(s) }).catch(() => {})
     }, 250)
     return () => { alive = false; clearTimeout(t) }
   }, [page, status, creditType, q, fromDate, toDate, reloadKey, localBump])
