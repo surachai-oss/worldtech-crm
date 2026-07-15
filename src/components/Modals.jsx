@@ -402,16 +402,29 @@ export function ActivityModal({ companies, contacts, defaultCompanyId, lead, cur
   )
 }
 
-export function TaskModal({ initial, companies, defaultCompanyId, currentUserName, isAdmin, onClose, onSave }) {
-  const { t } = useLanguage()
+// quotations: ให้เลือกใบเสนอราคาที่ต้องติดตามได้ (ราคาที่เสนอไปผ่านไหม อยู่ขั้นตอนไหน) — เลือกแล้วดึงบริษัทของใบเสนอราคานั้นมาให้อัตโนมัติ
+export function TaskModal({ initial, companies, quotations = [], defaultCompanyId, currentUserName, isAdmin, onClose, onSave }) {
+  const { t, lang } = useLanguage()
   const [f, setF] = useState(() => initial || {
-    company_id: defaultCompanyId || '', subject: '', due_date: '', priority: 'ปกติ', status: 'รอดำเนินการ', owner: currentUserName || '', note: ''
+    company_id: defaultCompanyId || '', quotation_id: '', subject: '', due_date: '', priority: 'ปกติ', status: 'รอดำเนินการ', owner: currentUserName || '', note: ''
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
+  const companyById = new Map(companies.map(c => [c.id, c]))
+  const onQuotationChange = (quotId) => {
+    const quot = quotations.find(q => q.id === quotId)
+    setF(s => ({ ...s, quotation_id: quotId, company_id: quot?.company_id || s.company_id }))
+  }
   // due_date ไม่บังคับ ถ้าไม่ได้กรอก/เคลียร์ทิ้งจะได้ "" มา ต้องแปลงเป็น null ก่อนส่ง ไม่งั้น Postgres ปฏิเสธ (invalid input syntax for type date)
-  const submit = () => onSave({ ...f, due_date: f.due_date || null })
+  const submit = () => onSave({ ...f, quotation_id: f.quotation_id || null, due_date: f.due_date || null })
   return (
     <ModalShell title={initial?.id ? 'แก้ไขงาน' : 'เพิ่มงานติดตาม'} onClose={onClose} onSave={submit}>
+      <Field label={lang === 'en' ? 'Quotation No.' : 'เลขที่ใบเสนอราคา'}>
+        <SearchableSelect
+          options={quotations} value={f.quotation_id} onChange={onQuotationChange}
+          placeholder={lang === 'en' ? '-- Type to search quotation no. --' : '-- พิมพ์เพื่อค้นหาเลขที่ใบเสนอราคา --'}
+          getOptionLabel={q => `${q.quot_no} - ${q.subject} (${companyById.get(q.company_id)?.name || '-'})`}
+        />
+      </Field>
       <Field label={t('บริษัท')}><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v }))} /></Field>
       <Field label={t('หัวข้องาน')} required><input className="form-control" value={f.subject} onChange={set('subject')} placeholder={t('เช่น โทรติดตามใบเสนอราคา')} /></Field>
       <div className="form-row">
