@@ -178,6 +178,7 @@ function AppInner({ session }) {
     leadStatus: async (id, status) => { await run(() => api.updateLead(id, { status }), 'อัปเดตสถานะสำเร็จ') },
     // เซลล์กรอกผู้ติดต่อเองตอนลูกค้าทักมาเอง หรือได้นามบัตรมาจากงานอีเวนต์ (ไม่ผ่านฟอร์มสาธารณะ)
     addLead: () => setModal({ type: 'lead', payload: {} }),
+    editLead: (lead) => setModal({ type: 'lead', payload: { initial: lead } }),
     deleteLead: async (id) => {
       if (!(await confirm('ลบลีดนี้?'))) return
       await run(() => api.deleteLead(id), 'ลบสำเร็จ')
@@ -409,7 +410,7 @@ function AppInner({ session }) {
             />
           )}
           {view === 'leads' && (
-            <Leads perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={actions.addLead} onCreateCompany={actions.convertLeadToCompany} onStatusChange={actions.leadStatus} onDelete={actions.deleteLead} onLogActivity={actions.logLeadActivity} />
+            <Leads perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={actions.addLead} onEdit={actions.editLead} onCreateCompany={actions.convertLeadToCompany} onStatusChange={actions.leadStatus} onDelete={actions.deleteLead} onLogActivity={actions.logLeadActivity} />
           )}
           {view === 'deals' && (
             <Deals perm={perm} deals={data.deals} companies={data.companies} quotations={data.quotations} onAdd={() => actions.addDeal(null)} onAddStage={actions.addDealStage} onEdit={actions.editDeal} onDelete={actions.deleteDeal} onMoveStage={actions.moveDealStage} onCreateQuotation={actions.createQuotationFromDeal} />

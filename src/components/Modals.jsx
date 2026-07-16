@@ -143,11 +143,13 @@ export function LeadModal({ initial, isAdmin, onClose, onSave }) {
       appliance_interest: [], applianceOther: '', purchase_reason: '', message: '', source: '', status: 'ติดต่อแล้ว'
     }
     if (!initial) return base
+    // company เป็น relation ที่ join มาตอน select (ไม่ใช่คอลัมน์จริงของตาราง leads) — ต้องตัดออกก่อนเก็บใน f ไม่งั้น update จะพังเพราะ Supabase หาคอลัมน์ชื่อนี้ไม่เจอ
+    const { company: _company, ...rest } = initial
     // ค่าเก่าที่เคยพิมพ์ระบุเอง (ไม่ตรงกับตัวเลือกคงที่) ให้ถือเป็น "อื่นๆ" แล้วเติมข้อความเดิมไว้ในช่องระบุ
     const customAppliance = (initial.appliance_interest || []).filter(v => !APPLIANCE_OPTIONS.includes(v))
     const knownAppliance = (initial.appliance_interest || []).filter(v => APPLIANCE_OPTIONS.includes(v))
     return {
-      ...base, ...initial,
+      ...base, ...rest,
       businessTypeOther: BUSINESS_TYPE_OPTIONS.includes(initial.business_type) ? '' : (initial.business_type || ''),
       appliance_interest: customAppliance.length ? [...knownAppliance, APPLIANCE_OTHER] : knownAppliance,
       applianceOther: customAppliance.join(', '),
@@ -405,8 +407,11 @@ export function ActivityModal({ companies, contacts, defaultCompanyId, lead, cur
 // quotations: ให้เลือกใบเสนอราคาที่ต้องติดตามได้ (ราคาที่เสนอไปผ่านไหม อยู่ขั้นตอนไหน) — เลือกแล้วดึงบริษัทของใบเสนอราคานั้นมาให้อัตโนมัติ
 export function TaskModal({ initial, companies, quotations = [], defaultCompanyId, currentUserName, isAdmin, onClose, onSave }) {
   const { t, lang } = useLanguage()
-  const [f, setF] = useState(() => initial || {
-    company_id: defaultCompanyId || '', quotation_id: '', subject: '', due_date: '', priority: 'ปกติ', status: 'รอดำเนินการ', owner: currentUserName || '', note: ''
+  const [f, setF] = useState(() => {
+    if (!initial) return { company_id: defaultCompanyId || '', quotation_id: '', subject: '', due_date: '', priority: 'ปกติ', status: 'รอดำเนินการ', owner: currentUserName || '', note: '' }
+    // company/lead เป็น relation ที่ join มาตอน select (ไม่ใช่คอลัมน์จริงของตาราง tasks) — ต้องตัดออกก่อนเก็บใน f ไม่งั้น update จะพังเพราะ Supabase หาคอลัมน์ชื่อนี้ไม่เจอ
+    const { company: _company, lead: _lead, ...rest } = initial
+    return rest
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
   const companyById = new Map(companies.map(c => [c.id, c]))
