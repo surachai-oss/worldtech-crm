@@ -124,7 +124,7 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
   )
 }
 
-export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdit, onDelete, onCreateQuotation }) {
+export default function Deals({ perm, deals, companies, quotations = [], onAdd, onAddStage, onEdit, onDelete, onCreateQuotation }) {
   const { t, lang } = useLanguage()
   const { list } = usePicklists()
   const [fromDate, setFromDate] = useState('')
@@ -145,6 +145,8 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
   // ดีลที่ยังไม่ปิดและมีวันที่ต้องติดตาม (follow_up_date) — ยอดรวมที่ต้องตามต่อ
   const followUp = deals.filter(d => !OPEN_STAGES_EXCLUDED.includes(d.stage) && d.follow_up_date)
   const followTotal = followUp.reduce((s, d) => s + (Number(d.value) || 0), 0)
+  // ดีลที่มีใบเสนอราคาอ้างอิงอยู่แล้ว (quotations.deal_id) — ใช้เปลี่ยนสีปุ่ม "ออกใบเสนอราคา" ให้เห็นว่าออกไปแล้ว
+  const dealIdsWithQuotation = new Set(quotations.map(q => q.deal_id).filter(Boolean))
 
   return (
     <div>
@@ -205,7 +207,7 @@ export default function Deals({ perm, deals, companies, onAdd, onAddStage, onEdi
                   return (
                     <div className="kanban-card" key={d.id} style={{ position: 'relative' }}>
                       {canEdit(d, perm) && (
-                        <button className="btn btn-secondary btn-xs" style={{ position: 'absolute', top: 6, right: 6, padding: '2px 6px', fontSize: 10 }} onClick={() => onCreateQuotation(d)} title={lang === 'en' ? 'Copy this deal into a new quotation' : 'ก็อปข้อมูลดีลนี้ไปสร้างใบเสนอราคา'}>{t('ออกใบเสนอราคา')}</button>
+                        <button className={`btn ${dealIdsWithQuotation.has(d.id) ? 'btn-success' : 'btn-secondary'} btn-xs`} style={{ position: 'absolute', top: 6, right: 6, padding: '2px 6px', fontSize: 10 }} onClick={() => onCreateQuotation(d)} title={dealIdsWithQuotation.has(d.id) ? (lang === 'en' ? 'Already has a quotation — click to copy into another one' : 'ออกใบเสนอราคาแล้ว — กดเพื่อก็อปไปสร้างใบใหม่อีกใบได้') : (lang === 'en' ? 'Copy this deal into a new quotation' : 'ก็อปข้อมูลดีลนี้ไปสร้างใบเสนอราคา')}>{t('ออกใบเสนอราคา')}</button>
                       )}
                       <div className="deal-name" style={{ paddingRight: canEdit(d, perm) ? 92 : 0 }}>{d.name}</div>
                       <div className="deal-co">{co ? co.name : '-'}{co?.credit_term && <span className="badge badge-orange" style={{ marginLeft: 6, fontSize: 9, fontWeight: 400 }}>{co.credit_term}</span>}</div>
