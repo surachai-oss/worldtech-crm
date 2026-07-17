@@ -240,6 +240,8 @@ alter table payment_requests add column if not exists bill_no text;
 -- payment_method = วิธีการชำระ (โอนเงิน/เงินสด/เช็ค/บัตรเครดิต/เครดิตเทอม/อื่นๆ) เลือกหลังประเภทการชำระ — payment_method_other ใช้เมื่อเลือก "อื่นๆ โปรดระบุ"
 alter table payment_requests add column if not exists payment_method text;
 alter table payment_requests add column if not exists payment_method_other text;
+-- cod_tracking_no = เลข tracking พัสดุ ใช้เมื่อ payment_method = "เก็บเงินปลายทาง" (ไม่มีสลิปโอนเงินให้แนบ เพราะลูกค้าจ่ายปลายทาง บัญชีตรวจสอบยอดเองตอนพัสดุถึง)
+alter table payment_requests add column if not exists cod_tracking_no text;
 
 -- ===== PAYMENT ITEMS (รายการสินค้าในคำขอตรวจยอด) =====
 create table if not exists payment_items (
