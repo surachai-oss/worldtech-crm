@@ -64,6 +64,7 @@ function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMi
           <Row label={t('ประเภทลูกค้า')} value={pr.credit_type || '-'} />
           <Row label={t('ประเภทการชำระ')} value={pr.payment_type || '-'} />
           <Row label={t('วิธีการชำระ')} value={(pr.payment_method === PAYMENT_METHOD_OTHER ? pr.payment_method_other : pr.payment_method) || '-'} />
+          {pr.cod_tracking_no && <Row label="Tracking" value={pr.cod_tracking_no} />}
           <Row label={t('เลขที่ PO')} value={pr.po_reference || '-'} />
           <Row label={t('เลขที่ออเดอร์')} value={pr.order?.order_no || pr.order_no || '-'} />
           <Row label={t('ยอดไม่รวม VAT')} value={fmtCurrency(exVat)} />

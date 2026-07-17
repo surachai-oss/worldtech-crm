@@ -3,7 +3,7 @@ import {
   PAYMENT_STATUS, fetchPaymentRequestsByOrder, listPaymentItems, listOrderItems, listProducts, computeDealTotals,
   addPaymentRequestWithItems, updatePaymentRequestWithItems, submitPaymentRequest, uploadPaymentSlip, getPaymentSlipUrl,
   markPaymentOrderCreated, deletePaymentRequest, notifyFinancePaymentSubmitted,
-  PAYMENT_METHOD_OPTIONS, PAYMENT_METHOD_OTHER,
+  PAYMENT_METHOD_OPTIONS, PAYMENT_METHOD_OTHER, PAYMENT_METHOD_COD,
 } from '../lib/api'
 import { fmtCurrency, paymentStatusLabel, paymentBadgeClass } from '../lib/format'
 import { printPaymentApproval, downloadPaymentApprovalImage } from '../lib/printPaymentApproval'
@@ -45,6 +45,7 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
     payment_type: existing?.payment_type || 'ชำระเต็มจำนวน',
     payment_method: existing?.payment_method || '',
     payment_method_other: existing?.payment_method_other || '',
+    cod_tracking_no: existing?.cod_tracking_no || '',
     slip_file_url: existing?.slip_file_url || '',
     remark: existing?.remark || '',
   }))
@@ -80,6 +81,7 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
   const itemsTotal = items.reduce((s, it) => s + lineTotal(it), 0)
   const cleanItems = () => items.filter(it => it.product_name?.trim() || it.sku?.trim())
   const isOtherPaymentMethod = f.payment_method === PAYMENT_METHOD_OTHER
+  const isCod = f.payment_method === PAYMENT_METHOD_COD
 
   const buildFields = () => ({
     request_date: f.request_date || todayStr(),
@@ -91,6 +93,7 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
     payment_type: f.payment_type || null,
     payment_method: f.payment_method || null,
     payment_method_other: isOtherPaymentMethod ? (f.payment_method_other || null) : null,
+    cod_tracking_no: isCod ? (f.cod_tracking_no || null) : null,
     total_amount: itemsTotal,
     slip_file_url: f.slip_file_url || null,
     remark: f.remark || null,
@@ -113,7 +116,8 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
 
   const submit = async () => {
     if (!cleanItems().length) { toast(t('ต้องมีรายการสินค้าอย่างน้อย 1 รายการ'), 'error'); return }
-    if (!slipFile && !f.slip_file_url) { toast(t('กรุณาแนบสลิปการโอน'), 'error'); return }
+    if (!isCod && !slipFile && !f.slip_file_url) { toast(t('กรุณาแนบสลิปการโอน'), 'error'); return }
+    if (isCod && !f.cod_tracking_no.trim()) { toast(t('กรุณาระบุเลขที่ Tracking'), 'error'); return }
     if (!(await confirm(t('ส่งคำขอให้บัญชีตรวจ? หลังส่งแล้วจะแก้ไขไม่ได้จนกว่าบัญชีจะตีกลับ')))) return
     setBusy(true)
     try {
@@ -195,6 +199,9 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
           {isOtherPaymentMethod && (
             <input className="form-control" style={{ marginTop: 8 }} value={f.payment_method_other} onChange={set('payment_method_other')} placeholder={t('ระบุวิธีการชำระ')} />
           )}
+          {isCod && (
+            <input className="form-control" style={{ marginTop: 8 }} value={f.cod_tracking_no} onChange={set('cod_tracking_no')} placeholder={t('เลขที่ Tracking')} />
+          )}
         </div>
       </div>
       <div className="form-group">
@@ -202,8 +209,12 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
         <input className="form-control" value={f.po_reference} onChange={set('po_reference')} placeholder={t('ไม่บังคับ')} />
       </div>
       <div className="form-group">
-        <label className="form-label required">{t('สลิปการโอน')}</label>
-        <input className="form-control" type="file" accept="image/*,.pdf" onChange={e => setSlipFile(e.target.files?.[0] || null)} />
+        <label className={`form-label${isCod ? '' : ' required'}`}>{t('สลิปการโอน')}</label>
+        {isCod ? (
+          <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ไม่ต้องแนบสลิป — ลูกค้าเก็บเงินปลายทาง บัญชีจะตรวจสอบยอดเอง')}</div>
+        ) : (
+          <input className="form-control" type="file" accept="image/*,.pdf" onChange={e => setSlipFile(e.target.files?.[0] || null)} />
+        )}
         {!slipFile && f.slip_file_url && <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('มีสลิปแนบอยู่แล้ว (เลือกไฟล์ใหม่เพื่อแทนที่)')}</div>}
       </div>
       <div className="form-group">
@@ -266,6 +277,7 @@ function PaymentRequestCard({ pr, order, settings, perm, currentUser, onEdit, on
           <span className={`badge ${paymentBadgeClass(pr.status)}`}>{paymentStatusLabel(pr.status)}</span>
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>{t('ยอดรวม')}: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(pr.total_amount)}</b></div>
+        {pr.cod_tracking_no && <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>{t('เก็บเงินปลายทาง')} · Tracking: {pr.cod_tracking_no}</div>}
         {pr.finance_remark && <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>{t('หมายเหตุจากบัญชี')}: {pr.finance_remark}</div>}
         {pr.approval_ref_no && <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>{t('เลขที่อนุมัติ')}: {pr.approval_ref_no}</div>}
 

@@ -40,7 +40,8 @@ const ACCOUNTING_DOC_OPEN_STATUSES = [ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO, 
 
 // วิธีการชำระของคำขอตรวจยอด (payment_requests.payment_method) — ตัวเลือกคงที่ ไม่ใช่ picklist ที่แก้เองได้
 export const PAYMENT_METHOD_OTHER = 'อื่นๆ โปรดระบุ'
-export const PAYMENT_METHOD_OPTIONS = ['โอนเงิน', 'เงินสด', 'เช็ค', 'บัตรเครดิต', 'เครดิตเทอม', PAYMENT_METHOD_OTHER]
+export const PAYMENT_METHOD_COD = 'เก็บเงินปลายทาง'
+export const PAYMENT_METHOD_OPTIONS = ['โอนเงิน', 'เงินสด', 'เช็ค', 'บัตรเครดิต', 'เครดิตเทอม', PAYMENT_METHOD_COD, PAYMENT_METHOD_OTHER]
 
 export const DOC_TYPES = ['ใบแจ้งหนี้', 'ใบกำกับภาษี + ใบเสร็จรับเงิน', 'ใบเสร็จรับเงิน', 'เอกสารอื่นๆ']
 export const DOC_DELIVERY_METHODS = ['ส่งสำเนาทางอีเมล', 'ส่งตัวจริง', 'ส่งทั้งอีเมลและตัวจริง']
