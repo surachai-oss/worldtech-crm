@@ -4,6 +4,7 @@ import {
   fetchAccountingDocRequests, updateAccountingDocRequest,
   markDocMissingInfo, approveAccountingDocRequest, markDocOriginalSent, markDocCancelled,
   listAccountingDocFiles, uploadAccountingDocFile, uploadAccountingDocExtraFile, getAccountingDocFileUrl,
+  listOrderItems,
 } from '../lib/api'
 import { fmtCurrency, fmtDate, docStatusBadgeClass, docPriorityBadgeClass } from '../lib/format'
 import { useUi } from './UiContext'
@@ -36,6 +37,14 @@ function DetailModal({ req, currentUserName, onClose, onChanged }) {
   const reloadFiles = () => listAccountingDocFiles(req.id).then(setFiles).catch(() => setFiles([]))
   useEffect(() => { reloadFiles() }, [req.id])
   const currentFiles = (files || []).filter(f => f.is_current)
+
+  // รายการสินค้าของออเดอร์ที่ขอเอกสารนี้ — ให้บัญชีเห็นว่าต้องออกเอกสารตรงกับสินค้า/ราคา/ส่วนลดอะไร ไม่ต้องเปิดหน้าออเดอร์แยกไปดู
+  const [orderItems, setOrderItems] = useState(null)
+  useEffect(() => {
+    if (!req.order?.id) { setOrderItems([]); return }
+    listOrderItems(req.order.id).then(setOrderItems).catch(() => setOrderItems([]))
+  }, [req.order?.id])
+  const itemsSubtotal = (orderItems || []).reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0)
 
   const run = async (fn, msg) => {
     setBusy(true)
@@ -142,6 +151,34 @@ function DetailModal({ req, currentUserName, onClose, onChanged }) {
           {req.original_shipping_address && <Row label={t('ที่อยู่จัดส่งตัวจริง')} value={req.original_shipping_address} />}
           {req.original_tracking_no && <Row label="Tracking" value={req.original_tracking_no} />}
           {req.sales_note && <Row label={t('หมายเหตุจากเซลล์')} value={req.sales_note} />}
+
+          {/* รายการสินค้าของออเดอร์ — ให้บัญชีออกเอกสารตรงกับสินค้า/ราคา/ส่วนลดที่เปิดออเดอร์ไปจริง */}
+          {orderItems?.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>{t('สินค้า/รายการ')}</th><th style={{ textAlign: 'center' }}>{t('จำนวน')}</th><th style={{ textAlign: 'right' }}>{t('ราคา/หน่วย')}</th><th style={{ textAlign: 'right' }}>{t('รวม')}</th></tr></thead>
+                  <tbody>
+                    {orderItems.map(it => (
+                      <tr key={it.id}>
+                        <td>{it.description || it.product?.name || '-'}</td>
+                        <td style={{ textAlign: 'center' }}>{it.quantity}</td>
+                        <td style={{ textAlign: 'right' }}>{fmtCurrency(it.unit_price)}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtCurrency((Number(it.quantity) || 0) * (Number(it.unit_price) || 0))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {Number(req.order?.discount_value) > 0 && (
+                <div style={{ textAlign: 'right', marginTop: 8, fontSize: 13, color: 'var(--danger)' }}>
+                  {t('ส่วนลด')} ({req.order.discount_type === 'เปอร์เซ็นต์' ? `${req.order.discount_value}%` : fmtCurrency(req.order.discount_value)}):
+                  {' '}-{fmtCurrency(itemsSubtotal - Number(req.order.value))}
+                </div>
+              )}
+              <div style={{ textAlign: 'right', marginTop: 4, fontSize: 13 }}>{t('ยอดรวม')}: <b style={{ color: 'var(--navy)' }}>{fmtCurrency(req.order?.value)}</b></div>
+            </div>
+          )}
 
           {/* ขั้นตรวจสอบ: เลือกก่อนว่า ข้อมูลไม่ครบ หรือ อนุมัติ */}
           {req.document_status === ACCOUNTING_DOC_STATUS.PENDING_REVIEW && (

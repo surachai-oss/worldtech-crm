@@ -984,7 +984,7 @@ export function accountingDocInfoComplete(f) {
 
 export async function fetchAccountingDocRequests({ status = '', priority = '', q = '', dateFrom = '', dateTo = '' } = {}) {
   let query = supabase.from('accounting_document_requests')
-    .select('*, order:orders(id, order_no, created_at, value, company:companies(id,name))')
+    .select('*, order:orders(id, order_no, created_at, value, discount_type, discount_value, company:companies(id,name))')
     .neq('document_status', ACCOUNTING_DOC_STATUS.DRAFT)  // ฉบับร่างยังไม่ส่ง — ไม่ต้องโชว์ในคิวบัญชี
     .order('created_at', { ascending: false })
   if (status) query = query.eq('document_status', status)

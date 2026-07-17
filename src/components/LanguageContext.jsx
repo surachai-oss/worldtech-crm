@@ -155,6 +155,7 @@ export const EN_DICT = {
   'สินค้า Grade B (GB)': 'Grade B Goods (GB)',
   'เลขที่ออเดอร์ (โดยประมาณ)': 'Order No. (estimated)',
   'รายการสินค้า': 'Line Items',
+  'สินค้า/รายการ': 'Product/Item',
   'จำนวน': 'Qty',
   'ราคา/หน่วย': 'Unit Price',
   '+ เพิ่มรายการ': '+ Add Item',
