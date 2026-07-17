@@ -182,10 +182,7 @@ export default function FinanceReview({ reloadKey, currentUserName, perm, onAppr
                     <td style={{ fontSize: 12 }}>{fmtDate(pr.request_date || pr.created_at)}</td>
                     <td>{pr.customer_name || pr.company?.name || '-'}</td>
                     <td style={{ fontSize: 12 }}>{pr.credit_type ? <span className={`badge ${pr.credit_type.startsWith('ลูกค้าเครดิต') ? 'badge-orange' : 'badge-green'}`}>{pr.credit_type}</span> : '-'}</td>
-                    <td style={{ fontSize: 12 }}>
-                      {(pr.payment_method === PAYMENT_METHOD_OTHER ? pr.payment_method_other : pr.payment_method) || '-'}
-                      {pr.cod_tracking_no && <div style={{ color: 'var(--text-light)' }}>Tracking: {pr.cod_tracking_no}</div>}
-                    </td>
+                    <td style={{ fontSize: 12 }}>{(pr.payment_method === PAYMENT_METHOD_OTHER ? pr.payment_method_other : pr.payment_method) || '-'}</td>
                     <td style={{ fontWeight: 600 }}>{fmtCurrency(pr.total_amount)}</td>
                     <td><span className={`badge ${paymentBadgeClass(pr.status)}`}>{paymentStatusLabel(pr.status)}</span></td>
                     <td style={{ fontSize: 12 }}>{pr.requested_by_name || '-'}</td>
