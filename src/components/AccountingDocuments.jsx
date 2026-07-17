@@ -12,6 +12,12 @@ import { useLanguage } from './LanguageContext'
 
 const NEEDS_ORIGINAL = (m) => m === 'ส่งตัวจริง' || m === 'ส่งทั้งอีเมลและตัวจริง'
 
+// สถานะที่บัญชีควรอัปโหลดไฟล์เอกสารกลับได้เลยทันที ไม่ต้องรอผ่านขั้นตรวจสอบก่อน — บางเคสข้อมูลจากเซลล์ไม่ครบ (เช่น ไม่ได้กรอกอีเมลผู้รับ) แต่บัญชีเห็นว่าออกเอกสารได้อยู่แล้วก็อัปโหลดเลยได้ ไม่ต้องรอเซลล์แก้ไขก่อน
+const UPLOADABLE_STATUSES = [
+  ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO, ACCOUNTING_DOC_STATUS.PENDING_REVIEW,
+  ACCOUNTING_DOC_STATUS.PENDING_ISSUE, ACCOUNTING_DOC_STATUS.PENDING_UPLOAD,
+]
+
 // map ประเภทเอกสารที่ลูกค้าขอ -> ชนิดไฟล์ที่บันทึก (บัญชีไม่ต้องเลือกเอง อัปโหลดไฟล์เดียวจบ)
 const DOC_TYPE_TO_FILE = {
   'ใบแจ้งหนี้': DOC_FILE_TYPES.INVOICE,
@@ -192,8 +198,8 @@ function DetailModal({ req, currentUserName, onClose, onChanged }) {
             </div>
           )}
 
-          {/* ขั้นอัปโหลดเอกสาร: ไม่ต้องกรอกเลขเอกสาร อัปโหลดไฟล์เดียวจบ -> เสร็จสิ้น (หรือไปรอส่งตัวจริง) */}
-          {req.document_status === ACCOUNTING_DOC_STATUS.PENDING_UPLOAD && (
+          {/* ขั้นอัปโหลดเอกสาร: ไม่ต้องกรอกเลขเอกสาร อัปโหลดไฟล์เดียวจบ -> เสร็จสิ้น (หรือไปรอส่งตัวจริง) — เปิดให้อัปโหลดได้ตั้งแต่ยังไม่ผ่านขั้นตรวจสอบด้วย กันเคสค้างที่ "รอข้อมูลจากเซลล์"/"รอออกเอกสาร" แล้วบัญชีอัปโหลดไม่ได้ */}
+          {UPLOADABLE_STATUSES.includes(req.document_status) && (
             <div style={{ marginTop: 14 }}>
               <FilesList />
               <label className="form-label required">{t('อัปโหลดเอกสาร (PDF หรือรูปภาพ)')}</label>
