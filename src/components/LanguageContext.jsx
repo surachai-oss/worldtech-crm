@@ -496,6 +496,7 @@ export const EN_DICT = {
   'เลขที่ Tracking': 'Tracking No.',
   'กรุณาระบุเลขที่ Tracking': 'Please enter the tracking no.',
   'ไม่ต้องแนบสลิป — ลูกค้าเก็บเงินปลายทาง บัญชีจะตรวจสอบยอดเอง': 'No slip needed — customer pays on delivery, accounting will verify the amount directly',
+  'ไม่ต้องแนบสลิป — วิธีชำระนี้บัญชีจะตรวจสอบยอดเอง': 'No slip needed — accounting will verify the amount directly for this payment method',
   'ส่วนลดท้ายบิล': 'Bill Discount',
   'เปอร์เซ็นต์': 'Percent',
   'จำนวนเงิน': 'Fixed Amount',

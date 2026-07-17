@@ -3,7 +3,7 @@ import {
   PAYMENT_STATUS, fetchPaymentRequestsByOrder, listPaymentItems, listOrderItems, listProducts, computeDealTotals,
   addPaymentRequestWithItems, updatePaymentRequestWithItems, submitPaymentRequest, uploadPaymentSlip, getPaymentSlipUrl,
   markPaymentOrderCreated, deletePaymentRequest, notifyFinancePaymentSubmitted,
-  PAYMENT_METHOD_OPTIONS, PAYMENT_METHOD_OTHER, PAYMENT_METHOD_COD,
+  PAYMENT_METHOD_OPTIONS, PAYMENT_METHOD_OTHER, PAYMENT_METHOD_COD, PAYMENT_METHOD_TRANSFER,
 } from '../lib/api'
 import { fmtCurrency, paymentStatusLabel, paymentBadgeClass } from '../lib/format'
 import { printPaymentApproval, downloadPaymentApprovalImage } from '../lib/printPaymentApproval'
@@ -82,6 +82,8 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
   const cleanItems = () => items.filter(it => it.product_name?.trim() || it.sku?.trim())
   const isOtherPaymentMethod = f.payment_method === PAYMENT_METHOD_OTHER
   const isCod = f.payment_method === PAYMENT_METHOD_COD
+  // สลิปการโอนมีความหมายเฉพาะตอนจ่ายผ่านการโอนเงินเท่านั้น — วิธีชำระอื่นๆ (เงินสด/เช็ค/บัตรเครดิต/เครดิตเทอม/เก็บเงินปลายทาง/อื่นๆ) ไม่มีสลิปให้แนบ บัญชีตรวจสอบยอดเองตามวิธีนั้นๆ
+  const needsSlip = f.payment_method === PAYMENT_METHOD_TRANSFER
 
   const buildFields = () => ({
     request_date: f.request_date || todayStr(),
@@ -116,7 +118,7 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
 
   const submit = async () => {
     if (!cleanItems().length) { toast(t('ต้องมีรายการสินค้าอย่างน้อย 1 รายการ'), 'error'); return }
-    if (!isCod && !slipFile && !f.slip_file_url) { toast(t('กรุณาแนบสลิปการโอน'), 'error'); return }
+    if (needsSlip && !slipFile && !f.slip_file_url) { toast(t('กรุณาแนบสลิปการโอน'), 'error'); return }
     if (isCod && !f.cod_tracking_no.trim()) { toast(t('กรุณาระบุเลขที่ Tracking'), 'error'); return }
     if (!(await confirm(t('ส่งคำขอให้บัญชีตรวจ? หลังส่งแล้วจะแก้ไขไม่ได้จนกว่าบัญชีจะตีกลับ')))) return
     setBusy(true)
@@ -209,11 +211,11 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
         <input className="form-control" value={f.po_reference} onChange={set('po_reference')} placeholder={t('ไม่บังคับ')} />
       </div>
       <div className="form-group">
-        <label className={`form-label${isCod ? '' : ' required'}`}>{t('สลิปการโอน')}</label>
-        {isCod ? (
-          <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ไม่ต้องแนบสลิป — ลูกค้าเก็บเงินปลายทาง บัญชีจะตรวจสอบยอดเอง')}</div>
-        ) : (
+        <label className={`form-label${needsSlip ? ' required' : ''}`}>{t('สลิปการโอน')}</label>
+        {needsSlip ? (
           <input className="form-control" type="file" accept="image/*,.pdf" onChange={e => setSlipFile(e.target.files?.[0] || null)} />
+        ) : (
+          <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{isCod ? t('ไม่ต้องแนบสลิป — ลูกค้าเก็บเงินปลายทาง บัญชีจะตรวจสอบยอดเอง') : t('ไม่ต้องแนบสลิป — วิธีชำระนี้บัญชีจะตรวจสอบยอดเอง')}</div>
         )}
         {!slipFile && f.slip_file_url && <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('มีสลิปแนบอยู่แล้ว (เลือกไฟล์ใหม่เพื่อแทนที่)')}</div>}
       </div>
