@@ -70,6 +70,7 @@ const ACCOUNTING_DOC_STATUS_CLS = {
   'รอส่งตัวจริง': 'badge-orange',
   'ส่งตัวจริงแล้ว': 'badge-navy',
   'เสร็จสิ้น': 'badge-green',
+  'ขอเอกสารเพิ่ม': 'badge-orange',
   'ยกเลิก': 'badge-red',
 }
 export function docStatusBadgeClass(s) { return ACCOUNTING_DOC_STATUS_CLS[s] || 'badge-gray' }

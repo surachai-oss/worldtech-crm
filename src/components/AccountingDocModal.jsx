@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   DOC_TYPES, DOC_DELIVERY_METHODS, DOC_PRIORITIES, DOC_FILE_TYPE_LABEL,
-  ACCOUNTING_DOC_STATUS, fetchAccountingDocRequestsByOrder, saveAccountingDocDraft, submitAccountingDocRequest,
+  ACCOUNTING_DOC_STATUS, fetchAccountingDocRequestsByOrder, saveAccountingDocDraft, submitAccountingDocRequest, requestAdditionalAccountingDoc,
   listAccountingDocFiles, getAccountingDocFileUrl,
 } from '../lib/api'
 import { docStatusBadgeClass, docPriorityBadgeClass } from '../lib/format'
@@ -41,7 +41,7 @@ function initForm(existing, order) {
 
 // ฟอร์มสร้าง/แก้ไขคำขอเอกสารบัญชี (อยู่ในป็อปอัปเดียว ไม่แยกหน้า) — ข้อมูลใบกำกับภาษีดึงจากออเดอร์ให้อัตโนมัติ แก้ไขได้ก่อนส่ง
 // มี 2 ปุ่ม: "บันทึก (ฉบับร่าง)" เก็บไว้ก่อนยังไม่ส่งบัญชี (เผื่อส่งให้ลูกค้าเช็คก่อน) และ "ส่งคำขอ" ส่งเข้าคิวบัญชีจริง
-function DocRequestForm({ order, existing, currentUser, onClose, onSaved }) {
+function DocRequestForm({ order, existing, currentUser, isAdditional = false, onClose, onSaved }) {
   const { toast } = useUi()
   const { t, lang } = useLanguage()
   const [f, setF] = useState(() => initForm(existing, order))
@@ -66,8 +66,13 @@ function DocRequestForm({ order, existing, currentUser, onClose, onSaved }) {
     if (!f.delivery_method) { toast(t('กรุณาเลือกวิธีส่งเอกสาร'), 'error'); return }
     setBusy(true)
     try {
-      await submitAccountingDocRequest(baseFields(), existing)
-      toast(existing?.submitted_at ? t('ส่งคำขอที่แก้ไขให้บัญชีแล้ว (ขึ้นสถานะอัพเดท)') : t('ส่งคำขอเข้าคิวบัญชีแล้ว'), 'success')
+      if (isAdditional) {
+        await requestAdditionalAccountingDoc(baseFields(), existing)
+        toast(t('ส่งคำขอเอกสารเพิ่มให้บัญชีแล้ว'), 'success')
+      } else {
+        await submitAccountingDocRequest(baseFields(), existing)
+        toast(existing?.submitted_at ? t('ส่งคำขอที่แก้ไขให้บัญชีแล้ว (ขึ้นสถานะอัพเดท)') : t('ส่งคำขอเข้าคิวบัญชีแล้ว'), 'success')
+      }
       onSaved()
     } catch (e) { toast(lang === 'en' ? 'Submit failed: ' + e.message : 'ส่งคำขอไม่สำเร็จ: ' + e.message, 'error'); setBusy(false) }
   }
@@ -151,14 +156,15 @@ function DocRequestForm({ order, existing, currentUser, onClose, onSaved }) {
         <button className="btn btn-outline" onClick={onClose} disabled={busy}>{t('ยกเลิก')}</button>
         {/* บันทึกฉบับร่างเฉพาะคำขอที่ยังไม่เคยส่ง (ใหม่/ฉบับร่าง) — คำขอที่ส่งบัญชีแล้วให้ใช้ "ส่งคำขอที่แก้ไข" เท่านั้น กันหลุดออกจากคิวบัญชี */}
         {!existing?.submitted_at && <button className="btn btn-secondary" onClick={saveDraft} disabled={busy}>{t('บันทึก (ฉบับร่าง)')}</button>}
-        <button className="btn btn-primary" onClick={submit} disabled={busy}>{existing?.submitted_at ? t('ส่งคำขอที่แก้ไข') : t('ส่งคำขอ')}</button>
+        <button className="btn btn-primary" onClick={submit} disabled={busy}>{isAdditional ? t('ส่งคำขอเอกสารเพิ่ม') : (existing?.submitted_at ? t('ส่งคำขอที่แก้ไข') : t('ส่งคำขอ'))}</button>
       </div>
     </div>
   )
 }
 
 // แสดงคำขอ 1 ใบ พร้อมไฟล์เอกสารที่บัญชีอัปโหลด (ดาวน์โหลดได้) + เลข tracking ตัวจริง + ปุ่มแก้ไข
-function DocRequestCard({ req, onEdit }) {
+// onRequestMore: เฉพาะคำขอที่ "เสร็จสิ้น" แล้ว — ลูกค้าขอไม่ครบตอนแรก เซลล์ขอเอกสารเพิ่มได้โดยไม่ต้องสร้างคำขอใหม่
+function DocRequestCard({ req, onEdit, onRequestMore }) {
   const { toast } = useUi()
   const { t, lang } = useLanguage()
   const [files, setFiles] = useState(null)
@@ -185,6 +191,9 @@ function DocRequestCard({ req, onEdit }) {
             {req.priority !== 'ปกติ' && <span className={`badge ${docPriorityBadgeClass(req.priority)}`}>{req.priority}</span>}
             <span className={`badge ${docStatusBadgeClass(req.document_status)}`}>{req.document_status}</span>
             <button className="btn btn-outline btn-xs" onClick={() => onEdit(req)}>{t('แก้ไข')}</button>
+            {req.document_status === ACCOUNTING_DOC_STATUS.COMPLETED && (
+              <button className="btn btn-secondary btn-xs" onClick={() => onRequestMore(req)}>{t('ขอเอกสารเพิ่ม')}</button>
+            )}
           </div>
         </div>
         {isDraft && <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>{t('ฉบับร่าง — ยังไม่ส่งบัญชี กด "แก้ไข" แล้ว "ส่งคำขอ" เมื่อพร้อม')}</div>}
@@ -225,6 +234,7 @@ export default function AccountingDocModal({ order, currentUser, onClose }) {
   const [requests, setRequests] = useState(null)
   const [formOpen, setFormOpen] = useState(false)   // true = แสดงฟอร์มสร้างใหม่
   const [editing, setEditing] = useState(null)       // คำขอที่กำลังแก้ไข (ถ้ามี)
+  const [requestingMore, setRequestingMore] = useState(null) // คำขอที่ "เสร็จสิ้น" แล้ว กำลังขอเอกสารเพิ่ม (ถ้ามี)
 
   const load = () => {
     if (!order?.id) { setRequests([]); return }
@@ -232,12 +242,13 @@ export default function AccountingDocModal({ order, currentUser, onClose }) {
   }
   useEffect(() => { load() }, [order?.id])
 
-  const onSaved = () => { setFormOpen(false); setEditing(null); load() }
-  const startEdit = (req) => { setEditing(req); setFormOpen(false) }
+  const onSaved = () => { setFormOpen(false); setEditing(null); setRequestingMore(null); load() }
+  const startEdit = (req) => { setEditing(req); setFormOpen(false); setRequestingMore(null) }
+  const startRequestMore = (req) => { setRequestingMore(req); setEditing(null); setFormOpen(false) }
 
   // ออเดอร์หนึ่งใบมีคำขอเอกสารได้ใบเดียว — ถ้ามีแล้วให้ "แก้ไข" ใบเดิม (ขึ้นสถานะอัพเดท) ไม่สร้างใบใหม่
   const hasRequest = (requests?.length || 0) > 0
-  const showGate = !formOpen && !editing && !hasRequest
+  const showGate = !formOpen && !editing && !requestingMore && !hasRequest
 
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
@@ -258,11 +269,16 @@ export default function AccountingDocModal({ order, currentUser, onClose }) {
                       <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('แก้ไขคำขอ')}: {req.document_type}</div>
                       <DocRequestForm order={order} existing={req} currentUser={currentUser} onClose={() => setEditing(null)} onSaved={onSaved} />
                     </div></div>
-                  : <DocRequestCard key={req.id} req={req} onEdit={startEdit} />
+                  : requestingMore?.id === req.id
+                  ? <div className="card" key={req.id} style={{ marginBottom: 10 }}><div className="card-body">
+                      <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('ขอเอกสารเพิ่ม')}: {req.document_type}</div>
+                      <DocRequestForm order={order} existing={req} currentUser={currentUser} isAdditional onClose={() => setRequestingMore(null)} onSaved={onSaved} />
+                    </div></div>
+                  : <DocRequestCard key={req.id} req={req} onEdit={startEdit} onRequestMore={startRequestMore} />
               ))}
 
               {/* สร้างคำขอใหม่ — เฉพาะออเดอร์ที่ยังไม่มีคำขอ (มีแล้วให้กด "แก้ไข" ใบเดิม) */}
-              {!hasRequest && !editing && (formOpen ? (
+              {!hasRequest && !editing && !requestingMore && (formOpen ? (
                 <div className="card"><div className="card-body">
                   <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('คำขอเอกสารใหม่')}</div>
                   <DocRequestForm order={order} existing={null} currentUser={currentUser} onClose={() => setFormOpen(false)} onSaved={onSaved} />

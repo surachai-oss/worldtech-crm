@@ -32,11 +32,13 @@ export const ACCOUNTING_DOC_STATUS = {
   PENDING_ORIGINAL: 'รอส่งตัวจริง',
   ORIGINAL_SENT: 'ส่งตัวจริงแล้ว',
   COMPLETED: 'เสร็จสิ้น',
+  // ลูกค้าเคยขอเอกสารและบัญชีทำเสร็จไปแล้ว แต่ขอไม่ครบ กลับมาขอเพิ่มทีหลัง — แยกจาก PENDING_REVIEW เพื่อให้บัญชีเห็นชัดว่าเป็นการขอเพิ่มจากใบที่เสร็จแล้ว ไม่ใช่คำขอที่ยังไม่เคยเสร็จ (ดู requestAdditionalAccountingDoc ด้านล่าง)
+  ADDITIONAL_REQUEST: 'ขอเอกสารเพิ่ม',
   CANCELLED: 'ยกเลิก',
 }
 export const ACCOUNTING_DOC_STATUS_LIST = Object.values(ACCOUNTING_DOC_STATUS)
 // สถานะที่ยังไม่จบงาน ใช้คำนวณ "งานเกินกำหนด" ในสรุปหน้าเอกสารบัญชี
-const ACCOUNTING_DOC_OPEN_STATUSES = [ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO, ACCOUNTING_DOC_STATUS.PENDING_REVIEW, ACCOUNTING_DOC_STATUS.PENDING_ISSUE, ACCOUNTING_DOC_STATUS.PENDING_UPLOAD]
+const ACCOUNTING_DOC_OPEN_STATUSES = [ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO, ACCOUNTING_DOC_STATUS.PENDING_REVIEW, ACCOUNTING_DOC_STATUS.PENDING_ISSUE, ACCOUNTING_DOC_STATUS.PENDING_UPLOAD, ACCOUNTING_DOC_STATUS.ADDITIONAL_REQUEST]
 
 // วิธีการชำระของคำขอตรวจยอด (payment_requests.payment_method) — ตัวเลือกคงที่ ไม่ใช่ picklist ที่แก้เองได้
 export const PAYMENT_METHOD_OTHER = 'อื่นๆ โปรดระบุ'
@@ -1041,6 +1043,16 @@ export const updateAccountingDocRequest = (id, d) =>
 
 export const deleteAccountingDocRequest = (id) =>
   supabase.from('accounting_document_requests').delete().eq('id', id).then(handle)
+
+// เซลล์ขอเอกสารเพิ่มจากคำขอที่บัญชีทำ "เสร็จสิ้น" ไปแล้ว (ลูกค้าขอไม่ครบตอนแรก) — ใช้ใบเดิม ไม่สร้างคำขอใหม่ แต่ตั้งสถานะเป็น ADDITIONAL_REQUEST แยกจาก PENDING_REVIEW เพื่อให้บัญชีเห็นชัดว่าใบนี้เคยเสร็จไปแล้วรอบหนึ่ง
+export async function requestAdditionalAccountingDoc(fields, existing) {
+  const complete = accountingDocInfoComplete(fields)
+  const now = new Date().toISOString()
+  const status = complete ? ACCOUNTING_DOC_STATUS.ADDITIONAL_REQUEST : ACCOUNTING_DOC_STATUS.WAITING_SALES_INFO
+  const req = await updateAccountingDocRequest(existing.id, { ...fields, document_status: status, revised_at: now })
+  await writeAuditLog({ entity_type: 'accounting_document_request', entity_id: existing.id, action: 'request_additional', actor_name: fields.sales_name, detail: `ขอเอกสารเพิ่มจากคำขอเดิม ${fields.document_type}` })
+  return req
+}
 
 // ===== Accounting actions (ฝ่ายบัญชี) =====
 export const markDocMissingInfo = (id, reason) =>

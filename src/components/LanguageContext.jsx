@@ -373,6 +373,8 @@ export const EN_DICT = {
   'บันทึก (ฉบับร่าง)': 'Save (Draft)',
   'แก้ไขคำขอ': 'Edit Request',
   'ส่งคำขอที่แก้ไข': 'Resubmit Request',
+  'ขอเอกสารเพิ่ม': 'Request Additional Documents',
+  'ส่งคำขอเอกสารเพิ่มให้บัญชีแล้ว': 'Additional document request sent to finance',
 
   // ===== Modals.jsx: Companies =====
   'แก้ไขลูกค้า': 'Edit Customer',
