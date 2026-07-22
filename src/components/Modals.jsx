@@ -6,6 +6,7 @@ import { useLanguage } from './LanguageContext'
 import { listProducts, listDealItems, listQuotationItems, computeDealTotals, getProductImageUrl } from '../lib/api'
 import DiscountField from './DiscountField'
 import { POSITION_OPTIONS, BUSINESS_TYPE_OTHER, BUSINESS_TYPE_OPTIONS, APPLIANCE_OTHER, APPLIANCE_OPTIONS, PURCHASE_REASON_OPTIONS } from '../lib/leadOptions'
+import { fmtDate, activityColor } from '../lib/format'
 
 function Field({ label, required, children }) {
   return (
@@ -358,7 +359,7 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
 // ถ้าลีดนี้แปลงเป็นลูกค้าแล้ว (มี converted_company_id) จะผูก company_id ให้ด้วยอัตโนมัติ ไปโผล่ในแท็บกิจกรรมของบริษัทนั้นด้วย
 // follow_up_date: ถ้ากรอก จะสร้างงานติดตาม (tasks) ให้อัตโนมัติตอนบันทึก (ดู saveActivity ใน App.jsx) — ไม่ต้องไปกรอกซ้ำที่หน้า "งานติดตาม"
 // lead_status: แก้สถานะของลีดได้จากที่นี่เลย (เฉพาะตอนเปิดจากหน้าผู้ติดต่อ) ไม่ต้องปิด popup แล้วไปเลือกที่ตารางแยกอีกที
-export function ActivityModal({ companies, contacts, defaultCompanyId, lead, currentUserName, isAdmin, onClose, onSave }) {
+export function ActivityModal({ companies, contacts, activities = [], defaultCompanyId, lead, currentUserName, isAdmin, onClose, onSave }) {
   const { t, lang } = useLanguage()
   const [f, setF] = useState({
     company_id: defaultCompanyId || lead?.converted_company_id || '', contact_id: '', type: '',
@@ -369,11 +370,30 @@ export function ActivityModal({ companies, contacts, defaultCompanyId, lead, cur
   const contactOptions = contacts.filter(c => c.company_id === f.company_id)
   // company_id/contact_id เป็น uuid ในฐานข้อมูล ส่ง '' ไปตรงๆ จะพัง (invalid input syntax for type uuid) ต้องแปลงเป็น null ก่อนเสมอ
   const submit = () => onSave({ ...f, company_id: f.company_id || null, contact_id: f.contact_id || null, lead_id: lead?.id || null })
+  // ประวัติการติดต่อเดิมของลีดนี้ — โชว์ให้เห็นว่าบันทึกที่ผ่านมาเข้าจริง กันดูเหมือนกดบันทึกแล้วข้อมูลหาย
+  const leadHistory = lead ? [...activities].filter(a => a.lead_id === lead.id).sort((a, b) => new Date(b.activity_date) - new Date(a.activity_date)) : []
   return (
     <ModalShell title="บันทึกการติดต่อ" onClose={onClose} onSave={submit}>
       {lead
         ? <Field label={lang === 'en' ? 'Contact' : 'ผู้ติดต่อ'}><input className="form-control" value={lead.full_name} disabled /></Field>
         : <Field label={t('บริษัท')}><CompanySelect companies={companies} value={f.company_id} onChange={v => setF(s => ({ ...s, company_id: v, contact_id: '' }))} /></Field>}
+      {lead && (
+        <div className="form-group">
+          <label className="form-label">{t('ประวัติการติดต่อที่ผ่านมา')} ({leadHistory.length})</label>
+          <div className="activity-feed" style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: leadHistory.length ? 8 : 0 }}>
+            {leadHistory.length ? leadHistory.map(a => (
+              <div className="activity-item" key={a.id}>
+                <div className="activity-icon" style={{ background: activityColor(a.type) }} />
+                <div className="activity-content">
+                  <div className="activity-title">{a.subject}</div>
+                  <div className="activity-meta"><span>{a.type}</span><span>{fmtDate(a.activity_date)}</span><span>{t('โดย')} {a.recorded_by}</span></div>
+                  {a.detail && <div className="activity-detail">{a.detail}</div>}
+                </div>
+              </div>
+            )) : <div className="empty-state" style={{ padding: 10 }}><div>{t('ยังไม่มีประวัติการติดต่อ')}</div></div>}
+          </div>
+        </div>
+      )}
       <div className="form-row">
         <Field label={t('ประเภทการติดต่อ')} required>
           <EditableSelect listKey="activity_types" value={f.type} onChange={v => setF(s => ({ ...s, type: v }))} isAdmin={isAdmin} />

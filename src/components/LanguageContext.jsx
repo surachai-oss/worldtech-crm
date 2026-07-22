@@ -118,6 +118,8 @@ export const EN_DICT = {
   'ดูทั้งหมด': 'View all',
   'กิจกรรมล่าสุด': 'Recent Activities',
   'ยังไม่มีกิจกรรม': 'No activities yet',
+  'ประวัติการติดต่อที่ผ่านมา': 'Previous Contact History',
+  'ยังไม่มีประวัติการติดต่อ': 'No contact history yet',
   'งานที่ต้องทำ (14 วัน)': 'Tasks Due (14 Days)',
   'ไม่มีงานใน 14 วัน': 'No tasks in the next 14 days',
   'ยังไม่มีดีล': 'No deals yet',
