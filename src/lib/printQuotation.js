@@ -12,8 +12,8 @@ const QUOTATION_TERMS = [
   'ผู้ซื้อต้องจัดเตรียมสถานที่ให้รถขนส่งเข้า–ออกได้สะดวก บริษัทฯ จัดส่งสินค้าและวางสินค้า ณ จุดรับสินค้าเท่านั้น',
   'เมื่อพ้นกำหนดยืนราคา บริษัทฯ ขอสงวนสิทธิ์ในการปรับราคาโดยไม่ต้องแจ้งล่วงหน้า',
   'คำสั่งซื้อสมบูรณ์เมื่อบริษัทฯ ได้รับเอกสารยืนยันการสั่งซื้อ และได้รับเงินมัดจำหรือชำระค่าสินค้าตามเงื่อนไขแล้ว',
-  'หากผู้ซื้อไม่รับสินค้าภายใน 6 เดือน บริษัทฯ ขอสงวนสิทธิ์ในการเรียกเก็บค่าสินค้าทั้งจำนวน หรือริบเงินมัดจำเป็นค่าเสียหาย',
-  'คำสั่งซื้อที่ไม่รับสินค้าเกิน 6 เดือน ถือว่ายกเลิกโดยอัตโนมัติ เว้นแต่มีข้อตกลงเป็นลายลักษณ์อักษรเป็นอย่างอื่น',
+  'หากผู้ซื้อไม่รับสินค้าภายใน 30 วัน บริษัทฯ ขอสงวนสิทธิ์ในการเรียกเก็บค่าสินค้าทั้งจำนวน หรือริบเงินมัดจำเป็นค่าเสียหาย',
+  'คำสั่งซื้อที่ไม่รับสินค้าเกิน 45 วัน ถือว่ายกเลิกโดยอัตโนมัติ เว้นแต่มีข้อตกลงเป็นลายลักษณ์อักษรเป็นอย่างอื่น',
 ]
 
 function escapeHtml(s) {
@@ -69,7 +69,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
         <td>${qty}</td>
         <td>
           ${escapeHtml(it.description) || '-'}
-          ${it.imageUrl ? `<br/><img src="${it.imageUrl}" style="max-width:220px;max-height:160px;margin-top:6px;border-radius:4px" onerror="this.style.display='none'" />` : ''}
+          ${it.imageUrl ? `<br/><img src="${it.imageUrl}" style="max-width:55px;max-height:42px;margin-top:3px;border-radius:4px" onerror="this.style.display='none'" />` : ''}
         </td>
         <td class="num">${fmtCurrency(unitPrice)}</td>
         <td class="num">-</td>
@@ -84,36 +84,36 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
       <meta charset="UTF-8">
       <title>${escapeHtml(quot.quot_no)}</title>
       <style>
-        @page { size: A4; margin: 14mm; }
-        body { font-family: 'Sarabun', 'Tahoma', sans-serif; color:#2d3748; font-size: 13px; margin:0; }
-        .banner { background:#1b315e; color:#fff; text-align:center; padding:10px; border-radius:4px; margin-bottom:18px; }
-        .banner .th { font-weight:700; font-size:16px; }
-        .banner .en { font-size:11px; letter-spacing:1px; opacity:.85; }
-        .topinfo { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:18px; }
-        .company-block { display:flex; gap:10px; align-items:center; flex:1; min-width:0; }
+        @page { size: A4; margin: 8mm; }
+        body { font-family: 'Sarabun', 'Tahoma', sans-serif; color:#2d3748; font-size: 11.5px; margin:0; }
+        .banner { background:#1b315e; color:#fff; text-align:center; padding:4px 6px; border-radius:4px; margin-bottom:6px; }
+        .banner .th { font-weight:700; font-size:14px; }
+        .banner .en { font-size:10px; letter-spacing:1px; opacity:.85; }
+        .topinfo { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:6px; }
+        .company-block { display:flex; gap:8px; align-items:center; flex:1; min-width:0; }
         .company-block > div { min-width:0; }
-        .logo { height:44px; flex-shrink:0; }
-        .company-name { font-weight:700; font-size:14px; }
-        .meta { font-size:11.5px; color:#4a5568; margin-top:2px; line-height:1.5; }
-        .doc-meta { text-align:right; font-size:12px; flex-shrink:0; white-space:nowrap; }
-        .doc-meta .label { font-weight:700; margin-top:10px; }
+        .logo { height:28px; flex-shrink:0; }
+        .company-name { font-weight:700; font-size:12.5px; }
+        .meta { font-size:10.5px; color:#4a5568; margin-top:1px; line-height:1.2; }
+        .doc-meta { text-align:right; font-size:11px; flex-shrink:0; white-space:nowrap; }
+        .doc-meta .label { font-weight:700; margin-top:4px; }
         .doc-meta .label:first-child { margin-top:0; }
-        .section-label { font-weight:700; margin-bottom:6px; }
-        .customer-block { margin-bottom:16px; }
-        .customer-info { padding-left:16px; font-size:12.5px; line-height:1.6; }
-        table { width:100%; border-collapse:collapse; margin-bottom:12px; }
-        th { background:#1b315e; color:#fff; text-align:left; padding:8px 10px; font-size:12px; }
+        .section-label { font-weight:700; margin-bottom:3px; }
+        .customer-block { margin-bottom:5px; }
+        .customer-info { padding-left:16px; font-size:11.5px; line-height:1.3; }
+        table { width:100%; border-collapse:collapse; margin-bottom:6px; }
+        th { background:#1b315e; color:#fff; text-align:left; padding:5px 8px; font-size:11px; }
         th.num, td.num { text-align:right; }
-        td { padding:8px 10px; border-bottom:1px solid #e0e4ea; font-size:13px; vertical-align:top; }
-        .below-table { display:flex; justify-content:space-between; gap:16px; margin-bottom:16px; }
+        td { padding:4px 8px; border-bottom:1px solid #e0e4ea; font-size:11.5px; vertical-align:top; }
+        .below-table { display:flex; justify-content:space-between; gap:16px; margin-bottom:8px; }
         .notes-left { color:#e53e3e; font-style:italic; font-size:12px; flex:1; }
-        .totals-box { min-width:280px; font-size:12.5px; }
-        .totals-box .row { display:flex; justify-content:space-between; padding:4px 10px; }
+        .totals-box { min-width:280px; font-size:12px; }
+        .totals-box .row { display:flex; justify-content:space-between; padding:3px 10px; }
         .totals-box .grand { background:#1b315e; color:#fff; font-weight:700; border-radius:2px; }
-        .remark-label { display:inline-block; background:#1b315e; color:#fff; font-size:11.5px; font-weight:700; padding:2px 10px; border-radius:2px; margin-bottom:6px; }
-        .remark-body { font-size:12px; color:#4a5568; line-height:1.6; margin-bottom:16px; }
-        .contact-box { background:#f4f6f9; padding:10px 14px; border-radius:4px; font-size:12px; line-height:1.6; }
-        .sign { display:flex; justify-content:space-between; margin-top:50px; font-size:12px; }
+        .remark-label { display:inline-block; background:#1b315e; color:#fff; font-size:11px; font-weight:700; padding:2px 10px; border-radius:2px; margin-bottom:4px; }
+        .remark-body { font-size:11.5px; color:#4a5568; line-height:1.4; margin-bottom:8px; }
+        .contact-box { background:#f4f6f9; padding:6px 12px; border-radius:4px; font-size:11.5px; line-height:1.4; }
+        .sign { display:flex; justify-content:space-between; margin-top:24px; font-size:12px; }
         .sign-col { width:45%; text-align:center; }
         .sign-name { min-height:16px; font-weight:600; margin-bottom:4px; }
         .sign-label { border-top:1px solid #999; padding-top:6px; }
