@@ -20,6 +20,7 @@ const SALES_MODES = [
   { key: 'day', label: 'รายวัน' },
   { key: 'week', label: 'รายสัปดาห์' },
   { key: 'month', label: 'รายเดือน' },
+  { key: 'year', label: 'รายปี' },
 ]
 
 // จัดกลุ่มดีลตามวันในฟิลด์ที่เลือก (close_date / follow_up_date) แบบราย วัน/สัปดาห์/เดือน
@@ -32,7 +33,10 @@ function groupDealsByPeriod(items, mode, dateField, ascending = false) {
     if (!raw) { key = 'zzz-ไม่ระบุ'; label = 'ไม่ระบุวันที่' }
     else {
       const [y, m, dd] = raw.split('-').map(Number)
-      if (mode === 'month') {
+      if (mode === 'year') {
+        key = `${y}`
+        label = new Date(y, 0, 1).toLocaleDateString('th-TH', { year: 'numeric' })
+      } else if (mode === 'month') {
         key = `${y}-${String(m).padStart(2, '0')}`
         label = new Date(y, m - 1, 1).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
       } else if (mode === 'week') {
@@ -152,7 +156,8 @@ export default function Deals({ perm, deals, companies, quotations = [], onAdd, 
     return true
   })
   const won = deals.filter(d => d.stage === 'Closed Won')
-  const wonTotal = won.reduce((s, d) => s + (Number(d.value) || 0), 0)
+  // ยอดหัวกล่อง "ยอดขายที่ปิดดีลสำเร็จ" อิงตามตัวกรองวันที่ปิด (default เดือนปัจจุบัน) ให้เห็นว่าเดือนนั้นๆปิดได้เท่าไหร่ — ส่วนป็อปอัปราย วัน/สัปดาห์/เดือน/ปี ยังคงดึงจาก won ทั้งหมด (ไม่กรองตามวันที่) ไว้เทียบย้อนหลังได้ทุกช่วง
+  const wonFilteredTotal = closedFiltered.filter(d => d.stage === 'Closed Won').reduce((s, d) => s + (Number(d.value) || 0), 0)
   // ดีลที่ยังไม่ปิดและมีวันที่ต้องติดตาม (follow_up_date) — ยอดรวมที่ต้องตามต่อ
   const followUp = deals.filter(d => !OPEN_STAGES_EXCLUDED.includes(d.stage) && d.follow_up_date)
   const followTotal = followUp.reduce((s, d) => s + (Number(d.value) || 0), 0)
@@ -177,7 +182,8 @@ export default function Deals({ perm, deals, companies, quotations = [], onAdd, 
                 ))}
               </div>
             </div>
-            <div className="kpi-value">{fmtCurrency(wonTotal)}</div>
+            <div className="kpi-value">{fmtCurrency(wonFilteredTotal)}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 2 }}>{fromDate ? fmtDate(fromDate) : t('ทั้งหมด')} – {toDate ? fmtDate(toDate) : t('ทั้งหมด')}</div>
           </div>
           <div className="kpi-card navy" style={{ flex: '1 1 380px', padding: '16px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
