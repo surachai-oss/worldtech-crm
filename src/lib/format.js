@@ -29,6 +29,16 @@ export function toLocalDateStr(ts) {
   return `${y}-${m}-${day}`
 }
 
+// ช่วงวันที่ของเดือนปัจจุบัน ('YYYY-MM-DD') — ใช้เป็นค่าเริ่มต้นของตัวกรองวันที่ในหน้ารายการต่างๆ กันต้องเลื่อนดูของเก่าสะสมทั้งหมดทุกครั้งที่เปิดหน้า
+export function currentMonthRange() {
+  const now = new Date()
+  const y = now.getFullYear(), m = now.getMonth()
+  const pad = (n) => String(n).padStart(2, '0')
+  const first = `${y}-${pad(m + 1)}-01`
+  const last = `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`
+  return { first, last }
+}
+
 export function stageBadgeClass(s) {
   const m = { 'Lead': 'badge-gray', 'Qualified': 'badge-blue', 'Proposal': 'badge-yellow', 'Negotiation': 'badge-orange', 'Closed Won': 'badge-green', 'Closed Lost': 'badge-red' }
   return m[s] || 'badge-gray'

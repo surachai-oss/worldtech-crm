@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { PAGE_SIZE, fetchLeadsPage, fetchAllLeads, fetchLeadsSourceSummary, fetchLeadsStatusSummary } from '../lib/api'
 import { exportLeadsToExcel } from '../lib/importExport'
-import { fmtDate } from '../lib/format'
+import { fmtDate, currentMonthRange } from '../lib/format'
 import { useUi } from './UiContext'
 import { usePicklists } from './PicklistsContext'
 import { useLanguage } from './LanguageContext'
@@ -15,8 +15,9 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
   const { list } = usePicklists()
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
+  // ค่าเริ่มต้นเป็นเดือนปัจจุบัน กันต้องเลื่อนดูของเก่าสะสมทั้งหมดทุกครั้งที่เปิดหน้า (ล้างตัวกรองเพื่อดูทั้งหมดได้ตามปกติ)
+  const [fromDate, setFromDate] = useState(() => currentMonthRange().first)
+  const [toDate, setToDate] = useState(() => currentMonthRange().last)
   const [page, setPage] = useState(0)
   const [rows, setRows] = useState([])
   const [count, setCount] = useState(0)

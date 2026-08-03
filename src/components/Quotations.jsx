@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PAGE_SIZE, fetchQuotationsPage, fetchQuotationsTotal, fetchQuotationsSummary } from '../lib/api'
-import { fmtCurrency, fmtDate, quotBadgeClass } from '../lib/format'
+import { fmtCurrency, fmtDate, quotBadgeClass, currentMonthRange } from '../lib/format'
 import { printQuotation } from '../lib/printQuotation'
 import { canManageChild, adminOnlyDelete } from '../lib/permissions'
 import { useUi } from './UiContext'
@@ -17,8 +17,9 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
   const [status, setStatus] = useState('')
   const [creditType, setCreditType] = useState('') // '' ทั้งหมด | 'normal' ธรรมดา | 'credit' เครดิต
   const [q, setQ] = useState('')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
+  // ค่าเริ่มต้นเป็นเดือนปัจจุบัน กันต้องเลื่อนดูของเก่าสะสมทั้งหมดทุกครั้งที่เปิดหน้า (ล้างตัวกรองเพื่อดูทั้งหมดได้ตามปกติ)
+  const [fromDate, setFromDate] = useState(() => currentMonthRange().first)
+  const [toDate, setToDate] = useState(() => currentMonthRange().last)
   const [page, setPage] = useState(0)
   const [rows, setRows] = useState([])
   const [count, setCount] = useState(0)

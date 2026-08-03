@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchOrders, listOrderItems, ORDER_STATUS, PAYMENT_STATUS, ACCOUNTING_DOC_STATUS } from '../lib/api'
-import { fmtCurrency, fmtDate, paymentStatusLabel, paymentBadgeClass, docStatusBadgeClass } from '../lib/format'
+import { fmtCurrency, fmtDate, paymentStatusLabel, paymentBadgeClass, docStatusBadgeClass, currentMonthRange } from '../lib/format'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import { OrderDetailModal } from './OrderModal'
@@ -53,8 +53,9 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
   const { t, lang } = useLanguage()
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
+  // ค่าเริ่มต้นเป็นเดือนปัจจุบัน กันต้องเลื่อนดูของเก่าสะสมทั้งหมดทุกครั้งที่เปิดหน้า (ล้างตัวกรองเพื่อดูทั้งหมดได้ตามปกติ)
+  const [fromDate, setFromDate] = useState(() => currentMonthRange().first)
+  const [toDate, setToDate] = useState(() => currentMonthRange().last)
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [detail, setDetail] = useState(null) // { order, items }

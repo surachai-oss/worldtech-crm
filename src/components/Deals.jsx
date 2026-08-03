@@ -1,20 +1,10 @@
 import { useState } from 'react'
-import { fmtCurrency, fmtDate, stageColor, toLocalDateStr } from '../lib/format'
+import { fmtCurrency, fmtDate, stageColor, toLocalDateStr, currentMonthRange } from '../lib/format'
 import { canEdit, adminOnlyDelete } from '../lib/permissions'
 import { usePicklists } from './PicklistsContext'
 import { useLanguage } from './LanguageContext'
 
 const OPEN_STAGES_EXCLUDED = ['Closed Won', 'Closed Lost']
-
-// ช่วงวันที่ของเดือนปัจจุบัน (ค่าเริ่มต้นของตัวกรองวันที่ปิดดีล) — ให้คอลัมน์ Closed Won/Lost เริ่มต้นโชว์แค่เดือนนี้ ไม่ต้องเลื่อนดูของเก่าสะสมทั้งหมด
-function currentMonthRange() {
-  const now = new Date()
-  const y = now.getFullYear(), m = now.getMonth()
-  const pad = (n) => String(n).padStart(2, '0')
-  const first = `${y}-${pad(m + 1)}-01`
-  const last = `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`
-  return { first, last }
-}
 
 const SALES_MODES = [
   { key: 'day', label: 'รายวัน' },
