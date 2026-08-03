@@ -6,6 +6,16 @@ import { listQuotationItems, getProductImageUrl } from './api'
 const VAT_RATE = 0.07
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
+// เงื่อนไขการเสนอราคาและการสั่งซื้อ — ข้อความคงที่ พิมพ์ทุกใบเสนอราคาเหมือนกัน ไม่ใช่ค่าที่แก้ไขได้ต่อใบแบบหมายเหตุ
+const QUOTATION_TERMS = [
+  'สินค้าพร้อมส่งขึ้นอยู่กับสต็อก ณ วันที่ยืนยันคำสั่งซื้อ และอาจเปลี่ยนแปลงได้โดยไม่ต้องแจ้งล่วงหน้า',
+  'ผู้ซื้อต้องจัดเตรียมสถานที่ให้รถขนส่งเข้า–ออกได้สะดวก บริษัทฯ จัดส่งสินค้าและวางสินค้า ณ จุดรับสินค้าเท่านั้น',
+  'เมื่อพ้นกำหนดยืนราคา บริษัทฯ ขอสงวนสิทธิ์ในการปรับราคาโดยไม่ต้องแจ้งล่วงหน้า',
+  'คำสั่งซื้อสมบูรณ์เมื่อบริษัทฯ ได้รับเอกสารยืนยันการสั่งซื้อ และได้รับเงินมัดจำหรือชำระค่าสินค้าตามเงื่อนไขแล้ว',
+  'หากผู้ซื้อไม่รับสินค้าภายใน 6 เดือน บริษัทฯ ขอสงวนสิทธิ์ในการเรียกเก็บค่าสินค้าทั้งจำนวน หรือริบเงินมัดจำเป็นค่าเสียหาย',
+  'คำสั่งซื้อที่ไม่รับสินค้าเกิน 6 เดือน ถือว่ายกเลิกโดยอัตโนมัติ เว้นแต่มีข้อตกลงเป็นลายลักษณ์อักษรเป็นอย่างอื่น',
+]
+
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 }
@@ -38,6 +48,8 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
     company?.tax_id ? `เลขประจำตัวผู้เสียภาษี : ${company.tax_id}` : '',
     company?.phone ? `โทร ${company.phone}` : '',
   ].filter(Boolean).map(escapeHtml).join('<br/>')
+
+  const termsHtml = `<div class="remark-label">เงื่อนไขการเสนอราคาและการสั่งซื้อ</div><div class="remark-body">${QUOTATION_TERMS.map(line => `*${escapeHtml(line)}`).join('<br/>')}</div>`
 
   const noteHtml = quot.note
     ? `<div class="remark-label">หมายเหตุ</div><div class="remark-body">${escapeHtml(quot.note).replace(/\n/g, '<br/>')}</div>`
@@ -166,6 +178,8 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
           <div class="row grand"><span>จำนวนเงินที่ต้องชำระ</span><span>${fmtCurrency(value)}</span></div>
         </div>
       </div>
+
+      ${termsHtml}
 
       ${noteHtml}
 
