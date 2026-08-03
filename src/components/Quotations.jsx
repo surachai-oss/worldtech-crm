@@ -78,7 +78,7 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
           <option value="normal">{t('ลูกค้าธรรมดา')}</option>
           <option value="credit">{t('ลูกค้าเครดิต')}</option>
         </select>
-        <input className="filter-input" placeholder={t('ค้นหา...')} value={q} onChange={e => setQ(e.target.value)} />
+        <input className="filter-input" placeholder={lang === 'en' ? 'Search subject / no. / company...' : 'ค้นหา หัวข้อ/เลขที่/บริษัท...'} value={q} onChange={e => setQ(e.target.value)} />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
           <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title={lang === 'en' ? 'Quotation date from' : 'วันที่ใบเสนอราคา ตั้งแต่'} />
           <span style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ถึง')}</span>

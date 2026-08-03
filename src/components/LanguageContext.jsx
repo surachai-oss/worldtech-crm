@@ -77,7 +77,7 @@ export const EN_DICT = {
   '+ เพิ่ม': '+ Add',
   'ยอดขายที่ปิดดีลสำเร็จ': 'Closed-Won Sales',
   'ยอดที่ต้องติดตาม': 'Amount to Follow Up',
-  'มีผลกับคอลัมน์ Closed Won/Lost เท่านั้น': 'Only affects the Closed Won/Lost columns',
+  'ตัวกรองวันที่มีผลกับคอลัมน์ Closed Won/Lost เท่านั้น': 'The date filter only affects the Closed Won/Lost columns',
   'รายวัน': 'Daily',
   'รายสัปดาห์': 'Weekly',
   'รายเดือน': 'Monthly',

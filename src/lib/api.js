@@ -67,6 +67,14 @@ function safeLike(q) {
   return (q || '').replace(/[%,()]/g, '').trim()
 }
 
+// หา id บริษัทที่ชื่อตรงกับคำค้น — ใช้ประกอบเงื่อนไข OR ตอนค้นหาในตารางที่ไม่มีชื่อบริษัทเป็นคอลัมน์ตรงๆ (เช่น ใบเสนอราคา) เพื่อให้ค้นหาจากชื่อบริษัทได้ด้วย
+async function companyIdsMatching(sq) {
+  if (!sq) return []
+  const { data, error } = await supabase.from('companies').select('id').ilike('name', `%${sq}%`)
+  if (error) throw error
+  return data.map(c => c.id)
+}
+
 // แปลงวันที่จาก <input type="date"> (สตริงตามเวลาเครื่อง) เป็นขอบเขต ISO ที่ครอบทั้งวันนั้นตามเวลาเครื่อง
 // ใช้กรองคอลัมน์ timestamptz (มีเวลาด้วย) ให้ตรงกับ "วันที่" ตามเวลาเครื่องจริงๆ ไม่ใช่ตามเที่ยงคืน UTC (ต่างจาก column แบบ date เฉยๆ ที่เทียบสตริงตรงๆได้)
 function dateRangeToIso(dateFrom, dateTo) {
@@ -151,7 +159,13 @@ export async function fetchQuotationsTotal({ status = '', q = '', dateFrom = '',
   if (creditType === 'credit') query = query.not('credit_term', 'is', null).neq('credit_term', '')
   else if (creditType === 'normal') query = query.or('credit_term.is.null,credit_term.eq.')
   const sq = safeLike(q)
-  if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
+  if (sq) {
+    // ค้นหาจากชื่อบริษัทได้ด้วย (ไม่ใช่แค่หัวข้อ/เลขที่) — หา company_id ที่ชื่อตรงกันมาประกอบ OR
+    const matchIds = await companyIdsMatching(sq)
+    const parts = [`subject.ilike.%${sq}%`, `quot_no.ilike.%${sq}%`]
+    if (matchIds.length) parts.push(`company_id.in.(${matchIds.join(',')})`)
+    query = query.or(parts.join(','))
+  }
   if (dateFrom) query = query.gte('quot_date', dateFrom)
   if (dateTo) query = query.lte('quot_date', dateTo)
   const { data, error } = await query
@@ -166,7 +180,12 @@ export async function fetchQuotationsPage({ page = 0, status = '', q = '', dateF
   if (creditType === 'credit') query = query.not('credit_term', 'is', null).neq('credit_term', '')
   else if (creditType === 'normal') query = query.or('credit_term.is.null,credit_term.eq.')
   const sq = safeLike(q)
-  if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
+  if (sq) {
+    const matchIds = await companyIdsMatching(sq)
+    const parts = [`subject.ilike.%${sq}%`, `quot_no.ilike.%${sq}%`]
+    if (matchIds.length) parts.push(`company_id.in.(${matchIds.join(',')})`)
+    query = query.or(parts.join(','))
+  }
   if (dateFrom) query = query.gte('quot_date', dateFrom)
   if (dateTo) query = query.lte('quot_date', dateTo)
   const { data, error, count } = await query.range(...range(page))
@@ -182,7 +201,12 @@ export async function fetchQuotationsSummary({ q = '', dateFrom = '', dateTo = '
   if (creditType === 'credit') query = query.not('credit_term', 'is', null).neq('credit_term', '')
   else if (creditType === 'normal') query = query.or('credit_term.is.null,credit_term.eq.')
   const sq = safeLike(q)
-  if (sq) query = query.or(`subject.ilike.%${sq}%,quot_no.ilike.%${sq}%`)
+  if (sq) {
+    const matchIds = await companyIdsMatching(sq)
+    const parts = [`subject.ilike.%${sq}%`, `quot_no.ilike.%${sq}%`]
+    if (matchIds.length) parts.push(`company_id.in.(${matchIds.join(',')})`)
+    query = query.or(parts.join(','))
+  }
   if (dateFrom) query = query.gte('quot_date', dateFrom)
   if (dateTo) query = query.lte('quot_date', dateTo)
   const { data, error } = await query

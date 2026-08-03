@@ -152,12 +152,20 @@ export default function Deals({ perm, deals, companies, quotations = [], onAdd, 
   const { list } = usePicklists()
   const [fromDate, setFromDate] = useState(() => currentMonthRange().first)
   const [toDate, setToDate] = useState(() => currentMonthRange().last)
+  const [q, setQ] = useState('')
   const [salesMode, setSalesMode] = useState(null) // null = ปิด, 'day'/'week'/'month' = เปิด popup ของช่วงนั้น
   const [followMode, setFollowMode] = useState(null)
 
+  // ค้นหาจากชื่อดีลหรือชื่อบริษัท — กรองการ์ดที่โชว์ในบอร์ด (ไม่กระทบยอดสรุป KPI ด้านบนซึ่งเป็นยอดตามช่วงวันที่)
+  const needle = q.trim().toLowerCase()
+  const searchedDeals = needle ? deals.filter(d => {
+    const co = companies.find(c => c.id === d.company_id)
+    return d.name?.toLowerCase().includes(needle) || co?.name?.toLowerCase().includes(needle)
+  }) : deals
+
   const totalVal = deals.reduce((s, d) => s + (Number(d.value) || 0), 0)
   // ดีลที่ปิดแล้ว (Closed Won/Lost) กรองตามวันที่ปิด (close_date) ตามตัวกรองด้านบน — ดีลที่ยังเปิดอยู่ (Lead ถึง Negotiation) ไม่กรองตามวันที่เลย เพราะเซลล์ต้องเห็นทุกดีลที่ต้องตามลูกค้าอยู่เสมอ
-  const closedFiltered = deals.filter(d => {
+  const closedFiltered = searchedDeals.filter(d => {
     if (!OPEN_STAGES_EXCLUDED.includes(d.stage)) return false
     const closed = d.close_date || toLocalDateStr(d.created_at)
     if (fromDate && closed < fromDate) return false
@@ -208,19 +216,20 @@ export default function Deals({ perm, deals, companies, quotations = [], onAdd, 
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
           <div className="filter-bar" style={{ margin: 0 }}>
+            <input className="filter-input" placeholder={lang === 'en' ? 'Search deal / company...' : 'ค้นหาชื่อดีล/บริษัท...'} value={q} onChange={e => setQ(e.target.value)} />
             <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title={lang === 'en' ? 'Deal closed from (Won/Lost)' : 'วันที่ปิดดีล (Won/Lost) ตั้งแต่'} />
             <span style={{ fontSize: 12, color: 'var(--text-light)', alignSelf: 'center' }}>{t('ถึง')}</span>
             <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title={lang === 'en' ? 'Deal closed to (Won/Lost)' : 'วันที่ปิดดีล (Won/Lost) ถึง'} />
             {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>{t('ล้าง')}</button>}
           </div>
-          <span style={{ fontSize: 11, color: 'var(--text-light)' }}>{t('มีผลกับคอลัมน์ Closed Won/Lost เท่านั้น')}</span>
+          <span style={{ fontSize: 11, color: 'var(--text-light)' }}>{t('ตัวกรองวันที่มีผลกับคอลัมน์ Closed Won/Lost เท่านั้น')}</span>
         </div>
       </div>
       {salesMode && <DealPeriodModal title="ยอดขายที่ปิดดีลสำเร็จ" deals={won} companies={companies} mode={salesMode} dateField="close_date" onEdit={onEdit} onClose={() => setSalesMode(null)} />}
       {followMode && <DealPeriodModal title="ยอดที่ต้องติดตาม" deals={followUp} companies={companies} mode={followMode} dateField="follow_up_date" ascending highlightOverdue onEdit={onEdit} onClose={() => setFollowMode(null)} />}
       <div className="kanban-board">
         {list('deal_stages').map(stage => {
-          const sd = (OPEN_STAGES_EXCLUDED.includes(stage) ? closedFiltered : deals).filter(d => d.stage === stage)
+          const sd = (OPEN_STAGES_EXCLUDED.includes(stage) ? closedFiltered : searchedDeals).filter(d => d.stage === stage)
           const sv = sd.reduce((s, d) => s + (Number(d.value) || 0), 0)
           const color = stageColor(stage)
           return (
