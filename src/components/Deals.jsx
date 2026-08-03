@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { fmtCurrency, fmtDate, stageColor, toLocalDateStr, currentMonthRange } from '../lib/format'
 import { canEdit, adminOnlyDelete } from '../lib/permissions'
+import { exportDealsToExcel } from '../lib/importExport'
 import { usePicklists } from './PicklistsContext'
 import { useLanguage } from './LanguageContext'
+import { useUi } from './UiContext'
 
 const OPEN_STAGES_EXCLUDED = ['Closed Won', 'Closed Lost']
 
@@ -59,6 +61,7 @@ const PERIOD_ROW_GRID = 'minmax(200px, 2fr) minmax(160px, 1.3fr) 100px 130px 96p
 // ป็อปอัปแสดงรายละเอียดดีลตามช่วง (วัน/สัปดาห์/เดือน) ของฟิลด์วันที่ที่เลือก — แต่ละกลุ่มลิสต์ดีลที่อยู่ในนั้น
 // highlightOverdue = ไฮไลต์วันที่เป็นสีแดงถ้าเลยกำหนดแล้ว (ใช้กับยอดที่ต้องติดตาม)
 function DealPeriodModal({ title, deals, companies, mode, dateField, ascending = false, highlightOverdue = false, onEdit, onClose }) {
+  const { toast } = useUi()
   const { t, lang } = useLanguage()
   const groups = groupDealsByPeriod(deals, mode, dateField, ascending)
   const grandTotal = deals.reduce((s, d) => s + (Number(d.value) || 0), 0)
@@ -66,12 +69,28 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
   const today = todayStr()
   // กดดู/แก้ไขดีล → ปิด popup ก่อนแล้วเปิดหน้าแก้ไขดีล กันไม่ให้ modal ซ้อนกัน
   const openDeal = (d) => { onClose(); onEdit(d) }
+  // ส่งออกข้อมูลที่โชว์อยู่ในป็อปอัปนี้ (ตามช่วง วัน/สัปดาห์/เดือน/ปี ที่เลือก) เป็น Excel ไปวิเคราะห์ต่อ
+  const doExport = () => {
+    const rows = groups.flatMap(g => g.rows.map(d => ({
+      period: g.label,
+      name: d.name,
+      company: companies.find(c => c.id === d.company_id)?.name || '-',
+      stage: d.stage,
+      date: fmtDate(d[dateField]),
+      value: Number(d.value) || 0,
+      owner: d.owner || '-',
+    })))
+    exportDealsToExcel(rows, `${title}_${modeLabel}.xlsx`).catch(e => toast('ส่งออกไม่สำเร็จ: ' + e.message, 'error'))
+  }
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={{ maxWidth: 1080 }}>
         <div className="modal-header">
           <div className="modal-title">{t(title)} · {t(modeLabel)} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({deals.length} {t('ดีล')} · {fmtCurrency(grandTotal)})</span></div>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {groups.length > 0 && <button className="btn btn-outline btn-sm" onClick={doExport}>{t('ส่งออกเป็น Excel')}</button>}
+            <button className="modal-close" onClick={onClose}>×</button>
+          </div>
         </div>
         <div className="modal-body" style={{ padding: '0 20px 20px' }}>
           {groups.length ? (

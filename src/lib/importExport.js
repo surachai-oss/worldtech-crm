@@ -273,6 +273,20 @@ const PAYMENT_EXPORT_COLUMNS = [
   { key: 'created_at', label: 'สร้างเมื่อ' },
 ]
 
+// ===== ส่งออกดีลจากป็อปอัปสรุปราย วัน/สัปดาห์/เดือน/ปี ในหน้าดีลการขาย เป็นไฟล์ Excel (เอาไปวิเคราะห์ต่อ) =====
+const DEAL_EXPORT_COLUMNS = [
+  { key: 'period', label: 'ช่วงเวลา' },
+  { key: 'name', label: 'ดีล' },
+  { key: 'company', label: 'บริษัท' },
+  { key: 'stage', label: 'Stage' },
+  { key: 'date', label: 'วันที่' },
+  { key: 'value', label: 'มูลค่า' },
+  { key: 'owner', label: 'ผู้รับผิดชอบ' },
+]
+
+export const exportDealsToExcel = (rows, filename = 'ดีล.xlsx') =>
+  exportRowsToExcel(DEAL_EXPORT_COLUMNS, rows, filename)
+
 export const exportPaymentRequestsToExcel = (rows, filename = 'คำขอตรวจยอด.xlsx') =>
   exportRowsToExcel(PAYMENT_EXPORT_COLUMNS, rows.map(r => ({
     ...r,
