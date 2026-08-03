@@ -69,7 +69,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
         <td>${qty}</td>
         <td>
           ${escapeHtml(it.description) || '-'}
-          ${it.imageUrl ? `<br/><img src="${it.imageUrl}" style="max-width:55px;max-height:42px;margin-top:3px;border-radius:4px" onerror="this.style.display='none'" />` : ''}
+          ${it.imageUrl ? `<br/><img src="${it.imageUrl}" style="max-width:130px;max-height:100px;margin-top:4px;border-radius:4px" onerror="this.style.display='none'" />` : ''}
         </td>
         <td class="num">${fmtCurrency(unitPrice)}</td>
         <td class="num">-</td>
@@ -85,22 +85,22 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
       <title>${escapeHtml(quot.quot_no)}</title>
       <style>
         @page { size: A4; margin: 8mm; }
-        body { font-family: 'Sarabun', 'Tahoma', sans-serif; color:#2d3748; font-size: 11.5px; margin:0; }
-        .banner { background:#1b315e; color:#fff; text-align:center; padding:4px 6px; border-radius:4px; margin-bottom:6px; }
-        .banner .th { font-weight:700; font-size:14px; }
-        .banner .en { font-size:10px; letter-spacing:1px; opacity:.85; }
-        .topinfo { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:6px; }
+        body { font-family: 'Sarabun', 'Tahoma', sans-serif; color:#2d3748; font-size: 12px; margin:0; }
+        .banner { background:#1b315e; color:#fff; text-align:center; padding:5px 6px; border-radius:4px; margin-bottom:8px; }
+        .banner .th { font-weight:700; font-size:16px; }
+        .banner .en { font-size:11px; letter-spacing:1px; opacity:.85; }
+        .topinfo { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:8px; }
         .company-block { display:flex; gap:8px; align-items:center; flex:1; min-width:0; }
         .company-block > div { min-width:0; }
-        .logo { height:28px; flex-shrink:0; }
-        .company-name { font-weight:700; font-size:12.5px; }
-        .meta { font-size:10.5px; color:#4a5568; margin-top:1px; line-height:1.2; }
-        .doc-meta { text-align:right; font-size:11px; flex-shrink:0; white-space:nowrap; }
-        .doc-meta .label { font-weight:700; margin-top:4px; }
+        .logo { height:40px; flex-shrink:0; }
+        .company-name { font-weight:700; font-size:15px; }
+        .meta { font-size:12px; color:#4a5568; margin-top:2px; line-height:1.35; }
+        .doc-meta { text-align:right; font-size:13px; flex-shrink:0; white-space:nowrap; }
+        .doc-meta .label { font-weight:700; margin-top:6px; }
         .doc-meta .label:first-child { margin-top:0; }
-        .section-label { font-weight:700; margin-bottom:3px; }
-        .customer-block { margin-bottom:5px; }
-        .customer-info { padding-left:16px; font-size:11.5px; line-height:1.3; }
+        .section-label { font-weight:700; margin-bottom:3px; font-size:13px; }
+        .customer-block { margin-bottom:6px; }
+        .customer-info { padding-left:16px; font-size:13.5px; line-height:1.45; }
         table { width:100%; border-collapse:collapse; margin-bottom:6px; }
         th { background:#1b315e; color:#fff; text-align:left; padding:5px 8px; font-size:11px; }
         th.num, td.num { text-align:right; }
