@@ -6,6 +6,16 @@ import { useLanguage } from './LanguageContext'
 
 const OPEN_STAGES_EXCLUDED = ['Closed Won', 'Closed Lost']
 
+// ช่วงวันที่ของเดือนปัจจุบัน (ค่าเริ่มต้นของตัวกรองวันที่ปิดดีล) — ให้คอลัมน์ Closed Won/Lost เริ่มต้นโชว์แค่เดือนนี้ ไม่ต้องเลื่อนดูของเก่าสะสมทั้งหมด
+function currentMonthRange() {
+  const now = new Date()
+  const y = now.getFullYear(), m = now.getMonth()
+  const pad = (n) => String(n).padStart(2, '0')
+  const first = `${y}-${pad(m + 1)}-01`
+  const last = `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`
+  return { first, last }
+}
+
 const SALES_MODES = [
   { key: 'day', label: 'รายวัน' },
   { key: 'week', label: 'รายสัปดาห์' },
@@ -127,19 +137,20 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
 export default function Deals({ perm, deals, companies, quotations = [], onAdd, onAddStage, onEdit, onDelete, onCreateQuotation }) {
   const { t, lang } = useLanguage()
   const { list } = usePicklists()
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
+  const [fromDate, setFromDate] = useState(() => currentMonthRange().first)
+  const [toDate, setToDate] = useState(() => currentMonthRange().last)
   const [salesMode, setSalesMode] = useState(null) // null = ปิด, 'day'/'week'/'month' = เปิด popup ของช่วงนั้น
   const [followMode, setFollowMode] = useState(null)
 
-  // กรองตามวันที่สร้างดีล (created_at) — เทียบเป็นวันที่ตามเวลาเครื่อง ไม่ใช่ UTC เพราะ created_at เก็บเป็น timestamptz
-  const filtered = deals.filter(d => {
-    const created = toLocalDateStr(d.created_at)
-    if (fromDate && created < fromDate) return false
-    if (toDate && created > toDate) return false
+  const totalVal = deals.reduce((s, d) => s + (Number(d.value) || 0), 0)
+  // ดีลที่ปิดแล้ว (Closed Won/Lost) กรองตามวันที่ปิด (close_date) ตามตัวกรองด้านบน — ดีลที่ยังเปิดอยู่ (Lead ถึง Negotiation) ไม่กรองตามวันที่เลย เพราะเซลล์ต้องเห็นทุกดีลที่ต้องตามลูกค้าอยู่เสมอ
+  const closedFiltered = deals.filter(d => {
+    if (!OPEN_STAGES_EXCLUDED.includes(d.stage)) return false
+    const closed = d.close_date || toLocalDateStr(d.created_at)
+    if (fromDate && closed < fromDate) return false
+    if (toDate && closed > toDate) return false
     return true
   })
-  const totalVal = filtered.reduce((s, d) => s + (Number(d.value) || 0), 0)
   const won = deals.filter(d => d.stage === 'Closed Won')
   const wonTotal = won.reduce((s, d) => s + (Number(d.value) || 0), 0)
   // ดีลที่ยังไม่ปิดและมีวันที่ต้องติดตาม (follow_up_date) — ยอดรวมที่ต้องตามต่อ
@@ -151,7 +162,7 @@ export default function Deals({ perm, deals, companies, quotations = [], onAdd, 
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">{t('ดีลการขาย')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({filtered.length} {t('ดีล')} · {fmtCurrency(totalVal)})</span></div>
+        <div className="section-title">{t('ดีลการขาย')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({deals.length} {t('ดีล')} · {fmtCurrency(totalVal)})</span></div>
         <button className="btn btn-primary" onClick={onAdd}>{t('+ เพิ่มดีล')}</button>
       </div>
       {/* กล่องสรุป 2 ใบ (ยอดขายปิดสำเร็จ + ยอดที่ต้องติดตาม) ชิดซ้าย + ตัวกรองวันที่ชิดขวา — กดปุ่มช่วงเวลาเพื่อเปิด popup รายละเอียด */}
@@ -180,18 +191,21 @@ export default function Deals({ perm, deals, companies, quotations = [], onAdd, 
             <div className="kpi-value">{fmtCurrency(followTotal)}</div>
           </div>
         </div>
-        <div className="filter-bar" style={{ margin: 0, flexShrink: 0 }}>
-          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title={lang === 'en' ? 'Deal created from' : 'วันที่สร้างดีล ตั้งแต่'} />
-          <span style={{ fontSize: 12, color: 'var(--text-light)', alignSelf: 'center' }}>{t('ถึง')}</span>
-          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title={lang === 'en' ? 'Deal created to' : 'วันที่สร้างดีล ถึง'} />
-          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>{t('ล้าง')}</button>}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+          <div className="filter-bar" style={{ margin: 0 }}>
+            <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title={lang === 'en' ? 'Deal closed from (Won/Lost)' : 'วันที่ปิดดีล (Won/Lost) ตั้งแต่'} />
+            <span style={{ fontSize: 12, color: 'var(--text-light)', alignSelf: 'center' }}>{t('ถึง')}</span>
+            <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title={lang === 'en' ? 'Deal closed to (Won/Lost)' : 'วันที่ปิดดีล (Won/Lost) ถึง'} />
+            {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>{t('ล้าง')}</button>}
+          </div>
+          <span style={{ fontSize: 11, color: 'var(--text-light)' }}>{t('มีผลกับคอลัมน์ Closed Won/Lost เท่านั้น')}</span>
         </div>
       </div>
       {salesMode && <DealPeriodModal title="ยอดขายที่ปิดดีลสำเร็จ" deals={won} companies={companies} mode={salesMode} dateField="close_date" onEdit={onEdit} onClose={() => setSalesMode(null)} />}
       {followMode && <DealPeriodModal title="ยอดที่ต้องติดตาม" deals={followUp} companies={companies} mode={followMode} dateField="follow_up_date" ascending highlightOverdue onEdit={onEdit} onClose={() => setFollowMode(null)} />}
       <div className="kanban-board">
         {list('deal_stages').map(stage => {
-          const sd = filtered.filter(d => d.stage === stage)
+          const sd = (OPEN_STAGES_EXCLUDED.includes(stage) ? closedFiltered : deals).filter(d => d.stage === stage)
           const sv = sd.reduce((s, d) => s + (Number(d.value) || 0), 0)
           const color = stageColor(stage)
           return (
