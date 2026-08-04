@@ -297,6 +297,25 @@ export async function exportLeadsToExcel(rows, history = []) {
   URL.revokeObjectURL(url)
 }
 
+// ===== ส่งออกออเดอร์เป็นไฟล์ Excel =====
+const ORDER_EXPORT_COLUMNS = [
+  { key: 'order_no', label: 'เลขออเดอร์' },
+  { key: 'quot_no', label: 'เลขใบเสนอราคา' },
+  { key: 'customer_name', label: 'บริษัท' },
+  { key: 'value', label: 'ยอดรวม' },
+  { key: 'sales_name', label: 'เซลล์' },
+  { key: 'created_at', label: 'วันที่สร้าง' },
+  { key: 'status', label: 'สถานะ' },
+]
+
+export const exportOrdersToExcel = (rows) =>
+  exportRowsToExcel(ORDER_EXPORT_COLUMNS, rows.map(r => ({
+    ...r,
+    customer_name: r.customer_name || r.company?.name || '',
+    created_at: (r.created_at || '').slice(0, 10),
+    status: r.status === 'Active' ? 'ใช้งานอยู่' : (r.status === 'Cancelled' ? 'ยกเลิกแล้ว' : (r.status || '')),
+  })), 'ออเดอร์.xlsx')
+
 // ===== ส่งออกคำขอตรวจยอดเป็นไฟล์ Excel (ใช้ทั้งหน้าคำขอตรวจยอดของเซลล์ และหน้าตรวจสอบยอดโอนของบัญชี) =====
 // บัญชีเอาไฟล์นี้ไปแมทช์กับระบบบัญชีภายหลังได้ — มีทั้งเลขคำขอ/เลขอนุมัติ/เลขอ้างอิงบัญชี/เลขออเดอร์
 const PAYMENT_EXPORT_COLUMNS = [
