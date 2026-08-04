@@ -653,6 +653,12 @@ export async function fetchAllLeads({ status = '', q = '', dateFrom = '', dateTo
   return query.then(handle)
 }
 
+// ดึงประวัติการติดต่อ (activities ที่ผูกกับ lead_id) ของลีดที่ระบุทั้งหมด — ใช้คู่กับ fetchAllLeads ตอน export เป็น Excel
+export async function fetchLeadActivities(leadIds = []) {
+  if (!leadIds.length) return []
+  return supabase.from('activities').select('*').in('lead_id', leadIds).order('activity_date', { ascending: false }).then(handle)
+}
+
 // สรุปจำนวนลีดแยกตามช่องทางที่มา (source) ตามตัวกรองปัจจุบัน — ใช้ดูว่าเดือนนี้ลีดมาจากช่องทางไหนเท่าไหร่
 export async function fetchLeadsSourceSummary({ status = '', q = '', dateFrom = '', dateTo = '' } = {}) {
   let query = supabase.from('leads').select('source')

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { PAGE_SIZE, fetchLeadsPage, fetchAllLeads, fetchLeadsSourceSummary, fetchLeadsStatusSummary } from '../lib/api'
+import { PAGE_SIZE, fetchLeadsPage, fetchAllLeads, fetchLeadActivities, fetchLeadsSourceSummary, fetchLeadsStatusSummary } from '../lib/api'
 import { exportLeadsToExcel } from '../lib/importExport'
 import { fmtDate, currentMonthRange } from '../lib/format'
 import { useUi } from './UiContext'
@@ -32,7 +32,8 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
     setExporting(true)
     try {
       const all = await fetchAllLeads({ status, q, dateFrom: fromDate, dateTo: toDate })
-      await exportLeadsToExcel(all)
+      const history = await fetchLeadActivities(all.map(l => l.id))
+      await exportLeadsToExcel(all, history)
     } catch (e) {
       toast('ส่งออกไม่สำเร็จ: ' + e.message, 'error')
     } finally {

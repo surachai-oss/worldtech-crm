@@ -246,12 +246,56 @@ const LEAD_EXPORT_COLUMNS = [
   { key: 'created_at', label: 'วันที่' },
 ]
 
-export const exportLeadsToExcel = (rows) =>
-  exportRowsToExcel(LEAD_EXPORT_COLUMNS, rows.map(r => ({
-    ...r,
-    created_at: (r.created_at || '').slice(0, 10),
-    appliance_interest: r.appliance_interest?.length ? r.appliance_interest.join(', ') : (r.interested_product || '')
-  })), 'ผู้ติดต่อ.xlsx')
+// ประวัติการติดต่อ (activities ที่ผูกกับ lead_id) — ใส่เป็นชีตที่สองในไฟล์เดียวกัน ให้ดูควบคู่กับข้อมูลผู้ติดต่อได้เลย
+const LEAD_HISTORY_COLUMNS = [
+  { key: 'lead_full_name', label: 'ชื่อผู้ติดต่อ' },
+  { key: 'lead_phone', label: 'โทรศัพท์' },
+  { key: 'type', label: 'ประเภทการติดต่อ' },
+  { key: 'activity_date', label: 'วันที่' },
+  { key: 'subject', label: 'หัวข้อ' },
+  { key: 'detail', label: 'รายละเอียด' },
+  { key: 'recorded_by', label: 'ผู้บันทึก' },
+]
+
+export async function exportLeadsToExcel(rows, history = []) {
+  const workbook = new ExcelJS.Workbook()
+
+  const leadSheet = workbook.addWorksheet('ผู้ติดต่อ')
+  leadSheet.columns = LEAD_EXPORT_COLUMNS.map(c => ({ header: c.label, key: c.key, width: 24 }))
+  leadSheet.getRow(1).font = { bold: true }
+  rows.forEach(r => {
+    const row = {
+      ...r,
+      created_at: (r.created_at || '').slice(0, 10),
+      appliance_interest: r.appliance_interest?.length ? r.appliance_interest.join(', ') : (r.interested_product || '')
+    }
+    leadSheet.addRow(LEAD_EXPORT_COLUMNS.reduce((o, c) => ({ ...o, [c.key]: row[c.key] ?? '' }), {}))
+  })
+
+  const leadById = new Map(rows.map(r => [r.id, r]))
+  const historySheet = workbook.addWorksheet('ประวัติการติดต่อ')
+  historySheet.columns = LEAD_HISTORY_COLUMNS.map(c => ({ header: c.label, key: c.key, width: 24 }))
+  historySheet.getRow(1).font = { bold: true }
+  history.forEach(a => {
+    const lead = leadById.get(a.lead_id)
+    const row = {
+      ...a,
+      lead_full_name: lead?.full_name || '',
+      lead_phone: lead?.phone || '',
+      activity_date: (a.activity_date || '').slice(0, 10),
+    }
+    historySheet.addRow(LEAD_HISTORY_COLUMNS.reduce((o, c) => ({ ...o, [c.key]: row[c.key] ?? '' }), {}))
+  })
+
+  const buffer = await workbook.xlsx.writeBuffer()
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'ผู้ติดต่อ.xlsx'
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 // ===== ส่งออกคำขอตรวจยอดเป็นไฟล์ Excel (ใช้ทั้งหน้าคำขอตรวจยอดของเซลล์ และหน้าตรวจสอบยอดโอนของบัญชี) =====
 // บัญชีเอาไฟล์นี้ไปแมทช์กับระบบบัญชีภายหลังได้ — มีทั้งเลขคำขอ/เลขอนุมัติ/เลขอ้างอิงบัญชี/เลขออเดอร์
