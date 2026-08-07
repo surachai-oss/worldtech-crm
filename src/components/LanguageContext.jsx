@@ -566,8 +566,8 @@ export const EN_DICT = {
   'กำลังส่ง...': 'Sending...',
   'หรือติดต่อเราโดยตรงทาง LINE:': 'Or contact us directly via LINE:',
 
-  // ===== เช็คราคา/มาร์จิ้น (Price & Margin Calculator) =====
-  'เช็คราคา/มาร์จิ้น': 'Price & Margin Check',
+  // ===== เช็คราคา (Price & Margin Calculator) =====
+  'เช็คราคา': 'Price check',
   'คำนวณราคาก่อนเสนอลูกค้า': 'Check the price before quoting a customer',
   'กรอกแค่ 4 ช่อง ระบบคำนวณ Margin สถานะ และราคาแนะนำขั้นต่ำให้เอง': 'Fill in 4 fields — margin, status and the suggested minimum price are calculated for you',
   '-- เลือกสินค้า --': '-- Select a product --',
@@ -628,12 +628,16 @@ export const EN_DICT = {
   'เซลล์เลือกได้เฉพาะสินค้าที่เป็น Active': 'Sales can only pick products that are Active',
   'เช่น ต้นทุนนี้รวมค่านำเข้าแล้ว / อัปเดตล่าสุดเมื่อไหร่': 'e.g. this cost already includes import fees / when it was last updated',
   'ข้อความนี้เซลล์เห็นได้ในหน้าเช็คราคา — อย่าใส่ตัวเลขต้นทุนลงไป': 'Sales can see this text on the price check page — do not put cost figures in it',
-  'ข้อมูลในหน้านี้เห็นได้เฉพาะบัญชีและแอดมิน — เซลล์เห็นแค่ผลลัพธ์การคำนวณในหน้า "เช็คราคา/มาร์จิ้น" ไม่เห็นตัวเลขต้นทุน': 'Only accounting and admins can see this page — sales only see the calculated result on the Price & Margin Check page, never the cost figures',
+  'ข้อมูลในหน้านี้เห็นได้เฉพาะบัญชีและแอดมิน — เซลล์เห็นแค่ผลลัพธ์การคำนวณในหน้า "เช็คราคา" ไม่เห็นตัวเลขต้นทุน': 'Only accounting and admins can see this page — sales only see the calculated result on the Price check page, never the cost figures',
   'ต้นทุนต้องมากกว่า 0 ไม่งั้นสินค้านี้จะยังคำนวณราคาไม่ได้': 'Cost must be greater than 0, otherwise this product cannot be priced',
   'Floor Price ต่ำกว่าต้นทุน + ค่าแพ็กกิ้ง': 'Floor price is below cost + packaging',
   'Margin ขั้นต่ำสูงกว่า Margin เป้าหมาย': 'Minimum margin is higher than the target margin',
   'บันทึกค่ากลางแล้ว': 'Shared value saved',
   'บันทึกต้นทุนสำเร็จ': 'Cost saved',
+  'นำเข้าต้นทุนจากไฟล์': 'Import costs from a file',
+  'คอลัมน์ที่รองรับ': 'Supported columns',
+  'บังคับกรอก: รหัสสินค้า และ ต้นทุน/ชิ้น — รหัสสินค้าต้องมีอยู่แล้วในหน้า "สินค้า"': 'Required: product code and cost per unit — the product code must already exist on the Products page',
+  'ถ้าสินค้านั้นเคยกรอกต้นทุนไว้แล้ว ระบบจะเขียนทับด้วยค่าในไฟล์': 'If a product already has a cost, the file overwrites it',
 }
 
 export function LanguageProvider({ children }) {

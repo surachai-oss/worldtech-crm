@@ -173,22 +173,10 @@ export default function PriceCheck({ perm }) {
 
   const reset = () => { setProductId(''); setQuantity('1'); setOfferPrice(''); setShippingCost(''); setResult(null) }
 
-  // สรุปประวัติตามตัวกรองปัจจุบัน — Margin เฉลี่ยถ่วงน้ำหนักด้วยยอดขาย ไม่ใช่ค่าเฉลี่ยของเปอร์เซ็นต์
-  const stats = useMemo(() => {
-    const byStatus = {}
-    let netSales = 0, profit = 0
-    history.forEach(r => {
-      byStatus[r.price_status] = (byStatus[r.price_status] || 0) + 1
-      netSales += Number(r.net_sales) || 0
-      profit += Number(r.total_profit) || 0
-    })
-    return { byStatus, netSales, profit, avgMargin: netSales > 0 ? profit / netSales * 100 : 0 }
-  }, [history])
-
   return (
     <div className="list-view">
       <div className="section-header">
-        <div className="section-title">{t('เช็คราคา/มาร์จิ้น')}</div>
+        <div className="section-title">{t('เช็คราคา')}</div>
       </div>
 
       <div className="card" style={{ marginBottom: 14 }}>
@@ -306,20 +294,6 @@ export default function PriceCheck({ perm }) {
         <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting || !history.length}>
           {exporting ? t('กำลังส่งออก...') : t('ส่งออกเป็น Excel')}
         </button>
-      </div>
-
-      <div className="kpi-grid">
-        {PRICE_STATUS_ORDER.map((s, i) => (
-          <div className={`kpi-card ${['green', '', 'red', 'navy'][i]}`} key={s}>
-            <div className="kpi-label">{s}</div>
-            <div className="kpi-value">{stats.byStatus[s] || 0}</div>
-          </div>
-        ))}
-        <div className="kpi-card blue">
-          <div className="kpi-label">{t('Margin เฉลี่ย')}</div>
-          <div className="kpi-value">{fmtPct(stats.avgMargin)}</div>
-          <div className="kpi-sub">{t('ยอดขายรวม')} {fmtCurrency(stats.netSales)}</div>
-        </div>
       </div>
 
       <div className="filter-bar">

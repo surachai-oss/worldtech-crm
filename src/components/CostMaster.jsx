@@ -6,9 +6,10 @@ import {
 import { fmtCurrency } from '../lib/format'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
+import ImportProductCostsModal from './ImportProductCostsModal'
 
 // หน้านี้เห็นได้เฉพาะบัญชี/แอดมิน (บังคับจริงด้วย RLS ของ product_costs — เซลล์ยิง API ตรงก็อ่านไม่ได้)
-// เป็นแหล่งข้อมูลเดียวที่หน้า "เช็คราคา/มาร์จิ้น" ใช้คำนวณ
+// เป็นแหล่งข้อมูลเดียวที่หน้า "เช็คราคา" ใช้คำนวณ
 
 const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v))
 const pct = (n) => (n === null || n === undefined || n === '' ? '-' : `${Number(n).toFixed(2)}%`)
@@ -204,6 +205,7 @@ export default function CostMaster({ currentUserName }) {
   const [q, setQ] = useState('')
   const [onlyMissing, setOnlyMissing] = useState(false)
   const [modal, setModal] = useState(null)
+  const [showImport, setShowImport] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -268,18 +270,25 @@ export default function CostMaster({ currentUserName }) {
         <div className="section-title">
           {t('ต้นทุนสินค้า')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} {t('รายการ')})</span>
         </div>
-        {missingCount > 0 && (
-          <span className="badge badge-orange">{t('ยังไม่ได้กรอกต้นทุน')} {missingCount} {t('รายการ')}</span>
-        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {missingCount > 0 && (
+            <span className="badge badge-orange">{t('ยังไม่ได้กรอกต้นทุน')} {missingCount} {t('รายการ')}</span>
+          )}
+          <button className="btn btn-outline btn-sm" onClick={() => setShowImport(true)}>{t('นำเข้าจากไฟล์')}</button>
+        </div>
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 12 }}>
-        {t('ข้อมูลในหน้านี้เห็นได้เฉพาะบัญชีและแอดมิน — เซลล์เห็นแค่ผลลัพธ์การคำนวณในหน้า "เช็คราคา/มาร์จิ้น" ไม่เห็นตัวเลขต้นทุน')}
+        {t('ข้อมูลในหน้านี้เห็นได้เฉพาะบัญชีและแอดมิน — เซลล์เห็นแค่ผลลัพธ์การคำนวณในหน้า "เช็คราคา" ไม่เห็นตัวเลขต้นทุน')}
       </div>
 
       {settings.length > 0 && <MarginSettingsCard rows={settings} onSave={onSaveSetting} />}
 
       {modal && <CostModal product={modal} onClose={() => setModal(null)} onSave={onSave} />}
+      {showImport && (
+        <ImportProductCostsModal products={rows} currentUserName={currentUserName}
+          onClose={() => setShowImport(false)} onImported={load} />
+      )}
 
       <div className="filter-bar">
         <input className="filter-input" placeholder={lang === 'en' ? 'Search product...' : 'ค้นหาสินค้า...'}

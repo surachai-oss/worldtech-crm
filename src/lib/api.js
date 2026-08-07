@@ -1361,3 +1361,17 @@ export const updateMarginSetting = (key, value, updatedBy) =>
   supabase.from('margin_settings')
     .update({ value: String(value), updated_by: updatedBy || null, updated_at: new Date().toISOString() })
     .eq('key', key).select().single().then(handle)
+
+// นำเข้าต้นทุนหลายรายการพร้อมกัน — upsert ทับของเดิมตาม product_id (RLS จำกัดให้เฉพาะบัญชี/แอดมิน)
+// ช่องที่เว้นว่างในไฟล์มาเป็น null และถูกเขียนทับจริง (ตั้งใจ: ไฟล์คือแหล่งข้อมูลล่าสุดของแถวนั้น)
+export async function bulkUpsertProductCosts(rows, updatedBy) {
+  const costs = rows.map(r => ({ ...r.cost, product_id: r.product_id, updated_by: updatedBy || null }))
+  await supabase.from('product_costs').upsert(costs, { onConflict: 'product_id' }).then(handle)
+
+  // category/brand อยู่คนละตาราง (products) และอัปเดตเฉพาะแถวที่ไฟล์ระบุมาจริง
+  const withMeta = rows.filter(r => r.meta && (r.meta.category || r.meta.brand))
+  for (const r of withMeta) {
+    await supabase.from('products').update(r.meta).eq('id', r.product_id).then(handle)
+  }
+  return costs.length
+}
