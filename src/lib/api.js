@@ -1439,3 +1439,8 @@ export async function applyStandardPriceTiers(productIds, updatedBy) {
   return productIds.length
 }
 
+
+// รายงานกำไร/ส่วนลดจากออเดอร์ที่เปิดจริง (บัญชี/แอดมินเท่านั้น — ฟังก์ชันฝั่ง DB ปฏิเสธ role อื่นเอง)
+// คืนข้อมูลรายบรรทัดสินค้า ให้หน้าเว็บรวมยอดเองตามมุมที่อยากดู
+export const fetchOrderMarginReport = ({ dateFrom = '', dateTo = '' } = {}) =>
+  supabase.rpc('margin_order_report', { p_from: dateFrom || null, p_to: dateTo || null }).then(handle)

@@ -1900,3 +1900,111 @@ end;
 $$ language plpgsql volatile security definer set search_path = public;
 
 grant execute on function margin_save_price_check(uuid, numeric, numeric, numeric, text, text) to authenticated;
+
+-- ============================================================================
+-- ===== ต้นทุน ณ วันเปิดออเดอร์ + รายงานกำไร/ส่วนลดจากออเดอร์จริง =====
+-- ============================================================================
+-- หน้าเช็คราคาเป็นแค่การลองคิด เช็คแล้วอาจไม่ได้ขายจริง จึงเอามาสรุปให้หัวหน้าไม่ได้
+-- ออเดอร์คือสิ่งที่เปิดบิลจริง — เก็บต้นทุน ณ วันเปิดไว้เป็น snapshot เหมือนที่ออเดอร์เก็บราคา/ที่อยู่
+-- แยกเป็นตารางต่างหาก ไม่ใส่ในตาราง order_items เพราะ order_items เปิดให้ทุกคนอ่านได้ (เซลล์ต้องไม่เห็นต้นทุน)
+create table if not exists order_item_costs (
+  order_item_id        uuid primary key references order_items(id) on delete cascade,
+  order_id             uuid references orders(id) on delete cascade,
+  product_id           uuid references products(id) on delete set null,
+  unit_cost            numeric,
+  normal_selling_price numeric,
+  created_at           timestamptz default now()
+);
+
+create index if not exists idx_order_item_costs_order on order_item_costs (order_id);
+
+-- เขียนอัตโนมัติตอนบันทึกรายการสินค้าของออเดอร์ — ฝั่งแอปไม่ต้องส่งต้นทุนมา (และส่งไม่ได้ด้วยเพราะเซลล์อ่านไม่ถึง)
+create or replace function snapshot_order_item_cost() returns trigger as $$
+declare
+  v_cost   numeric;
+  v_normal numeric;
+begin
+  if new.product_id is not null then
+    select cost_price, normal_selling_price into v_cost, v_normal
+      from product_costs where product_id = new.product_id;
+    if found then
+      insert into order_item_costs (order_item_id, order_id, product_id, unit_cost, normal_selling_price)
+      values (new.id, new.order_id, new.product_id, v_cost, v_normal)
+      on conflict (order_item_id) do nothing;
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_order_items_cost on order_items;
+create trigger trg_order_items_cost after insert on order_items
+  for each row execute function snapshot_order_item_cost();
+
+-- เติมย้อนหลังให้ออเดอร์เก่า — ใช้ต้นทุนจากประวัติที่ใกล้วันเปิดออเดอร์ที่สุด ถ้าไม่มีประวัติค่อยใช้ต้นทุนปัจจุบัน
+-- (นี่คือเหตุผลที่เก็บ product_cost_history ไว้ — ตอบได้ว่าตอนนั้นต้นทุนเท่าไหร่)
+insert into order_item_costs (order_item_id, order_id, product_id, unit_cost, normal_selling_price)
+select oi.id, oi.order_id, oi.product_id,
+  coalesce(
+    (select h.cost_price from product_cost_history h
+      where h.product_id = oi.product_id and h.changed_at <= o.created_at
+      order by h.changed_at desc limit 1),
+    (select c.cost_price from product_costs c where c.product_id = oi.product_id)),
+  coalesce(
+    (select h.normal_selling_price from product_cost_history h
+      where h.product_id = oi.product_id and h.changed_at <= o.created_at
+      order by h.changed_at desc limit 1),
+    (select c.normal_selling_price from product_costs c where c.product_id = oi.product_id))
+from order_items oi
+join orders o on o.id = oi.order_id
+where oi.product_id is not null
+  and not exists (select 1 from order_item_costs x where x.order_item_id = oi.id);
+
+alter table order_item_costs enable row level security;
+drop policy if exists "order_item_costs select" on order_item_costs;
+create policy "order_item_costs select" on order_item_costs for select using (is_admin() or is_finance());
+-- ไม่มี policy insert/update/delete = เขียนตรงไม่ได้ เข้าได้แค่ผ่าน trigger (security definer)
+
+-- ===== รายงานระดับรายการสินค้าของออเดอร์จริง (บัญชี/แอดมินเท่านั้น) =====
+-- คืนข้อมูลดิบรายบรรทัด ให้หน้าเว็บไปรวมยอดเองตามมุมที่อยากดู (รายออเดอร์ / รายสินค้า / รายเซลล์)
+create or replace function margin_order_report(p_from date default null, p_to date default null)
+returns table (
+  order_id        uuid,
+  order_no        text,
+  order_date      timestamptz,
+  customer_name   text,
+  sales_name      text,
+  order_status    text,
+  product_id      uuid,
+  product_code    text,
+  product_name    text,
+  quantity        numeric,
+  unit_price      numeric,
+  line_sales      numeric,
+  line_cost       numeric,
+  line_normal     numeric
+) as $$
+begin
+  if not (is_admin() or is_finance()) then
+    raise exception 'ดูรายงานนี้ได้เฉพาะฝ่ายบัญชีและผู้ดูแลระบบ';
+  end if;
+
+  return query
+  select
+    o.id, o.order_no, o.created_at, o.customer_name, o.sales_name, o.status,
+    oi.product_id, p.code, coalesce(p.name, oi.description),
+    oi.quantity, oi.unit_price,
+    oi.quantity * oi.unit_price,
+    oi.quantity * coalesce(oic.unit_cost, 0),
+    oi.quantity * coalesce(oic.normal_selling_price, 0)
+  from orders o
+  join order_items oi on oi.order_id = o.id
+  left join order_item_costs oic on oic.order_item_id = oi.id
+  left join products p on p.id = oi.product_id
+  where (p_from is null or o.created_at >= p_from::timestamptz)
+    and (p_to is null or o.created_at < (p_to::timestamptz + interval '1 day'))
+  order by o.created_at desc, oi.sort_order;
+end;
+$$ language plpgsql stable security definer set search_path = public;
+
+grant execute on function margin_order_report(date, date) to authenticated;

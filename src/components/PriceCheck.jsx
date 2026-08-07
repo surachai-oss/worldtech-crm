@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  fetchProductPriceView, checkPrice, savePriceCheck, fetchPriceChecks, deletePriceCheck,
-  PRICE_STATUS_PASS, PRICE_STATUS_LOW_MARGIN, PRICE_STATUS_UNDER, PRICE_STATUS_NO_SELL, PRICE_STATUS_ORDER
+  fetchProductPriceView, checkPrice,
+  PRICE_STATUS_PASS, PRICE_STATUS_LOW_MARGIN, PRICE_STATUS_UNDER, PRICE_STATUS_NO_SELL
 } from '../lib/api'
-import { exportPriceChecksToExcel } from '../lib/importExport'
-import { fmtCurrency, fmtDate, currentMonthRange } from '../lib/format'
-import { adminOnlyDelete } from '../lib/permissions'
+import { fmtCurrency } from '../lib/format'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import SearchableSelect from './SearchableSelect'
@@ -107,7 +105,7 @@ function buildComparison(results) {
 }
 
 // ข้อความสรุปให้เซลล์คัดลอกไปคุยหัวหน้านอกระบบ — ห้ามมีต้นทุนอยู่ในนี้
-function buildSummaryText(results, comparison, note) {
+function buildSummaryText(results, comparison) {
   const ok = results.filter(x => x.result)
   const lines = ['ขอปรึกษาราคา B2B', '']
   if (ok.length) lines.push(`สินค้า: ${ok[0].result.product_code} - ${ok[0].result.product_name}`, '')
@@ -137,7 +135,6 @@ function buildSummaryText(results, comparison, note) {
     lines.push('คำแนะนำระบบ:', ok[0].result.recommendation || '', '')
   }
 
-  if (note?.trim()) lines.push('หมายเหตุจากเซลล์:', note.trim(), '')
   lines.push('หมายเหตุ: ระบบไม่ได้แสดงต้นทุนสินค้าใน Summary นี้')
   return lines.join('\n')
 }
@@ -152,7 +149,7 @@ function ResultRow({ label, value, strong, hint, color }) {
 }
 
 export default function PriceCheck({ perm }) {
-  const { toast, confirm } = useUi()
+  const { toast } = useUi()
   const { t, lang } = useLanguage()
   const canSeeProfit = perm?.isAdmin || perm?.isFinance
 
@@ -161,18 +158,9 @@ export default function PriceCheck({ perm }) {
 
   const [productId, setProductId] = useState('')
   const [options, setOptions] = useState(() => [blankOption(), blankOption(), blankOption()])
-  const [note, setNote] = useState('')
   const [calculating, setCalculating] = useState(false)
-  const [savingNo, setSavingNo] = useState(0)
   const [results, setResults] = useState([])   // [{ no, result, error }]
 
-  const [history, setHistory] = useState([])
-  const [loadingHistory, setLoadingHistory] = useState(true)
-  const [hq, setHq] = useState('')
-  const [hStatus, setHStatus] = useState('')
-  const [fromDate, setFromDate] = useState(() => currentMonthRange().first)
-  const [toDate, setToDate] = useState(() => currentMonthRange().last)
-  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     fetchProductPriceView()
@@ -181,19 +169,6 @@ export default function PriceCheck({ perm }) {
       .finally(() => setLoadingProducts(false))
   }, [toast])
 
-  const loadHistory = () => {
-    setLoadingHistory(true)
-    fetchPriceChecks({ q: hq, status: hStatus, dateFrom: fromDate, dateTo: toDate })
-      .then(setHistory)
-      .catch(e => toast('โหลดประวัติไม่สำเร็จ: ' + e.message, 'error'))
-      .finally(() => setLoadingHistory(false))
-  }
-
-  useEffect(() => {
-    const timer = setTimeout(loadHistory, 250)
-    return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hq, hStatus, fromDate, toDate])
 
   // เลือกได้เฉพาะสินค้าที่บัญชีกรอกต้นทุนแล้วและยัง Active — ตัวอื่นคำนวณไม่ได้อยู่ดี
   const selectable = useMemo(
@@ -245,25 +220,11 @@ export default function PriceCheck({ perm }) {
     } finally { setCalculating(false) }
   }
 
-  const doSave = async (entry) => {
-    setSavingNo(entry.no)
-    try {
-      const saved = await savePriceCheck({
-        ...argsFor(entry.idx),
-        note,
-        optionLabel: results.filter(x => x.result).length > 1 ? `ตัวเลือกที่ ${entry.no}` : null
-      })
-      setResults(prev => prev.map(x => (x.no === entry.no ? { ...x, result: { ...x.result, check_no: saved.check_no } } : x)))
-      toast('บันทึกประวัติแล้ว (' + saved.check_no + ')', 'success')
-      loadHistory()
-    } catch (e) { toast(e.message, 'error') }
-    finally { setSavingNo(0) }
-  }
 
   const comparison = useMemo(() => buildComparison(results), [results])
 
   const doCopy = async () => {
-    const text = buildSummaryText(results, comparison, note)
+    const text = buildSummaryText(results, comparison)
     try {
       await navigator.clipboard.writeText(text)
       toast('คัดลอกสรุปแล้ว นำไปวางในแชทได้เลย', 'success')
@@ -272,21 +233,10 @@ export default function PriceCheck({ perm }) {
     }
   }
 
-  const doExport = async () => {
-    setExporting(true)
-    try { await exportPriceChecksToExcel(history, canSeeProfit) }
-    catch (e) { toast('ส่งออกไม่สำเร็จ: ' + e.message, 'error') }
-    finally { setExporting(false) }
-  }
 
-  const doDelete = async (row) => {
-    if (!(await confirm(`ลบประวัติการเช็คราคา ${row.check_no}?`))) return
-    try { await deletePriceCheck(row.id); toast('ลบสำเร็จ', 'success'); loadHistory() }
-    catch (e) { toast('ลบไม่สำเร็จ: ' + e.message, 'error') }
-  }
 
   const reset = () => {
-    setProductId(''); setOptions([blankOption(), blankOption(), blankOption()]); setNote(''); setResults([])
+    setProductId(''); setOptions([blankOption(), blankOption(), blankOption()]); setResults([])
   }
 
   const okResults = results.filter(x => x.result)
@@ -354,14 +304,6 @@ export default function PriceCheck({ perm }) {
             ))}
           </div>
 
-          <div className="form-group" style={{ marginTop: 12, marginBottom: 0 }}>
-            <label className="form-label">{t('หมายเหตุ (บันทึกไว้ดูย้อนหลัง)')}</label>
-            <input className="form-control" value={note} onChange={e => setNote(e.target.value)}
-              placeholder={t('เช่น ตกลงราคาโปรเจค A / ลูกค้าเก่าซื้อซ้ำ / แถมค่าส่งแลกกับสั่งเพิ่ม')} />
-            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
-              {t('ข้อความนี้จะถูกเก็บไว้กับประวัติตอนกดบันทึก ใช้ตอบย้อนหลังว่าทำไมลูกค้ารายนี้ได้ราคานี้')}
-            </div>
-          </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={doCheck} disabled={calculating}>
@@ -479,10 +421,6 @@ export default function PriceCheck({ perm }) {
                     }}>
                       {entry.result.recommendation}
                     </div>
-                    <button className="btn btn-outline btn-sm" style={{ marginTop: 10, width: '100%' }}
-                      onClick={() => doSave(entry)} disabled={savingNo === entry.no}>
-                      {savingNo === entry.no ? t('กำลังบันทึก...') : t('บันทึกประวัติ')}
-                    </button>
                   </>
                 )}
               </div>
@@ -497,71 +435,6 @@ export default function PriceCheck({ perm }) {
         </div>
       )}
 
-      <div className="section-header" style={{ marginTop: 4 }}>
-        <div className="section-title" style={{ fontSize: 15 }}>
-          {t('ประวัติการเช็คราคา')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({history.length} {t('รายการ')})</span>
-        </div>
-        <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting || !history.length}>
-          {exporting ? t('กำลังส่งออก...') : t('ส่งออกเป็น Excel')}
-        </button>
-      </div>
-
-      <div className="filter-bar">
-        <select className="filter-select" value={hStatus} onChange={e => setHStatus(e.target.value)}>
-          <option value="">{t('ทุกสถานะ')}</option>
-          {PRICE_STATUS_ORDER.map(s => <option key={s}>{s}</option>)}
-        </select>
-        <input className="filter-input" placeholder={lang === 'en' ? 'Search product / check no...' : 'ค้นหา สินค้า/เลขที่...'}
-          value={hq} onChange={e => setHq(e.target.value)} style={{ minWidth: 240 }} />
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
-          <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} />
-          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ถึง')}</span>
-          <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} />
-          {(fromDate || toDate) && <button className="btn btn-outline btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>{t('ล้าง')}</button>}
-        </div>
-      </div>
-
-      <div className="card list-card">
-        <div className="table-wrap">
-          {history.length ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>{t('เลขที่')}</th><th>{t('วันที่')}</th><th>{t('สินค้า')}</th><th>{t('จำนวน')}</th>
-                  <th>{t('ราคาที่เสนอ')}</th><th>{t('ยอดขายรวม')}</th>
-                  {canSeeProfit && <th>{t('กำไรรวม')}</th>}
-                  <th>Margin</th><th>{t('สถานะ')}</th><th>{t('ราคาแนะนำขั้นต่ำ')}</th><th>{t('หมายเหตุ')}</th><th>{t('ผู้เช็ค')}</th>
-                  {adminOnlyDelete(perm) && <th></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {history.map(r => (
-                  <tr key={r.id}>
-                    <td style={{ fontWeight: 600, color: 'var(--navy)', fontSize: 12 }}>
-                      {r.check_no}
-                      {r.option_label && <div style={{ fontSize: 10, color: 'var(--text-light)', fontWeight: 400 }}>{r.option_label}</div>}
-                    </td>
-                    <td style={{ fontSize: 12 }}>{fmtDate(r.created_at)}</td>
-                    <td><div style={{ fontWeight: 500 }}>{r.product_code}</div><div style={{ fontSize: 11, color: 'var(--text-light)' }}>{r.product_name}</div></td>
-                    <td>{r.quantity}</td>
-                    <td>{fmtCurrency(r.offer_price)}</td>
-                    <td style={{ fontWeight: 600 }}>{fmtCurrency(r.net_sales)}</td>
-                    {canSeeProfit && <td style={{ fontWeight: 600 }}>{fmtCurrency(r.total_profit)}</td>}
-                    <td style={{ fontWeight: 600 }}>{fmtPct(r.margin_percent)}</td>
-                    <td><span className={`badge ${statusCls(r.price_status)}`}>{r.price_status}</span></td>
-                    <td>{r.suggested_min_price ? fmtCurrency(r.suggested_min_price) : '-'}</td>
-                    <td style={{ fontSize: 11, maxWidth: 220 }}>{r.note || '-'}</td>
-                    <td style={{ fontSize: 11 }}>{r.created_by_name || '-'}</td>
-                    {adminOnlyDelete(perm) && (
-                      <td className="td-actions"><button className="btn btn-danger btn-xs" onClick={() => doDelete(r)}>{t('ลบ')}</button></td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : <div className="empty-state"><div>{loadingHistory ? t('กำลังโหลด...') : t('ยังไม่มีประวัติการเช็คราคา')}</div></div>}
-        </div>
-      </div>
     </div>
   )
 }

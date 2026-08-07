@@ -701,6 +701,26 @@ export const EN_DICT = {
   'เพดาน': 'cap',
   'ยังไม่มี': 'not set',
   'ช่องส่วนลดขั้นบันไดเติมเกณฑ์มาตรฐานมาให้แล้ว แก้ทับได้ ถ้าลบทิ้งระบบจะใช้ค่ามาตรฐานแทน': 'The tier discount columns come pre-filled with the standard steps — edit them freely; clear a cell and the standard value is used',
+
+  // ===== สรุปกำไร/ส่วนลดจากออเดอร์จริง =====
+  'สรุปกำไร/ส่วนลด': 'Profit / discount summary',
+  'สรุปกำไร/ส่วนลดจากออเดอร์จริง': 'Profit and discount from actual orders',
+  'รายออเดอร์': 'By order',
+  'รายสินค้า': 'By product',
+  'รายเซลล์': 'By sales rep',
+  'รวมออเดอร์ที่ยกเลิก': 'Include cancelled orders',
+  'กำไรขั้นต้น': 'Gross profit',
+  'ยังไม่หักค่าขนส่ง/Buffer': 'before shipping and buffers',
+  'ส่วนลดเฉลี่ยจากราคาปกติ': 'Average discount off normal price',
+  'ส่วนลด': 'Discount',
+  'ยอดขาย': 'Sales',
+  'ออเดอร์': 'orders',
+  'ไม่มีออเดอร์ในช่วงที่เลือก': 'No orders in the selected range',
+  'มี': 'There are',
+  'บรรทัดที่ไม่มีต้นทุนบันทึกไว้ (สินค้าที่ยังไม่ได้กรอกต้นทุน หรือรายการที่พิมพ์ชื่อเอง) — กำไรที่แสดงจะสูงกว่าความจริง': 'lines with no cost recorded (products with no cost entered, or free-text items) — the profit shown is higher than reality',
+  'ต้นทุนที่ใช้คือต้นทุน ณ วันที่เปิดออเดอร์ ไม่ใช่ต้นทุนวันนี้ — ออเดอร์เก่าจึงยังสะท้อนราคาทุนตอนนั้น': 'Costs are those at the time the order was opened, not today, so older orders still reflect the cost back then',
+  'กำไรขั้นต้น = ยอดขาย − ต้นทุนสินค้า ยังไม่ได้หักค่าขนส่งจริงและ Buffer ตัวเลขจึงสูงกว่า Margin ในหน้าเช็คราคาเล็กน้อย': 'Gross profit = sales − product cost, before actual shipping and buffers, so it reads slightly higher than the margin on the price check page',
+  'ส่วนลดเทียบกับราคาขายปกติ ณ วันที่เปิดออเดอร์ นับเฉพาะรายการที่มีราคาขายปกติบันทึกไว้': 'Discount is against the normal selling price at the time of the order, counting only lines that had one recorded',
 }
 
 export function LanguageProvider({ children }) {

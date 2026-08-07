@@ -7,6 +7,7 @@ import { useLanguage } from './LanguageContext'
 import { OrderDetailModal } from './OrderModal'
 import AccountingDocModal from './AccountingDocModal'
 import OrderPaymentModal from './OrderPaymentModal'
+import OrderMarginReport from './OrderMarginReport'
 
 // เอาคำขอตรวจยอดล่าสุดของออเดอร์มาโชว์สถานะที่ปุ่ม — เลือกใบที่ยัง "ไม่ถูกปฏิเสธ" ก่อน (ตรงกับใบที่เปิดป็อปอัปแล้วจะเจอ) ถ้าถูกปฏิเสธหมดค่อยโชว์ใบล่าสุดที่ถูกปฏิเสธ
 function latestPaymentRequest(order) {
@@ -63,6 +64,8 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
   const [docModalOrder, setDocModalOrder] = useState(null)
   const [paymentModalOrder, setPaymentModalOrder] = useState(null)
   const [exporting, setExporting] = useState(false)
+  // สรุปกำไรเห็นได้เฉพาะบัญชี/แอดมิน — เริ่มต้นซ่อนไว้ กันบังรายการออเดอร์ที่เป็นงานหลักของหน้านี้
+  const [showReport, setShowReport] = useState(false)
 
   // rows คือรายการที่กรองตามตัวกรองปัจจุบันอยู่แล้ว (หน้านี้ไม่มี pagination) จึง export ตรงจาก rows ได้เลยไม่ต้องดึงซ้ำ
   const doExport = async () => {
@@ -98,10 +101,17 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
       <div className="section-header">
         <div className="section-title">{t('ออเดอร์')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} {t('รายการ')})</span></div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {(perm?.isAdmin || perm?.isFinance) && (
+            <button className={`btn btn-sm ${showReport ? 'btn-secondary' : 'btn-outline'}`} onClick={() => setShowReport(v => !v)}>
+              {t('สรุปกำไร/ส่วนลด')}
+            </button>
+          )}
           <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting}>{exporting ? t('กำลังส่งออก...') : t('ส่งออกเป็น Excel')}</button>
           <button className="btn btn-primary" onClick={onAdd}>{t('+ สร้างออเดอร์')}</button>
         </div>
       </div>
+      {showReport && (perm?.isAdmin || perm?.isFinance) && <OrderMarginReport />}
+
       <div className="filter-bar">
         <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
           <option value="">{t('ทุกสถานะ')}</option>
