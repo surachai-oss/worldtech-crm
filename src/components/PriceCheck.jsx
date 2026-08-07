@@ -447,7 +447,10 @@ export default function PriceCheck({ perm }) {
                           value={`${Number(entry.result.special_discount_percent)}%  (${fmtCurrency(entry.result.special_price)})`} />
                       </>
                     )}
-                    <ResultRow label="Floor Price" value={fmtCurrency(entry.result.floor_price)} />
+                    {/* โหมดขั้นบันได เส้นห้ามขายคือราคาเท่าทุนจริง ไม่ใช่ Floor Price ที่ตั้งไว้ — เรียกชื่อให้ตรงกันไม่งั้นอ่านผิด */}
+                    <ResultRow label={entry.result.ladder ? t('ราคาเท่าทุน/ชิ้น') : 'Floor Price'}
+                      value={fmtCurrency(entry.result.floor_price)}
+                      hint={entry.result.ladder ? `(${t('ต่ำกว่านี้คือขาดทุน')})` : null} />
                     <ResultRow label={t('ราคาแนะนำขั้นต่ำ/ชิ้น')}
                       value={entry.result.suggested_min_price ? fmtCurrency(entry.result.suggested_min_price) : t('คำนวณไม่ได้')} strong />
                     {entry.result.suggested_target_price && (

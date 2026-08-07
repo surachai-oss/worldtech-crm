@@ -695,6 +695,8 @@ export const EN_DICT = {
   'ใส่เกณฑ์มาตรฐาน': 'Apply standard steps',
   'ตั้งขั้นบันไดมาตรฐานให้ทุกสินค้า': 'Apply standard steps to all products',
   'กำลังตั้งค่า...': 'Applying...',
+  'ราคาเท่าทุน/ชิ้น': 'Break-even price / unit',
+  'ต่ำกว่านี้คือขาดทุน': 'below this is a loss',
 }
 
 export function LanguageProvider({ children }) {

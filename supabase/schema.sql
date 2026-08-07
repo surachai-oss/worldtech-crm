@@ -1433,7 +1433,8 @@ declare
   v_price_tier    numeric;   -- ราคา/ชิ้นที่ตรงกับส่วนลดของขั้นนี้
   v_price_special numeric;   -- ราคา/ชิ้นที่ตรงกับเพดานส่วนลดพิเศษ
   v_fixed         numeric;
-  v_price_min     numeric;   -- ราคา/ชิ้นที่ยังได้ Margin ขั้นต่ำพอดี (เส้นตายจากต้นทุนจริง)
+  v_price_min     numeric;   -- ราคา/ชิ้นที่ยังได้ Margin ขั้นต่ำพอดี (เกณฑ์ที่ "รับได้" ไม่ใช่เส้นขาดทุน)
+  v_breakeven     numeric;   -- ราคา/ชิ้นที่กำไรเป็นศูนย์พอดี (รวม Buffer แล้ว) = เส้นขาดทุนจริง
   v_price_target  numeric;
   v_floor         numeric;
   v_floor_source  text;
@@ -1494,6 +1495,7 @@ begin
   v_fixed := (v_c.cost_price * p_quantity) + v_ship;
   if 1 - v_buf - (v_min / 100)    > 0 then v_price_min    := (v_fixed / (1 - v_buf - (v_min / 100)))    / p_quantity; end if;
   if 1 - v_buf - (v_target / 100) > 0 then v_price_target := (v_fixed / (1 - v_buf - (v_target / 100))) / p_quantity; end if;
+  if 1 - v_buf > 0 then v_breakeven := (v_fixed / (1 - v_buf)) / p_quantity; end if;
 
   v_normal := coalesce(v_c.normal_selling_price, 0);
   if v_normal > 0 then v_offer_disc := (1 - p_offer_price / v_normal) * 100; end if;
@@ -1505,11 +1507,12 @@ begin
     v_special_disc  := coalesce(v_c.special_discount_percent, margin_setting_num('special_discount_percent', 15));
     v_price_tier    := v_normal * (1 - v_tier_disc / 100);
     v_price_special := v_normal * (1 - v_special_disc / 100);
-    -- เส้น "ไม่ควรขาย" คือราคาที่ยังได้ Margin ขั้นต่ำจากต้นทุนจริง ไม่ใช่เพดานส่วนลด
-    -- (เพดานส่วนลดเป็นแค่เส้นแบ่งว่าต้องไปคุยหัวหน้าหรือยัง)
-    v_floor := coalesce(v_price_min, 0);
+    -- เส้น "ไม่ควรขาย" = ราคาที่เท่าทุนจริงเท่านั้น
+    -- Margin ขั้นต่ำคือ "ต่ำสุดที่รับได้" ไม่ใช่จุดขาดทุน ต่ำกว่านั้นแต่ยังมีกำไร = "ต่ำกว่าเกณฑ์" (คุยหัวหน้า) ไม่ใช่ห้ามขาย
+    v_floor := coalesce(v_breakeven, 0);
     v_floor_source := 'ขั้น ' || v_step.min_qty || ' ชิ้นขึ้นไป · ส่วนลดปกติ ' || trim(to_char(v_tier_disc, 'FM999990.##'))
-                      || '% · เพดานพิเศษ ' || trim(to_char(v_special_disc, 'FM999990.##')) || '%';
+                      || '% · เพดานพิเศษ ' || trim(to_char(v_special_disc, 'FM999990.##'))
+                      || '% · ต่ำกว่าราคาเท่าทุนถึงจะห้ามขาย';
     v_tier_label := 'ขั้น ' || v_step.min_qty || ' ชิ้นขึ้นไป';
   else
     v_floor := coalesce(v_c.floor_price, 0);
@@ -1521,16 +1524,21 @@ begin
     -- ไล่ตามส่วนลด: อยู่ในเกณฑ์ของขั้น → ใช้ส่วนลดพิเศษ → เกินเพดาน → ต่ำจนไม่คุ้มต้นทุน
     -- เทียบกันที่ "% ส่วนลด" ไม่ใช่ตัวเงิน และเผื่อ 0.05 จุด — เซลล์พิมพ์ราคากลมๆ (10% ของ 1,919 = 1,727.10
     -- แต่จะเสนอ 1,727) ต้องไม่ตกไปอีกระดับเพราะเศษสตางค์
-    if v_profit <= 0 or v_margin <= 0 or (v_price_min is not null and p_offer_price < v_price_min - 0.005) then
-      v_tier := 'Below Floor / ไม่ควรขาย';              v_status := 'ไม่ควรขาย';
+    if v_profit <= 0 or v_margin <= 0 then
+      -- ขาดทุนจริงเท่านั้นถึงจะห้ามขาย
+      v_tier := 'Below Cost / ไม่ควรขาย';               v_status := 'ไม่ควรขาย';
+    elsif v_offer_disc > v_special_disc + 0.05 then
+      v_tier := 'Tier 3 / เกินเพดานส่วนลดพิเศษ';         v_status := 'ต่ำกว่าเกณฑ์';
+    elsif v_price_min is not null and p_offer_price < v_price_min - 0.005 then
+      -- ส่วนลดยังอยู่ในกรอบ แต่ Margin ที่ได้ต่ำกว่าที่รับได้ — มักแปลว่าต้นทุนขึ้นจนเกณฑ์ส่วนลดเก่าไม่ทันแล้ว
+      v_tier := 'Tier 3 / Margin ต่ำกว่าที่รับได้';       v_status := 'ต่ำกว่าเกณฑ์';
     elsif v_offer_disc <= v_tier_disc + 0.05 then
       v_tier := 'Tier 1 / อยู่ในส่วนลดของขั้นนี้';        v_status := 'ผ่าน / ขายได้';
-    elsif v_offer_disc <= v_special_disc + 0.05 then
-      v_tier := 'Tier 2 / ใช้ส่วนลดพิเศษ';               v_status := 'ขายได้ แต่ Margin ต่ำ';
     else
-      v_tier := 'Tier 3 / เกินเพดานส่วนลดพิเศษ';         v_status := 'ต่ำกว่าเกณฑ์';
+      v_tier := 'Tier 2 / ใช้ส่วนลดพิเศษ';               v_status := 'ขายได้ แต่ Margin ต่ำ';
     end if;
   else
+    -- Floor Price ที่บัญชีตั้งเองยังเป็นเส้นห้ามขายได้ เพราะเป็นกฎที่ตั้งใจกำหนด ไม่ใช่ผลข้างเคียงของ Margin ขั้นต่ำ
     if v_net <= 0 or (v_floor > 0 and p_offer_price < v_floor) or v_profit <= 0 or v_margin <= 0 then
       v_tier := 'Below Floor / ไม่ควรขาย';       v_status := 'ไม่ควรขาย';
     elsif v_margin >= v_target then
@@ -1562,14 +1570,23 @@ begin
 
   -- ===== คำแนะนำ =====
   if v_ladder then
-    v_recommend := case v_status
-      when 'ผ่าน / ขายได้' then 'อยู่ในส่วนลดที่ขั้นนี้ให้ได้ (' || trim(to_char(v_tier_disc, 'FM999990.##')) || '%) เสนอราคานี้ได้เลย'
-      when 'ขายได้ แต่ Margin ต่ำ' then 'เกินส่วนลดปกติของขั้นนี้ (' || trim(to_char(v_tier_disc, 'FM999990.##'))
-           || '%) แต่ยังไม่เกินเพดานพิเศษ ' || trim(to_char(v_special_disc, 'FM999990.##')) || '% — ควรเช็คกับหัวหน้าก่อนยืนยัน'
-      when 'ต่ำกว่าเกณฑ์' then 'เกินเพดานส่วนลดพิเศษ ' || trim(to_char(v_special_disc, 'FM999990.##'))
-           || '% ต้องคุยหัวหน้าก่อนเสนอราคานี้ให้ลูกค้า'
-      else 'ไม่แนะนำให้ขาย ราคานี้ต่ำจนไม่เหลือ Margin ขั้นต่ำ'
-    end;
+    if v_status = 'ผ่าน / ขายได้' then
+      v_recommend := 'อยู่ในส่วนลดที่ขั้นนี้ให้ได้ (' || trim(to_char(v_tier_disc, 'FM999990.##')) || '%) เสนอราคานี้ได้เลย';
+    elsif v_status = 'ขายได้ แต่ Margin ต่ำ' then
+      v_recommend := 'เกินส่วนลดปกติของขั้นนี้ (' || trim(to_char(v_tier_disc, 'FM999990.##'))
+        || '%) แต่ยังไม่เกินเพดานพิเศษ ' || trim(to_char(v_special_disc, 'FM999990.##')) || '% — ควรเช็คกับหัวหน้าก่อนยืนยัน';
+    elsif v_status = 'ต่ำกว่าเกณฑ์' then
+      -- ยังมีกำไรอยู่ ห้ามเขียนให้เข้าใจว่าขาดทุน แค่ต่ำกว่าเกณฑ์ที่ตกลงกันไว้
+      if v_offer_disc > v_special_disc + 0.05 then
+        v_recommend := 'ยังมีกำไร แต่ส่วนลดเกินเพดานพิเศษ ' || trim(to_char(v_special_disc, 'FM999990.##'))
+          || '% ต้องคุยหัวหน้าก่อนเสนอราคานี้ให้ลูกค้า';
+      else
+        v_recommend := 'ยังมีกำไร แต่ Margin ต่ำกว่าขั้นต่ำที่รับได้ (' || trim(to_char(v_min, 'FM999990.##'))
+          || '%) — ส่วนลดยังอยู่ในกรอบ แปลว่าต้นทุนอาจขึ้นจนเกณฑ์ส่วนลดเดิมไม่ทันแล้ว ควรคุยหัวหน้าและแจ้งบัญชีทบทวนเกณฑ์';
+      end if;
+    else
+      v_recommend := 'ราคานี้ขาดทุน ต่ำกว่าราคาเท่าทุน ' || to_char(coalesce(v_breakeven, 0), 'FM999,999,990.00') || ' บาท/ชิ้น';
+    end if;
     if v_offer_disc is not null then
       v_recommend := 'ลูกค้าขอส่วนลด ' || trim(to_char(v_offer_disc, 'FM999990.##')) || '% — ' || v_recommend;
     end if;
@@ -1615,6 +1632,7 @@ begin
     'auto_tier',             v_tier,
     'price_status',          v_status,
     'floor_price',           round(v_floor, 2),
+    'breakeven_price',       case when v_breakeven is null then null else round(v_breakeven, 2) end,
     'floor_source',          v_floor_source,
     'ladder',                v_ladder,
     'tier_label',            v_tier_label,
