@@ -6,7 +6,8 @@ import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 
 // products: รายการสินค้าทั้งหมดในระบบ (จาก fetchProductCosts) ใช้จับคู่รหัสสินค้าในไฟล์กับสินค้าจริง
-export default function ImportProductCostsModal({ products, currentUserName, onClose, onImported }) {
+// marginSettings: ค่ากลาง buffer ปัจจุบัน ส่งต่อให้ template ไปเขียนในชีต "วิธีกรอก" ให้ตรงกับที่ระบบใช้จริง
+export default function ImportProductCostsModal({ products, marginSettings = [], currentUserName, onClose, onImported }) {
   const { toast } = useUi()
   const { t, lang } = useLanguage()
   const [parsed, setParsed] = useState(null) // { validRows, invalidRows }
@@ -54,7 +55,7 @@ export default function ImportProductCostsModal({ products, currentUserName, onC
               <div style={{ fontSize: 13, marginBottom: 12 }}>
                 {t('1) ดาวน์โหลด Template (มีรหัสและชื่อสินค้าทุกตัวมาให้แล้ว)  2) กรอกตัวเลขใน Excel  3) อัปโหลดไฟล์ .xlsx กลับมาที่นี่')}
               </div>
-              <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} onClick={() => downloadProductCostTemplate(products)}>
+              <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} onClick={() => downloadProductCostTemplate(products, marginSettings)}>
                 {t('ดาวน์โหลด Template (.xlsx)')}
               </button>
               <div className="form-group">
@@ -66,6 +67,7 @@ export default function ImportProductCostsModal({ products, currentUserName, onC
                 <div style={{ marginTop: 6 }}>{t('แถวไหนไม่ได้กรอกอะไรเลยจะถูกข้าม กรอกเฉพาะสินค้าที่ต้องการได้')}</div>
                 <div>{t('แถวที่กรอกต้องมีต้นทุน/ชิ้น เสมอ — ค่าเดิมของสินค้านั้นจะถูกเขียนทับด้วยค่าในไฟล์')}</div>
                 <div>{t('Shipping Buffer / Provision Buffer / ค่าขนส่งมาตรฐาน ไม่มีในไฟล์ — ใช้ค่ากลาง ตั้งรายตัวได้ที่ปุ่มแก้ไข')}</div>
+                <div style={{ marginTop: 6 }}>{t('ในไฟล์มีชีต "วิธีกรอก" อธิบายทีละช่อง พร้อมสูตรและเกณฑ์ตัดสินสถานะ')}</div>
               </div>
             </>
           ) : (

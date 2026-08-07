@@ -450,27 +450,138 @@ export const exportPriceChecksToExcel = (rows, includeProfit = false) => {
 // ===== นำเข้าต้นทุนสินค้าจากไฟล์ Excel (บัญชี/แอดมินเท่านั้น) =====
 // Template ถูกเติมรหัส+ชื่อสินค้าทุกตัวมาให้แล้ว บัญชีแค่กรอกตัวเลขลงในแถวที่ต้องการ ไม่ต้องพิมพ์รหัสเอง
 // Shipping/Provision Buffer และค่าขนส่งมาตรฐาน ไม่มีในไฟล์ — ใช้ค่ากลางจากหน้า "ต้นทุนสินค้า" (ตั้งรายตัวได้ในป็อปอัปแก้ไข)
+// required/hint/example ใช้สร้างชีต "วิธีกรอก" ในไฟล์ template ให้บัญชีอ่านได้ในไฟล์เลย ไม่ต้องกลับมาถามในระบบ
 export const PRODUCT_COST_IMPORT_COLUMNS = [
-  { key: 'code', label: 'รหัสสินค้า', locked: true },
-  { key: 'name', label: 'ชื่อสินค้า', locked: true },   // ใส่มาให้อ่านประกอบเท่านั้น ตอนนำเข้าไม่ได้ใช้
-  { key: 'cost_price', label: 'ต้นทุน/ชิ้น', numeric: true },
-  { key: 'normal_selling_price', label: 'ราคาขายปกติ', numeric: true },
-  { key: 'target_margin_percent', label: 'Margin เป้าหมาย (%)', numeric: true },
-  { key: 'minimum_margin_percent', label: 'Margin ขั้นต่ำ (%)', numeric: true },
-  { key: 'floor_price', label: 'Floor Price', numeric: true },
-  { key: 'category', label: 'หมวดหมู่สินค้า' },
+  {
+    key: 'code', label: 'รหัสสินค้า', locked: true,
+    required: 'ระบบเติมให้', example: 'SKU-001',
+    hint: 'ห้ามแก้ — ระบบใช้ช่องนี้จับคู่กับสินค้าในระบบ ถ้าแก้แล้วไม่ตรงจะนำเข้าไม่ได้',
+  },
+  {
+    // ใส่มาให้อ่านประกอบเท่านั้น ตอนนำเข้าไม่ได้ใช้
+    key: 'name', label: 'ชื่อสินค้า', locked: true,
+    required: 'ระบบเติมให้', example: 'ตู้เย็น 2 ประตู 15 คิว',
+    hint: 'ไว้ดูว่ากรอกถูกตัวไหม ตอนนำเข้าระบบไม่ได้ใช้ช่องนี้',
+  },
+  {
+    key: 'cost_price', label: 'ต้นทุน/ชิ้น', numeric: true,
+    required: 'บังคับ', example: '1850',
+    hint: 'ต้นทุนจริงต่อ 1 ชิ้น ต้องมากกว่า 0 — ถ้าจะกรอกแถวนี้ต้องมีช่องนี้เสมอ',
+  },
+  {
+    key: 'normal_selling_price', label: 'ราคาขายปกติ', numeric: true,
+    required: 'ไม่บังคับ', example: '2390',
+    hint: 'ราคาที่ขายทั่วไป โชว์ให้เซลล์เห็นเป็นตัวเทียบ ไม่ได้เอาไปคำนวณ Margin',
+  },
+  {
+    key: 'target_margin_percent', label: 'Margin เป้าหมาย (%)', numeric: true,
+    required: 'ควรกรอก', example: '20',
+    hint: 'Margin ที่คำนวณได้ถึงค่านี้ = "ผ่าน / ขายได้" — ถ้าเว้นว่างระบบถือเป็น 0 แทบทุกราคาจะขึ้นว่าผ่าน',
+  },
+  {
+    key: 'minimum_margin_percent', label: 'Margin ขั้นต่ำ (%)', numeric: true,
+    required: 'ควรกรอก', example: '12',
+    hint: 'ต่ำกว่าเป้าหมายแต่ยังถึงค่านี้ = "ขายได้ แต่ Margin ต่ำ" / ต่ำกว่าค่านี้ = "ต่ำกว่าเกณฑ์" ต้องคุยหัวหน้า',
+  },
+  {
+    key: 'floor_price', label: 'Floor Price', numeric: true,
+    required: 'ควรกรอก', example: '2150',
+    hint: 'ราคาต่อชิ้นต่ำสุดที่ยอมได้ เซลล์เสนอต่ำกว่านี้ = "ไม่ควรขาย" ทันที — เว้นว่างระบบถือเป็น 0 คือไม่มีเพดานล่าง',
+  },
+  {
+    key: 'category', label: 'หมวดหมู่สินค้า',
+    required: 'ไม่บังคับ', example: 'ตู้เย็น',
+    hint: 'ข้อความอิสระ ใช้จัดกลุ่มสินค้าเวลาดูรายการ',
+  },
 ]
 
 // ช่องที่บัญชีต้องกรอกเอง (ไม่นับรหัส/ชื่อที่เติมมาให้) — ใช้ตัดสินว่าแถวไหน "ยังไม่ได้กรอก" แล้วข้ามไป
 const COST_FILLABLE_KEYS = PRODUCT_COST_IMPORT_COLUMNS.filter(c => !c.locked).map(c => c.key)
 
+// เขียนชีต "วิธีกรอก" — อธิบายทีละช่อง + สูตรที่ระบบใช้ + เกณฑ์ตัดสินสถานะ
+// settings: [{ key, value }] จาก margin_settings เอามาโชว์ค่า buffer จริงที่ใช้อยู่ ไม่ใช่เลขที่ hardcode ไว้ในคำอธิบาย
+function addCostHowToSheet(workbook, settings = []) {
+  const val = (k, fallback) => settings.find(s => s.key === k)?.value ?? fallback
+  const ship = val('shipping_buffer_percent', '2')
+  const prov = val('provision_buffer_percent', '2')
+  const defShip = val('default_shipping_cost', '0')
+
+  const sheet = workbook.addWorksheet('วิธีกรอก')
+  sheet.columns = [{ width: 22 }, { width: 14 }, { width: 78 }, { width: 16 }]
+
+  const title = (text) => {
+    const r = sheet.addRow([text])
+    r.font = { bold: true, size: 12, color: { argb: 'FF1B315E' } }
+    sheet.addRow([])
+  }
+  const line = (text) => sheet.addRow([text])
+
+  title('วิธีกรอกไฟล์นำเข้าต้นทุนสินค้า')
+  line('• กรอกเฉพาะแถวของสินค้าที่ต้องการ แถวไหนปล่อยว่างทั้งแถวระบบจะข้ามให้ ไม่ขึ้นเป็นข้อผิดพลาด')
+  line('• แถวที่กรอกจะเขียนทับค่าเดิมของสินค้านั้น (ค่าที่เห็นอยู่ในไฟล์คือค่าปัจจุบันในระบบ แก้ทับได้เลย)')
+  line('• กรอกเป็นตัวเลขล้วน ไม่ต้องใส่ลูกน้ำ ไม่ต้องใส่คำว่าบาท และไม่ต้องใส่เครื่องหมาย %')
+  line('• คอลัมน์พื้นเทา (รหัสสินค้า / ชื่อสินค้า) ห้ามแก้ ระบบใช้จับคู่กับสินค้าในระบบ')
+  sheet.addRow([])
+
+  title('แต่ละช่องกรอกอย่างไร')
+  const head = sheet.addRow(['ช่อง', 'ต้องกรอกไหม', 'กรอกอย่างไร', 'ตัวอย่าง'])
+  head.font = { bold: true }
+  head.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F3F6' } } })
+  PRODUCT_COST_IMPORT_COLUMNS.forEach(c => {
+    const r = sheet.addRow([c.label, c.required || '', c.hint || '', c.example || ''])
+    r.getCell(3).alignment = { wrapText: true, vertical: 'top' }
+    r.getCell(1).font = { bold: true }
+  })
+  sheet.addRow([])
+
+  title('สูตรที่ระบบใช้คำนวณ')
+  line('ยอดขายรวม       = ราคาที่เซลล์เสนอ × จำนวน')
+  line(`Shipping Buffer  = ยอดขายรวม × ${ship}%`)
+  line(`Provision Buffer = ยอดขายรวม × ${prov}%`)
+  line('ต้นทุนรวม        = (ต้นทุน/ชิ้น × จำนวน) + ค่าขนส่งจริง + Shipping Buffer + Provision Buffer')
+  line('กำไร             = ยอดขายรวม − ต้นทุนรวม')
+  line('Margin (%)       = กำไร ÷ ยอดขายรวม × 100')
+  sheet.addRow([])
+  line(`หมายเหตุ: ค่าขนส่งจริงเซลล์เป็นคนกรอกตอนเช็คราคา ถ้าไม่กรอกระบบใช้ค่ามาตรฐาน ${defShip} บาท`)
+  line('ค่า Buffer และค่าขนส่งมาตรฐานไม่มีในไฟล์นี้ ใช้ค่ากลางของระบบ ถ้าสินค้าตัวไหนต้องใช้ค่าเฉพาะ ตั้งได้ที่ปุ่ม "แก้ไข" ในหน้าต้นทุนสินค้า')
+  sheet.addRow([])
+
+  title('ระบบตัดสินสถานะอย่างไร (ไล่จากบนลงล่าง เจอข้อไหนก่อนใช้ข้อนั้น)')
+  const head2 = sheet.addRow(['สถานะที่เซลล์เห็น', 'เงื่อนไข', 'แปลว่า'])
+  head2.font = { bold: true }
+  head2.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F3F6' } } })
+  const rules = [
+    ['ไม่ควรขาย', 'ราคาที่เสนอ < Floor Price  หรือ  กำไร ≤ 0', 'ต่ำกว่าราคาขั้นต่ำหรือขาดทุน ไม่ควรเสนอ'],
+    ['ผ่าน / ขายได้', 'Margin ≥ Margin เป้าหมาย', 'เสนอราคานี้ได้เลย'],
+    ['ขายได้ แต่ Margin ต่ำ', 'Margin ≥ Margin ขั้นต่ำ (แต่ยังไม่ถึงเป้าหมาย)', 'ขายได้ แต่ควรดูจำนวนและเงื่อนไขก่อน'],
+    ['ต่ำกว่าเกณฑ์', 'Margin < Margin ขั้นต่ำ (แต่ยังมีกำไรและไม่ต่ำกว่า Floor Price)', 'ยังมีกำไร แต่ต้องคุยหัวหน้าก่อนเสนอ'],
+  ]
+  rules.forEach(([a, b, c]) => {
+    const r = sheet.addRow([a, b, c])
+    r.getCell(1).font = { bold: true }
+    r.getCell(2).alignment = { wrapText: true, vertical: 'top' }
+  })
+  sheet.addRow([])
+
+  title('ข้อควรระวัง')
+  line('• Floor Price ไม่ควรต่ำกว่าต้นทุน/ชิ้น ไม่งั้นระบบจะยอมให้เสนอราคาที่ขาดทุนได้')
+  line('• Margin ขั้นต่ำ ไม่ควรสูงกว่า Margin เป้าหมาย')
+  line('• ถ้าเว้น Margin เป้าหมายและ Margin ขั้นต่ำไว้ ระบบถือเป็น 0 ทั้งคู่ เกือบทุกราคาจะขึ้นว่า "ผ่าน / ขายได้" — ควรกรอกเสมอ')
+  line('• สินค้าที่ยังไม่มีต้นทุนจะไม่ขึ้นให้เซลล์เลือกในหน้าเช็คราคา')
+  line('• เซลล์ไม่เห็นตัวเลขต้นทุนในไฟล์นี้และในระบบ เห็นแค่ Margin เป็นเปอร์เซ็นต์กับสถานะ')
+}
+
 // products: [{ id, code, name, category, cost }] จาก fetchProductCosts — เติมค่าเดิมที่เคยกรอกไว้ลงไปด้วย
 // จะได้แก้ไขทับได้เลย ไม่ต้องกรอกใหม่ทั้งหมด (ไฟล์ที่โหลดออกไปคือสถานะปัจจุบันของระบบ)
-export async function downloadProductCostTemplate(products = []) {
+export async function downloadProductCostTemplate(products = [], settings = []) {
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet('Template')
   sheet.columns = PRODUCT_COST_IMPORT_COLUMNS.map(c => ({ header: c.label, key: c.key, width: c.key === 'name' ? 34 : 20 }))
   sheet.getRow(1).font = { bold: true }
+  // คำอธิบายสั้นๆ ติดหัวคอลัมน์ไว้ด้วย (เอาเมาส์ชี้แล้วเห็น) — รายละเอียดเต็มอยู่ในชีต "วิธีกรอก"
+  PRODUCT_COST_IMPORT_COLUMNS.forEach((c, i) => {
+    if (c.hint) sheet.getCell(1, i + 1).note = `${c.required || ''}\n${c.hint}`
+  })
 
   products.forEach(p => {
     const c = p.cost || {}
@@ -492,6 +603,8 @@ export async function downloadProductCostTemplate(products = []) {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F3F6' } }
     })
   })
+
+  addCostHowToSheet(workbook, settings)
 
   const buffer = await workbook.xlsx.writeBuffer()
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })

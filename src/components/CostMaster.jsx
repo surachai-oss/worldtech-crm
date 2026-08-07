@@ -278,7 +278,7 @@ export default function CostMaster({ currentUserName }) {
 
       {modal && <CostModal product={modal} onClose={() => setModal(null)} onSave={onSave} />}
       {showImport && (
-        <ImportProductCostsModal products={rows} currentUserName={currentUserName}
+        <ImportProductCostsModal products={rows} marginSettings={settings} currentUserName={currentUserName}
           onClose={() => setShowImport(false)} onImported={load} />
       )}
 

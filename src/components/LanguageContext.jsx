@@ -639,6 +639,7 @@ export const EN_DICT = {
   'แถวที่กรอกต้องมีต้นทุน/ชิ้น เสมอ — ค่าเดิมของสินค้านั้นจะถูกเขียนทับด้วยค่าในไฟล์': 'Any row you fill in must have a cost per unit — the file overwrites that product\'s existing values',
   'Shipping Buffer / Provision Buffer / ค่าขนส่งมาตรฐาน ไม่มีในไฟล์ — ใช้ค่ากลาง ตั้งรายตัวได้ที่ปุ่มแก้ไข': 'Shipping buffer, provision buffer and standard shipping are not in the file — they use the shared defaults, and can be set per product via Edit',
   'Floor Price ต่ำกว่าต้นทุน': 'Floor price is below cost',
+  'ในไฟล์มีชีต "วิธีกรอก" อธิบายทีละช่อง พร้อมสูตรและเกณฑ์ตัดสินสถานะ': 'The file has a "วิธีกรอก" sheet explaining every column, the formula and how the status is decided',
 }
 
 export function LanguageProvider({ children }) {
