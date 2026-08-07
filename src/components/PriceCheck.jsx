@@ -95,10 +95,11 @@ function buildComparison(results) {
     }
   }
 
-  if (br.price_status === PRICE_STATUS_UNDER) {
-    lines.push(`แม้จะเป็นตัวที่ดีที่สุด แต่ยังต่ำกว่า Margin ขั้นต่ำ — ควรคุยหัวหน้าก่อนเสนอ หรือขยับราคาขึ้นเป็น ${br.suggested_min_price ? fmtCurrency(br.suggested_min_price) + ' บาท/ชิ้น' : 'ราคาแนะนำขั้นต่ำ'}`)
-  } else if (br.price_status === PRICE_STATUS_LOW_MARGIN && br.suggested_min_price) {
-    lines.push(`ถ้าอยากถึงเป้าหมาย ต้องเสนออย่างน้อย ${fmtCurrency(br.suggested_min_price)} บาท/ชิ้น`)
+  // แนะนำด้วยราคาที่มาจาก "ราคาขายปกติ × ส่วนลด" เท่านั้น — ไม่อ้างราคาที่คำนวณจากต้นทุน
+  if (br.price_status === PRICE_STATUS_UNDER && br.special_price) {
+    lines.push(`แม้จะเป็นตัวที่ดีที่สุด แต่ยังเกินเพดานส่วนลดพิเศษ — ถ้าขยับขึ้นเป็น ${fmtCurrency(br.special_price)} บาท/ชิ้น จะอยู่ในเพดานพอดี`)
+  } else if (br.price_status === PRICE_STATUS_LOW_MARGIN && br.tier_price) {
+    lines.push(`ถ้าอยากอยู่ในส่วนลดปกติของขั้นนี้ ต้องเสนออย่างน้อย ${fmtCurrency(br.tier_price)} บาท/ชิ้น`)
   }
 
   return { bestNo: best.no, headline, lines }
@@ -121,8 +122,8 @@ function buildSummaryText(results, comparison) {
       `Margin คงเหลือ: ${fmtPct(r.margin_percent)}`,
       `Tier ระบบ: ${r.auto_tier}`,
       `สถานะ: ${r.price_status}`,
-      `ราคาแนะนำขั้นต่ำ: ${r.suggested_min_price ? `${fmtCurrency(r.suggested_min_price)} บาท` : 'คำนวณไม่ได้'}`,
-      `Floor Price: ${fmtCurrency(r.floor_price)} บาท`,
+      ...(r.tier_price ? [`ส่วนลดที่ขั้นนี้ให้ได้: ${r.tier_discount_percent}% (${fmtCurrency(r.tier_price)} บาท/ชิ้น)`] : []),
+      ...(r.special_price ? [`เพดานส่วนลดพิเศษ: ${r.special_discount_percent}% (${fmtCurrency(r.special_price)} บาท/ชิ้น)`] : []),
       ''
     )
   })
@@ -270,9 +271,12 @@ export default function PriceCheck({ perm }) {
           {selected && (
             <div style={{ margin: '2px 0 12px', fontSize: 12, color: 'var(--text-light)' }}>
               {t('ราคาขายปกติ')}: <b>{selected.normal_selling_price ? fmtCurrency(selected.normal_selling_price) : '-'}</b>
-              {'  ·  '}Floor Price: <b>{fmtCurrency(selected.floor_price)}</b>
-              {'  ·  '}{t('Margin เป้าหมาย')}: <b>{fmtPct(selected.target_margin_percent)}</b>
-              {'  ·  '}{t('Margin ขั้นต่ำ')}: <b>{fmtPct(selected.minimum_margin_percent)}</b>
+              {/* Floor Price / เกณฑ์ Margin เป็นตัวเลขภายใน เซลล์ใช้ส่วนลดของขั้นตัดสินใจแทน */}
+              {canSeeProfit && <>
+                {'  ·  '}Floor Price: <b>{fmtCurrency(selected.floor_price)}</b>
+                {'  ·  '}{t('Margin เป้าหมาย')}: <b>{fmtPct(selected.target_margin_percent)}</b>
+                {'  ·  '}{t('Margin ขั้นต่ำ')}: <b>{fmtPct(selected.minimum_margin_percent)}</b>
+              </>}
               {selected.finance_remark && <div style={{ marginTop: 4 }}>{t('หมายเหตุจากบัญชี')}: {selected.finance_remark}</div>}
             </div>
           )}
@@ -389,15 +393,20 @@ export default function PriceCheck({ perm }) {
                           value={`${Number(entry.result.special_discount_percent)}%  (${fmtCurrency(entry.result.special_price)})`} />
                       </>
                     )}
-                    {/* โหมดขั้นบันได เส้นห้ามขายคือราคาเท่าทุนจริง ไม่ใช่ Floor Price ที่ตั้งไว้ — เรียกชื่อให้ตรงกันไม่งั้นอ่านผิด */}
-                    <ResultRow label={entry.result.ladder ? t('ราคาเท่าทุน/ชิ้น') : 'Floor Price'}
-                      value={fmtCurrency(entry.result.floor_price)}
-                      hint={entry.result.ladder ? `(${t('ต่ำกว่านี้คือขาดทุน')})` : null} />
-                    <ResultRow label={t('ราคาแนะนำขั้นต่ำ/ชิ้น')}
-                      value={entry.result.suggested_min_price ? fmtCurrency(entry.result.suggested_min_price) : t('คำนวณไม่ได้')} strong />
-                    {entry.result.suggested_target_price && (
-                      <ResultRow label={t('ราคาที่ถึงเป้าหมาย/ชิ้น')} value={fmtCurrency(entry.result.suggested_target_price)}
-                        color="var(--success)" />
+                    {/* ราคาเท่าทุน/ขั้นต่ำ/ถึงเป้าหมาย คำนวณจากต้นทุนโดยตรง เซลล์จึงไม่เห็น (ฝั่งเซิร์ฟเวอร์ก็ไม่ส่งมาให้)
+                        สิ่งที่เซลล์ใช้ตัดสินใจคือราคาของขั้นกับเพดานพิเศษ ซึ่งมาจากราคาขายปกติ ไม่เกี่ยวกับต้นทุน */}
+                    {canSeeProfit && (
+                      <>
+                        <ResultRow label={entry.result.ladder ? t('ราคาเท่าทุน/ชิ้น') : 'Floor Price'}
+                          value={fmtCurrency(entry.result.floor_price)}
+                          hint={entry.result.ladder ? `(${t('ต่ำกว่านี้คือขาดทุน')})` : null} />
+                        <ResultRow label={t('ราคาแนะนำขั้นต่ำ/ชิ้น')}
+                          value={entry.result.suggested_min_price ? fmtCurrency(entry.result.suggested_min_price) : t('คำนวณไม่ได้')} strong />
+                        {entry.result.suggested_target_price && (
+                          <ResultRow label={t('ราคาที่ถึงเป้าหมาย/ชิ้น')} value={fmtCurrency(entry.result.suggested_target_price)}
+                            color="var(--success)" />
+                        )}
+                      </>
                     )}
                     {/* ขั้นถัดไปเป็นไพ่ให้เซลล์ชวนลูกค้าซื้อเพิ่มเพื่อแลกส่วนลดที่ลึกกว่า */}
                     {entry.result.next_tier_min_qty && entry.result.next_tier_price && (

@@ -1585,7 +1585,7 @@ begin
           || '%) — ส่วนลดยังอยู่ในกรอบ แปลว่าต้นทุนอาจขึ้นจนเกณฑ์ส่วนลดเดิมไม่ทันแล้ว ควรคุยหัวหน้าและแจ้งบัญชีทบทวนเกณฑ์';
       end if;
     else
-      v_recommend := 'ราคานี้ขาดทุน ต่ำกว่าราคาเท่าทุน ' || to_char(coalesce(v_breakeven, 0), 'FM999,999,990.00') || ' บาท/ชิ้น';
+      v_recommend := 'ราคานี้ขาดทุน ไม่ควรเสนอ — ต้องขยับราคาขึ้น';
     end if;
     if v_offer_disc is not null then
       v_recommend := 'ลูกค้าขอส่วนลด ' || trim(to_char(v_offer_disc, 'FM999990.##')) || '% — ' || v_recommend;
@@ -1657,9 +1657,17 @@ $$ language plpgsql stable security definer set search_path = public;
 
 -- ===== ตัดกำไรเป็นบาทออกถ้าผู้เรียกไม่ใช่บัญชี/แอดมิน =====
 -- (เซลล์ยังเห็น Margin % ตามที่ requirement ต้องการ แต่ไม่ได้ตัวเลขกำไรตรงๆ ไปลบกลับหาต้นทุน)
+-- ตัวเลขกลุ่มนี้ย้อนคำนวณต้นทุนได้ตรงๆ (เช่น ราคาเท่าทุน × (1 − buffer) = ต้นทุน) จึงต้องตัดที่นี่
+-- ไม่ใช่แค่ซ่อนบนหน้าจอ — ถ้าตัดแค่ฝั่งหน้าเว็บ เปิด DevTools ดู response ก็เห็นอยู่ดี
+-- ส่วนราคาที่มาจาก "ราคาขายปกติ × ส่วนลด" (tier_price / special_price / next_tier_price) ไม่เกี่ยวกับต้นทุน ส่งให้เซลล์ได้
 create or replace function margin_strip_cost(p_result json) returns json as $$
   select case when is_admin() or is_finance() then p_result
-              else (p_result::jsonb - 'total_profit')::json end;
+              else (p_result::jsonb
+                      - 'total_profit'
+                      - 'breakeven_price'
+                      - 'floor_price'
+                      - 'suggested_min_price'
+                      - 'suggested_target_price')::json end;
 $$ language sql stable security definer set search_path = public;
 
 -- ===== เช็คราคา (ไม่บันทึกประวัติ) =====
