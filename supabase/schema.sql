@@ -1253,7 +1253,7 @@ create table if not exists product_costs (
   shipping_buffer_percent  numeric,                     -- ว่าง = ใช้ค่ากลางจาก margin_settings
   provision_buffer_percent numeric,                     -- ว่าง = ใช้ค่ากลางจาก margin_settings
   default_shipping_cost    numeric,                     -- ค่าขนส่งมาตรฐาน ใช้เมื่อเซลล์ไม่กรอก
-  packaging_cost           numeric,                     -- ค่าแพ็กกิ้งต่อชิ้น
+  packaging_cost           numeric,                     -- เลิกใช้แล้ว (ตัดค่าแพ็กกิ้งออกจากการคำนวณ) — คงคอลัมน์ไว้เผื่อข้อมูลเก่า
   status                   text default 'Active',       -- Active / Inactive / Discontinued
   finance_remark           text,
   updated_by               text,
@@ -1278,9 +1278,11 @@ insert into margin_settings (key, value, description, owner_role) values
   ('shipping_buffer_percent',  '2', 'ค่าเผื่อค่าขนส่ง คิดจากยอดขายรวม (%)',              'Finance'),
   ('provision_buffer_percent', '2', 'ค่าเผื่อ Provision / กันความเสี่ยง คิดจากยอดขายรวม (%)', 'Finance'),
   ('default_shipping_cost',    '0', 'ค่าขนส่งมาตรฐาน ใช้เมื่อเซลล์ไม่กรอกค่าขนส่งจริง (บาท)', 'Finance'),
-  ('default_packaging_cost',   '0', 'ค่าแพ็กกิ้งต่อชิ้น (บาท)',                          'Finance'),
   ('round_suggested_price_to', '1', 'ปัดราคาแนะนำขั้นต่ำขึ้นเป็นจำนวนเท่าของกี่บาท (1 = ปัดเป็นจำนวนเต็ม)', 'Finance')
 on conflict (key) do nothing;
+
+-- ค่าแพ็กกิ้งถูกตัดออกจากการคำนวณแล้ว — ลบค่ากลางทิ้งกันบัญชีเห็นแล้วเข้าใจผิดว่ายังมีผล
+delete from margin_settings where key = 'default_packaging_cost';
 
 -- ----- ประวัติการเช็คราคา — เป็น log เฉยๆ ไม่ใช่ approval log และไม่มีคอลัมน์ต้นทุน -----
 create sequence if not exists price_check_seq start 1;
@@ -1354,7 +1356,7 @@ $$ language sql stable security definer set search_path = public;
 --  NetSales        = OfferPrice × Quantity
 --  ShippingBuffer  = NetSales × ShippingBufferPercent / 100
 --  ProvisionBuffer = NetSales × ProvisionBufferPercent / 100
---  TotalCost       = (CostPrice × Qty) + ค่าขนส่งจริง + ShippingBuffer + ProvisionBuffer + (PackagingCost × Qty)
+--  TotalCost       = (CostPrice × Qty) + ค่าขนส่งจริง + ShippingBuffer + ProvisionBuffer
 --  TotalProfit     = NetSales − TotalCost
 --  MarginPercent   = TotalProfit / NetSales × 100
 create or replace function margin_compute_price(
@@ -1368,7 +1370,6 @@ declare
   v_c             product_costs%rowtype;
   v_ship_buf_pct  numeric;
   v_prov_buf_pct  numeric;
-  v_packaging     numeric;
   v_used_default  boolean;
   v_ship          numeric;
   v_net           numeric;
@@ -1408,7 +1409,6 @@ begin
   -- ค่าเฉพาะของสินค้า > ค่ากลางที่บัญชีตั้งไว้ > ค่าสำรอง
   v_ship_buf_pct := coalesce(v_c.shipping_buffer_percent,  margin_setting_num('shipping_buffer_percent', 2));
   v_prov_buf_pct := coalesce(v_c.provision_buffer_percent, margin_setting_num('provision_buffer_percent', 2));
-  v_packaging    := coalesce(v_c.packaging_cost,           margin_setting_num('default_packaging_cost', 0));
 
   v_used_default := (p_shipping_cost is null);
   v_ship := case when v_used_default
@@ -1418,7 +1418,7 @@ begin
   v_net        := p_offer_price * p_quantity;
   v_ship_buf   := v_net * v_ship_buf_pct / 100;
   v_prov_buf   := v_net * v_prov_buf_pct / 100;
-  v_total_cost := (v_c.cost_price * p_quantity) + v_ship + v_ship_buf + v_prov_buf + (v_packaging * p_quantity);
+  v_total_cost := (v_c.cost_price * p_quantity) + v_ship + v_ship_buf + v_prov_buf;
   v_profit     := v_net - v_total_cost;
   v_margin     := case when v_net > 0 then v_profit / v_net * 100 else 0 end;
 
@@ -1438,7 +1438,7 @@ begin
   end if;
 
   -- ราคาต่ำสุดที่ควรเสนอ เพื่อให้ยังได้ Margin ขั้นต่ำหลังหัก buffer ทั้งสองตัว
-  v_fixed := (v_c.cost_price * p_quantity) + v_ship + (v_packaging * p_quantity);
+  v_fixed := (v_c.cost_price * p_quantity) + v_ship;
   v_denom := 1 - ((v_ship_buf_pct + v_prov_buf_pct) / 100) - (v_min / 100);
   if v_denom <= 0 then
     v_suggest := null;

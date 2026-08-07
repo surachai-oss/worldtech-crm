@@ -448,40 +448,63 @@ export const exportPriceChecksToExcel = (rows, includeProfit = false) => {
 }
 
 // ===== นำเข้าต้นทุนสินค้าจากไฟล์ Excel (บัญชี/แอดมินเท่านั้น) =====
-// จับคู่กับสินค้าที่มีอยู่แล้วด้วย "รหัสสินค้า" — ไม่สร้างสินค้าใหม่ให้ (ต้องไปเพิ่มที่หน้าสินค้าก่อน)
-// ช่องที่เว้นว่าง = ไม่แตะค่าเดิมของสินค้านั้น (ยกเว้นต้นทุนที่บังคับกรอก)
+// Template ถูกเติมรหัส+ชื่อสินค้าทุกตัวมาให้แล้ว บัญชีแค่กรอกตัวเลขลงในแถวที่ต้องการ ไม่ต้องพิมพ์รหัสเอง
+// Shipping/Provision Buffer และค่าขนส่งมาตรฐาน ไม่มีในไฟล์ — ใช้ค่ากลางจากหน้า "ต้นทุนสินค้า" (ตั้งรายตัวได้ในป็อปอัปแก้ไข)
 export const PRODUCT_COST_IMPORT_COLUMNS = [
-  { key: 'code', label: 'รหัสสินค้า', required: true },
-  { key: 'cost_price', label: 'ต้นทุน/ชิ้น', required: true, numeric: true },
+  { key: 'code', label: 'รหัสสินค้า', locked: true },
+  { key: 'name', label: 'ชื่อสินค้า', locked: true },   // ใส่มาให้อ่านประกอบเท่านั้น ตอนนำเข้าไม่ได้ใช้
+  { key: 'cost_price', label: 'ต้นทุน/ชิ้น', numeric: true },
   { key: 'normal_selling_price', label: 'ราคาขายปกติ', numeric: true },
   { key: 'target_margin_percent', label: 'Margin เป้าหมาย (%)', numeric: true },
   { key: 'minimum_margin_percent', label: 'Margin ขั้นต่ำ (%)', numeric: true },
   { key: 'floor_price', label: 'Floor Price', numeric: true },
-  { key: 'shipping_buffer_percent', label: 'Shipping Buffer (%)', numeric: true },
-  { key: 'provision_buffer_percent', label: 'Provision Buffer (%)', numeric: true },
-  { key: 'default_shipping_cost', label: 'ค่าขนส่งมาตรฐาน', numeric: true },
-  { key: 'packaging_cost', label: 'ค่าแพ็กกิ้ง/ชิ้น', numeric: true },
-  { key: 'status', label: 'สถานะ' },
-  { key: 'category', label: 'หมวดหมู่' },
-  { key: 'brand', label: 'แบรนด์' },
-  { key: 'finance_remark', label: 'หมายเหตุจากบัญชี' },
+  { key: 'category', label: 'หมวดหมู่สินค้า' },
 ]
 
-const PRODUCT_COST_EXAMPLE_ROW = {
-  code: 'SKU-001', cost_price: 1850, normal_selling_price: 2390,
-  target_margin_percent: 20, minimum_margin_percent: 12, floor_price: 2150,
-  shipping_buffer_percent: 2, provision_buffer_percent: 2,
-  default_shipping_cost: 150, packaging_cost: 15,
-  status: 'Active', category: 'Refrigerator', brand: 'Worldtech',
-  finance_remark: 'ต้นทุนนี้รวมค่านำเข้าแล้ว'
-}
+// ช่องที่บัญชีต้องกรอกเอง (ไม่นับรหัส/ชื่อที่เติมมาให้) — ใช้ตัดสินว่าแถวไหน "ยังไม่ได้กรอก" แล้วข้ามไป
+const COST_FILLABLE_KEYS = PRODUCT_COST_IMPORT_COLUMNS.filter(c => !c.locked).map(c => c.key)
 
-export const downloadProductCostTemplate = () =>
-  downloadExcelTemplate(PRODUCT_COST_IMPORT_COLUMNS, PRODUCT_COST_EXAMPLE_ROW, 'template_นำเข้าต้นทุนสินค้า.xlsx', {
-    status: ['Active', 'Inactive', 'Discontinued']
+// products: [{ id, code, name, category, cost }] จาก fetchProductCosts — เติมค่าเดิมที่เคยกรอกไว้ลงไปด้วย
+// จะได้แก้ไขทับได้เลย ไม่ต้องกรอกใหม่ทั้งหมด (ไฟล์ที่โหลดออกไปคือสถานะปัจจุบันของระบบ)
+export async function downloadProductCostTemplate(products = []) {
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet('Template')
+  sheet.columns = PRODUCT_COST_IMPORT_COLUMNS.map(c => ({ header: c.label, key: c.key, width: c.key === 'name' ? 34 : 20 }))
+  sheet.getRow(1).font = { bold: true }
+
+  products.forEach(p => {
+    const c = p.cost || {}
+    sheet.addRow({
+      code: p.code,
+      name: p.name,
+      cost_price: c.cost_price ?? '',
+      normal_selling_price: c.normal_selling_price ?? '',
+      target_margin_percent: c.target_margin_percent ?? '',
+      minimum_margin_percent: c.minimum_margin_percent ?? '',
+      floor_price: c.floor_price ?? '',
+      category: p.category ?? '',
+    })
   })
 
+  // รหัส/ชื่อสินค้าเป็นตัวจับคู่กับระบบ — ทำพื้นเทาไว้เป็นสัญญาณว่าไม่ต้องแก้ (ไม่ล็อกชีต กันไฟล์แก้ไขไม่ได้)
+  ;[1, 2].forEach(col => {
+    sheet.getColumn(col).eachCell(cell => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F3F6' } }
+    })
+  })
+
+  const buffer = await workbook.xlsx.writeBuffer()
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'template_นำเข้าต้นทุนสินค้า.xlsx'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 // productsByCode: Map ของ 'รหัสสินค้าตัวพิมพ์เล็ก' -> { id, code, name } ใช้จับคู่แถวในไฟล์กับสินค้าจริง
+// แถวที่ยังไม่ได้กรอกอะไรเลยจะถูกข้าม (ไม่นับเป็น error) เพราะ template แจกมาครบทุกสินค้า บัญชีมักกรอกทีละส่วน
 export async function parseProductCostImportFile(file, productsByCode) {
   const rawRows = await readExcelRows(file)
   const labelToCol = {}
@@ -490,6 +513,7 @@ export async function parseProductCostImportFile(file, productsByCode) {
   const seenInFile = new Set()
   const validRows = []
   const invalidRows = []
+  let skipped = 0
 
   rawRows.forEach((raw, i) => {
     const row = {}
@@ -498,31 +522,30 @@ export async function parseProductCostImportFile(file, productsByCode) {
       if (col) row[col.key] = String(value ?? '').trim()
     })
 
+    // ยังไม่ได้กรอกอะไรในแถวนี้เลย = ข้ามไปเงียบๆ
+    if (COST_FILLABLE_KEYS.every(k => !row[k])) { skipped++; return }
+
     const errors = []
     const code = row.code || ''
     const normCode = code.toLowerCase()
     const product = normCode ? productsByCode.get(normCode) : null
 
-    if (!code) errors.push('กรุณากรอกรหัสสินค้า')
+    if (!code) errors.push('ไม่มีรหัสสินค้าในแถวนี้')
     else if (!product) errors.push('ไม่พบรหัสสินค้านี้ในระบบ (เพิ่มที่หน้าสินค้าก่อน)')
     else if (seenInFile.has(normCode)) errors.push('รหัสสินค้าซ้ำกันในไฟล์นี้')
     if (code) seenInFile.add(normCode)
 
-    // ตัวเลขทุกช่องต้องเป็นตัวเลขจริงถ้ากรอกมา — เว้นว่างได้ (แปลว่าไม่แตะค่าเดิม) ยกเว้นต้นทุนที่บังคับ
+    // ช่องตัวเลขเว้นว่างได้ (= ล้างค่าเดิม) แต่ถ้ากรอกมาต้องเป็นตัวเลขจริง — ยกเว้นต้นทุนที่บังคับ
     const nums = {}
     PRODUCT_COST_IMPORT_COLUMNS.filter(c => c.numeric).forEach(c => {
-      const raw2 = row[c.key]
-      if (raw2 === '' || raw2 === undefined) { nums[c.key] = null; return }
-      const n = Number(String(raw2).replace(/,/g, ''))
+      const v = row[c.key]
+      if (v === '' || v === undefined) { nums[c.key] = null; return }
+      const n = Number(String(v).replace(/,/g, ''))
       if (isNaN(n)) errors.push(`${c.label} ต้องเป็นตัวเลข`)
       else nums[c.key] = n
     })
-    if (nums.cost_price === null || nums.cost_price === undefined) errors.push('กรุณากรอกต้นทุน/ชิ้น')
+    if (nums.cost_price === null) errors.push('กรุณากรอกต้นทุน/ชิ้น')
     else if (nums.cost_price <= 0) errors.push('ต้นทุน/ชิ้น ต้องมากกว่า 0')
-
-    if (row.status && !['Active', 'Inactive', 'Discontinued'].includes(row.status)) {
-      errors.push('สถานะต้องเป็น Active / Inactive / Discontinued')
-    }
 
     if (errors.length) { invalidRows.push({ row: i + 2, errors, data: row }); return }
 
@@ -536,16 +559,11 @@ export async function parseProductCostImportFile(file, productsByCode) {
         target_margin_percent: nums.target_margin_percent,
         minimum_margin_percent: nums.minimum_margin_percent,
         floor_price: nums.floor_price,
-        shipping_buffer_percent: nums.shipping_buffer_percent,
-        provision_buffer_percent: nums.provision_buffer_percent,
-        default_shipping_cost: nums.default_shipping_cost,
-        packaging_cost: nums.packaging_cost,
-        status: row.status || 'Active',
-        finance_remark: row.finance_remark || null,
+        status: 'Active',
       },
-      meta: { category: row.category || null, brand: row.brand || null },
+      meta: { category: row.category || null },
     })
   })
 
-  return { validRows, invalidRows }
+  return { validRows, invalidRows, skipped }
 }

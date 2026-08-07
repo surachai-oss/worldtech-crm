@@ -17,7 +17,7 @@ const pct = (n) => (n === null || n === undefined || n === '' ? '-' : `${Number(
 const EMPTY = {
   cost_price: '', normal_selling_price: '', target_margin_percent: '', minimum_margin_percent: '',
   floor_price: '', shipping_buffer_percent: '', provision_buffer_percent: '',
-  default_shipping_cost: '', packaging_cost: '', status: 'Active', finance_remark: '',
+  default_shipping_cost: '', status: 'Active', finance_remark: '',
   category: '', brand: ''
 }
 
@@ -34,7 +34,6 @@ function CostModal({ product, onClose, onSave }) {
     shipping_buffer_percent: c.shipping_buffer_percent ?? '',
     provision_buffer_percent: c.provision_buffer_percent ?? '',
     default_shipping_cost: c.default_shipping_cost ?? '',
-    packaging_cost: c.packaging_cost ?? '',
     status: c.status || 'Active',
     finance_remark: c.finance_remark || '',
     category: product.category || '',
@@ -45,8 +44,8 @@ function CostModal({ product, onClose, onSave }) {
   // เตือนล่วงหน้าตามข้อควรระวังใน requirement — ไม่บล็อกการบันทึก แค่ให้บัญชีเห็นก่อน
   const warnings = []
   if (!(Number(f.cost_price) > 0)) warnings.push(t('ต้นทุนต้องมากกว่า 0 ไม่งั้นสินค้านี้จะยังคำนวณราคาไม่ได้'))
-  if (f.floor_price !== '' && Number(f.floor_price) < Number(f.cost_price || 0) + Number(f.packaging_cost || 0)) {
-    warnings.push(t('Floor Price ต่ำกว่าต้นทุน + ค่าแพ็กกิ้ง'))
+  if (f.floor_price !== '' && Number(f.floor_price) < Number(f.cost_price || 0)) {
+    warnings.push(t('Floor Price ต่ำกว่าต้นทุน'))
   }
   if (f.minimum_margin_percent !== '' && f.target_margin_percent !== '' &&
       Number(f.minimum_margin_percent) > Number(f.target_margin_percent)) {
@@ -88,8 +87,11 @@ function CostModal({ product, onClose, onSave }) {
               <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('ราคาต่ำสุดต่อชิ้นที่ไม่ควรต่ำกว่า — ต่ำกว่านี้ระบบขึ้น "ไม่ควรขาย"')}</div>
             </div>
             <div className="form-group">
-              <label className="form-label">{t('ค่าแพ็กกิ้ง/ชิ้น')}</label>
-              <input className="form-control" type="number" step="0.01" min="0" value={f.packaging_cost} onChange={set('packaging_cost')} placeholder={t('ว่าง = ใช้ค่ากลาง')} />
+              <label className="form-label">{t('สถานะ')}</label>
+              <select className="form-control" value={f.status} onChange={set('status')}>
+                {PRODUCT_COST_STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
+              </select>
+              <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('เซลล์เลือกได้เฉพาะสินค้าที่เป็น Active')}</div>
             </div>
           </div>
           <div className="form-row">
@@ -109,22 +111,13 @@ function CostModal({ product, onClose, onSave }) {
               <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('ใช้เมื่อเซลล์ไม่กรอกค่าขนส่งจริง')}</div>
             </div>
             <div className="form-group">
-              <label className="form-label">{t('สถานะ')}</label>
-              <select className="form-control" value={f.status} onChange={set('status')}>
-                {PRODUCT_COST_STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-              </select>
-              <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('เซลล์เลือกได้เฉพาะสินค้าที่เป็น Active')}</div>
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
               <label className="form-label">{t('หมวดหมู่')}</label>
               <input className="form-control" value={f.category} onChange={set('category')} />
             </div>
-            <div className="form-group">
-              <label className="form-label">{t('แบรนด์')}</label>
-              <input className="form-control" value={f.brand} onChange={set('brand')} />
-            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">{t('แบรนด์')}</label>
+            <input className="form-control" value={f.brand} onChange={set('brand')} />
           </div>
           <div className="form-group">
             <label className="form-label">{t('หมายเหตุจากบัญชี')}</label>
@@ -244,7 +237,6 @@ export default function CostMaster({ currentUserName }) {
         shipping_buffer_percent: num(f.shipping_buffer_percent),
         provision_buffer_percent: num(f.provision_buffer_percent),
         default_shipping_cost: num(f.default_shipping_cost),
-        packaging_cost: num(f.packaging_cost),
         status: f.status,
         finance_remark: f.finance_remark || null
       }, currentUserName)

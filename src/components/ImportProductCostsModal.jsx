@@ -52,9 +52,9 @@ export default function ImportProductCostsModal({ products, currentUserName, onC
           {!parsed ? (
             <>
               <div style={{ fontSize: 13, marginBottom: 12 }}>
-                {t('1) ดาวน์โหลด Template  2) กรอกข้อมูลใน Excel  3) อัปโหลดไฟล์ .xlsx กลับมาที่นี่')}
+                {t('1) ดาวน์โหลด Template (มีรหัสและชื่อสินค้าทุกตัวมาให้แล้ว)  2) กรอกตัวเลขใน Excel  3) อัปโหลดไฟล์ .xlsx กลับมาที่นี่')}
               </div>
-              <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} onClick={downloadProductCostTemplate}>
+              <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} onClick={() => downloadProductCostTemplate(products)}>
                 {t('ดาวน์โหลด Template (.xlsx)')}
               </button>
               <div className="form-group">
@@ -63,8 +63,9 @@ export default function ImportProductCostsModal({ products, currentUserName, onC
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-light)', lineHeight: 1.6 }}>
                 <div>{t('คอลัมน์ที่รองรับ')}: {PRODUCT_COST_IMPORT_COLUMNS.map(c => c.label).join(', ')}</div>
-                <div style={{ marginTop: 6 }}>{t('บังคับกรอก: รหัสสินค้า และ ต้นทุน/ชิ้น — รหัสสินค้าต้องมีอยู่แล้วในหน้า "สินค้า"')}</div>
-                <div>{t('ถ้าสินค้านั้นเคยกรอกต้นทุนไว้แล้ว ระบบจะเขียนทับด้วยค่าในไฟล์')}</div>
+                <div style={{ marginTop: 6 }}>{t('แถวไหนไม่ได้กรอกอะไรเลยจะถูกข้าม กรอกเฉพาะสินค้าที่ต้องการได้')}</div>
+                <div>{t('แถวที่กรอกต้องมีต้นทุน/ชิ้น เสมอ — ค่าเดิมของสินค้านั้นจะถูกเขียนทับด้วยค่าในไฟล์')}</div>
+                <div>{t('Shipping Buffer / Provision Buffer / ค่าขนส่งมาตรฐาน ไม่มีในไฟล์ — ใช้ค่ากลาง ตั้งรายตัวได้ที่ปุ่มแก้ไข')}</div>
               </div>
             </>
           ) : (
@@ -73,6 +74,7 @@ export default function ImportProductCostsModal({ products, currentUserName, onC
               <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
                 <span style={{ color: 'var(--success)', fontWeight: 600 }}>{lang === 'en' ? `Valid: ${parsed.validRows.length} record(s)` : `ถูกต้อง ${parsed.validRows.length} รายการ`}</span>
                 {parsed.invalidRows.length > 0 && <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{lang === 'en' ? `Errors: ${parsed.invalidRows.length} record(s)` : `ผิดพลาด ${parsed.invalidRows.length} รายการ`}</span>}
+                {parsed.skipped > 0 && <span style={{ color: 'var(--text-light)' }}>{lang === 'en' ? `Skipped (blank): ${parsed.skipped}` : `ข้าม (ไม่ได้กรอก) ${parsed.skipped} รายการ`}</span>}
               </div>
               {parsed.invalidRows.length > 0 && (
                 <div className="card" style={{ marginBottom: 12, maxHeight: 160, overflow: 'auto' }}>

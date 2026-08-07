@@ -605,7 +605,6 @@ export const EN_DICT = {
   'ราคาขายปกติ': 'Normal selling price',
   'Margin เป้าหมาย (%)': 'Target margin (%)',
   'Margin ขั้นต่ำ (%)': 'Minimum margin (%)',
-  'ค่าแพ็กกิ้ง/ชิ้น': 'Packaging cost / unit',
   'ค่าขนส่งมาตรฐาน': 'Standard shipping cost',
   'ว่าง = ใช้ค่ากลาง': 'Blank = use the shared default',
   'ค่ากลาง': 'shared default',
@@ -630,14 +629,16 @@ export const EN_DICT = {
   'ข้อความนี้เซลล์เห็นได้ในหน้าเช็คราคา — อย่าใส่ตัวเลขต้นทุนลงไป': 'Sales can see this text on the price check page — do not put cost figures in it',
   'ข้อมูลในหน้านี้เห็นได้เฉพาะบัญชีและแอดมิน — เซลล์เห็นแค่ผลลัพธ์การคำนวณในหน้า "เช็คราคา" ไม่เห็นตัวเลขต้นทุน': 'Only accounting and admins can see this page — sales only see the calculated result on the Price check page, never the cost figures',
   'ต้นทุนต้องมากกว่า 0 ไม่งั้นสินค้านี้จะยังคำนวณราคาไม่ได้': 'Cost must be greater than 0, otherwise this product cannot be priced',
-  'Floor Price ต่ำกว่าต้นทุน + ค่าแพ็กกิ้ง': 'Floor price is below cost + packaging',
   'Margin ขั้นต่ำสูงกว่า Margin เป้าหมาย': 'Minimum margin is higher than the target margin',
   'บันทึกค่ากลางแล้ว': 'Shared value saved',
   'บันทึกต้นทุนสำเร็จ': 'Cost saved',
   'นำเข้าต้นทุนจากไฟล์': 'Import costs from a file',
   'คอลัมน์ที่รองรับ': 'Supported columns',
-  'บังคับกรอก: รหัสสินค้า และ ต้นทุน/ชิ้น — รหัสสินค้าต้องมีอยู่แล้วในหน้า "สินค้า"': 'Required: product code and cost per unit — the product code must already exist on the Products page',
-  'ถ้าสินค้านั้นเคยกรอกต้นทุนไว้แล้ว ระบบจะเขียนทับด้วยค่าในไฟล์': 'If a product already has a cost, the file overwrites it',
+  '1) ดาวน์โหลด Template (มีรหัสและชื่อสินค้าทุกตัวมาให้แล้ว)  2) กรอกตัวเลขใน Excel  3) อัปโหลดไฟล์ .xlsx กลับมาที่นี่': '1) Download the template (every product code and name is already filled in)  2) Enter the numbers in Excel  3) Upload the .xlsx back here',
+  'แถวไหนไม่ได้กรอกอะไรเลยจะถูกข้าม กรอกเฉพาะสินค้าที่ต้องการได้': 'Rows left completely blank are skipped, so you can fill in only the products you want',
+  'แถวที่กรอกต้องมีต้นทุน/ชิ้น เสมอ — ค่าเดิมของสินค้านั้นจะถูกเขียนทับด้วยค่าในไฟล์': 'Any row you fill in must have a cost per unit — the file overwrites that product\'s existing values',
+  'Shipping Buffer / Provision Buffer / ค่าขนส่งมาตรฐาน ไม่มีในไฟล์ — ใช้ค่ากลาง ตั้งรายตัวได้ที่ปุ่มแก้ไข': 'Shipping buffer, provision buffer and standard shipping are not in the file — they use the shared defaults, and can be set per product via Edit',
+  'Floor Price ต่ำกว่าต้นทุน': 'Floor price is below cost',
 }
 
 export function LanguageProvider({ children }) {
