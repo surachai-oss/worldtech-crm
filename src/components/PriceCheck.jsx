@@ -421,9 +421,9 @@ export default function PriceCheck({ perm }) {
                     <ResultRow label={t('ราคาที่เสนอ/ชิ้น')} value={`${fmtCurrency(entry.result.offer_price)} × ${entry.result.quantity}`} />
                     {/* เทียบกับราคาขายปกติ ให้เซลล์เห็นว่าที่ลูกค้าขอมาถูกกว่าปกติมากแค่ไหน */}
                     <ResultRow label={t('ราคาขายปกติ/ชิ้น')}
-                      value={selected?.normal_selling_price ? fmtCurrency(selected.normal_selling_price) : '-'} />
-                    {selected?.normal_selling_price > 0 && (() => {
-                      const normal = Number(selected.normal_selling_price)
+                      value={entry.result.normal_selling_price ? fmtCurrency(entry.result.normal_selling_price) : '-'} />
+                    {entry.result.normal_selling_price > 0 && (() => {
+                      const normal = Number(entry.result.normal_selling_price)
                       const diff = Number(entry.result.offer_price) - normal
                       const pctOff = (diff / normal) * 100
                       return (
@@ -435,9 +435,24 @@ export default function PriceCheck({ perm }) {
                     <ResultRow label={t('ค่าขนส่งที่ใช้คำนวณ')} value={shipLabel(entry.result)}
                       hint={entry.result.used_default_shipping ? `(${t('ค่ามาตรฐาน')})` : null} />
                     <ResultRow label="Tier" value={entry.result.auto_tier} />
+                    {entry.result.tier_label && (
+                      <ResultRow label={t('เกณฑ์ที่ใช้')}
+                        value={`${entry.result.tier_label}${entry.result.tier_max_discount_percent != null ? ` · ลดได้ถึง ${Number(entry.result.tier_max_discount_percent)}%` : ''}`} />
+                    )}
                     <ResultRow label="Floor Price" value={fmtCurrency(entry.result.floor_price)} />
                     <ResultRow label={t('ราคาแนะนำขั้นต่ำ/ชิ้น')}
                       value={entry.result.suggested_min_price ? fmtCurrency(entry.result.suggested_min_price) : t('คำนวณไม่ได้')} strong />
+                    {entry.result.suggested_target_price && (
+                      <ResultRow label={t('ราคาที่ถึงเป้าหมาย/ชิ้น')} value={fmtCurrency(entry.result.suggested_target_price)}
+                        color="var(--success)" />
+                    )}
+                    {/* ขั้นถัดไปเป็นไพ่ให้เซลล์ชวนลูกค้าซื้อเพิ่มเพื่อแลกส่วนลดที่ลึกกว่า */}
+                    {entry.result.next_tier_min_qty && entry.result.next_tier_price && (
+                      <div style={{ marginTop: 8, padding: '6px 8px', borderRadius: 6, background: '#ebf8ff', fontSize: 11.5, color: '#2b6cb0' }}>
+                        {t('ถ้าเพิ่มเป็น')} <b>{entry.result.next_tier_min_qty}</b> {t('ชิ้น')} {t('จะลดได้ถึง')} <b>{Number(entry.result.next_tier_max_discount_percent)}%</b>
+                        {' '}({t('ราคาต่ำสุดประมาณ')} {fmtCurrency(entry.result.next_tier_price)})
+                      </div>
+                    )}
                     {/* ตัวเลข Buffer และกำไรเป็นบาท เซลล์ไม่ต้องเห็น — ดูแค่ Margin % กับสถานะก็พอตัดสินใจได้ */}
                     {canSeeProfit && (
                       <>

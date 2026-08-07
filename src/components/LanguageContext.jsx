@@ -664,6 +664,28 @@ export const EN_DICT = {
   'ต้นทุน': 'Cost',
   'ราคาขายปกติ/ชิ้น': 'Normal selling price / unit',
   'ต่างจากราคาปกติ': 'vs normal price',
+
+  // ===== ขั้นบันไดราคาตามจำนวน =====
+  'ขั้นบันได': 'Qty tiers',
+  'ขั้นบันไดราคาตามจำนวน': 'Quantity price tiers',
+  'ตั้งว่าซื้อตั้งแต่กี่ชิ้น ลดจากราคาขายปกติได้ลึกแค่ไหน — ระบบจะหยิบขั้นที่ตรงกับจำนวนที่เซลล์กรอกมาใช้': 'Set how deep a discount off the normal price is allowed at each quantity — the system applies the step matching the quantity sales enters',
+  'ถ้าต้นทุนขึ้นจนส่วนลดนั้นทำให้ต่ำกว่า Margin ขั้นต่ำ ระบบจะดึงราคาต่ำสุดกลับขึ้นมาเอง ไม่ปล่อยให้ขาดทุน': 'If a cost rise would push that discount below the minimum margin, the system raises the floor back up on its own',
+  'ช่อง Margin เว้นว่างได้ = ใช้ค่าของสินค้า': 'Leave a margin field blank to use the product default',
+  'ราคาขายปกติของสินค้านี้': 'Normal selling price for this product',
+  'บาท/ชิ้น': 'THB / unit',
+  'สินค้านี้ยังไม่ได้กรอกราคาขายปกติ — ส่วนลดจะคำนวณเป็นราคาไม่ได้ ต้องกรอกก่อน': 'This product has no normal selling price yet — discounts cannot be turned into a price until it is filled in',
+  'จำนวนตั้งแต่': 'Qty from',
+  'ลดได้ไม่เกิน (%)': 'Max discount (%)',
+  '= ราคา/ชิ้น': '= price / unit',
+  'ตามสินค้า': 'product default',
+  'เพิ่มขั้น': 'Add step',
+  'ยังไม่ได้ตั้งขั้นบันได — ตอนนี้สินค้านี้ใช้ Floor Price ตัวเดียวกับทุกจำนวน': 'No tiers set — this product uses one floor price for every quantity',
+  'เกณฑ์ที่ใช้': 'Rule applied',
+  'ราคาที่ถึงเป้าหมาย/ชิ้น': 'Price to hit target / unit',
+  'ถ้าเพิ่มเป็น': 'If raised to',
+  'ชิ้น': 'units',
+  'จะลดได้ถึง': 'the discount can go to',
+  'ราคาต่ำสุดประมาณ': 'floor approx.',
 }
 
 export function LanguageProvider({ children }) {

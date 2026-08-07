@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   fetchProductCosts, upsertProductCost, updateProductMeta,
-  fetchMarginSettings, updateMarginSetting, PRODUCT_COST_STATUS_OPTIONS
+  fetchMarginSettings, updateMarginSetting, fetchPriceTierCounts, PRODUCT_COST_STATUS_OPTIONS
 } from '../lib/api'
 import { fmtCurrency } from '../lib/format'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import ImportProductCostsModal from './ImportProductCostsModal'
 import CostHistoryModal from './CostHistoryModal'
+import PriceTierModal from './PriceTierModal'
 
 // หน้านี้เห็นได้เฉพาะบัญชี/แอดมิน (บังคับจริงด้วย RLS ของ product_costs — เซลล์ยิง API ตรงก็อ่านไม่ได้)
 // เป็นแหล่งข้อมูลเดียวที่หน้า "เช็คราคา" ใช้คำนวณ
@@ -201,13 +202,16 @@ export default function CostMaster({ currentUserName }) {
   const [modal, setModal] = useState(null)
   const [showImport, setShowImport] = useState(false)
   const [historyProduct, setHistoryProduct] = useState(null)
+  const [tierProduct, setTierProduct] = useState(null)
+  const [tierCounts, setTierCounts] = useState({})
 
   const load = async () => {
     setLoading(true)
     try {
-      const [products, ms] = await Promise.all([fetchProductCosts(), fetchMarginSettings()])
+      const [products, ms, tiers] = await Promise.all([fetchProductCosts(), fetchMarginSettings(), fetchPriceTierCounts()])
       setRows(products)
       setSettings(ms)
+      setTierCounts(tiers)
     } catch (e) {
       toast('โหลดข้อมูลต้นทุนไม่สำเร็จ: ' + e.message, 'error')
     } finally { setLoading(false) }
@@ -284,6 +288,10 @@ export default function CostMaster({ currentUserName }) {
           onClose={() => setShowImport(false)} onImported={load} />
       )}
       {historyProduct && <CostHistoryModal product={historyProduct} onClose={() => setHistoryProduct(null)} />}
+      {tierProduct && (
+        <PriceTierModal product={tierProduct} currentUserName={currentUserName}
+          onClose={() => setTierProduct(null)} onChanged={load} />
+      )}
 
       <div className="filter-bar">
         <input className="filter-input" placeholder={lang === 'en' ? 'Search product...' : 'ค้นหาสินค้า...'}
@@ -330,6 +338,7 @@ export default function CostMaster({ currentUserName }) {
                       <td style={{ fontSize: 11, color: 'var(--text-light)' }}>{c?.updated_by || '-'}</td>
                       <td className="td-actions">
                         <button className="btn btn-outline btn-xs" onClick={() => setModal(r)}>{hasCost ? t('แก้ไข') : t('กรอกต้นทุน')}</button>
+                        {hasCost && <button className="btn btn-outline btn-xs" onClick={() => setTierProduct(r)}>{t('ขั้นบันได')}{tierCounts[r.id] ? ` (${tierCounts[r.id]})` : ''}</button>}
                         {hasCost && <button className="btn btn-outline btn-xs" onClick={() => setHistoryProduct(r)}>{t('ประวัติ')}</button>}
                       </td>
                     </tr>

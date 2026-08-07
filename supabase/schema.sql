@@ -1359,6 +1359,39 @@ $$ language sql stable security definer set search_path = public;
 --  TotalCost       = (CostPrice × Qty) + ค่าขนส่งจริง + ShippingBuffer + ProvisionBuffer
 --  TotalProfit     = NetSales − TotalCost
 --  MarginPercent   = TotalProfit / NetSales × 100
+-- ===== ขั้นบันไดราคาตามจำนวน =====
+-- ปัญหาเดิม: Floor Price เป็นตัวเลขเดียว คนซื้อ 1 ตัวกับ 100 ตัวโดนเกณฑ์เดียวกัน
+-- ขั้นบันไดให้บัญชีตั้งได้ว่า "ซื้อตั้งแต่กี่ชิ้น ลดได้ลึกแค่ไหน" แล้วระบบคิด Floor Price ให้ตามจำนวนที่เซลล์กรอก
+-- max_discount_percent คิดจาก normal_selling_price — ถ้าต้นทุนขึ้นจนส่วนลดนั้นทำให้ต่ำกว่า Margin ขั้นต่ำ
+-- ระบบจะดึง Floor Price กลับขึ้นมาเองใน margin_compute_price (ไม่ปล่อยให้ขาดทุนเงียบๆ)
+create table if not exists product_price_tiers (
+  id                     uuid primary key default uuid_generate_v4(),
+  product_id             uuid references products(id) on delete cascade,
+  min_qty                int not null check (min_qty >= 1),
+  max_discount_percent   numeric,   -- ลดจากราคาขายปกติได้ไม่เกินกี่ % (ว่าง = ใช้ Floor Price ของสินค้า)
+  minimum_margin_percent numeric,   -- ว่าง = ใช้ของสินค้า
+  target_margin_percent  numeric,   -- ว่าง = ใช้ของสินค้า
+  note                   text,
+  updated_by             text,
+  updated_at             timestamptz default now(),
+  unique (product_id, min_qty)
+);
+
+create index if not exists idx_product_price_tiers_product on product_price_tiers (product_id, min_qty);
+
+drop trigger if exists trg_product_price_tiers_updated on product_price_tiers;
+create trigger trg_product_price_tiers_updated before update on product_price_tiers
+  for each row execute function set_updated_at();
+
+-- ----- RLS: เป็นเพดานส่วนลดเชิงพาณิชย์ เปิดให้เฉพาะบัญชี/แอดมิน -----
+-- เซลล์ไม่ต้องอ่านตารางนี้ตรงๆ เพราะ margin_price_check ส่งขั้นที่ใช้อยู่กับขั้นถัดไปกลับไปให้แล้ว
+alter table product_price_tiers enable row level security;
+drop policy if exists "product_price_tiers select" on product_price_tiers;
+create policy "product_price_tiers select" on product_price_tiers for select using (is_admin() or is_finance());
+drop policy if exists "product_price_tiers write" on product_price_tiers;
+create policy "product_price_tiers write" on product_price_tiers for all
+  using (is_admin() or is_finance()) with check (is_admin() or is_finance());
+
 create or replace function margin_compute_price(
   p_product_id    uuid,
   p_quantity      numeric,
@@ -1368,8 +1401,11 @@ create or replace function margin_compute_price(
 declare
   v_p             products%rowtype;
   v_c             product_costs%rowtype;
+  v_step          product_price_tiers%rowtype;
+  v_next          product_price_tiers%rowtype;
   v_ship_buf_pct  numeric;
   v_prov_buf_pct  numeric;
+  v_buf           numeric;
   v_used_default  boolean;
   v_ship          numeric;
   v_net           numeric;
@@ -1381,14 +1417,19 @@ declare
   v_target        numeric;
   v_min           numeric;
   v_floor         numeric;
-  v_tier          text;
-  v_status        text;
+  v_floor_source  text;
+  v_tier_label    text;
   v_fixed         numeric;
-  v_denom         numeric;
+  v_price_min     numeric;   -- ราคา/ชิ้นที่ทำให้ได้ Margin ขั้นต่ำพอดี (คำนวณจากต้นทุนจริง)
+  v_price_target  numeric;   -- ราคา/ชิ้นที่ทำให้ถึง Margin เป้าหมายพอดี
+  v_price_disc    numeric;   -- ราคา/ชิ้นที่ได้จากเพดานส่วนลดของขั้นนั้น
+  v_next_price    numeric;
   v_suggest       numeric;
   v_suggest_err   text;
   v_round         numeric;
   v_recommend     text;
+  v_tier          text;
+  v_status        text;
 begin
   select * into v_p from products where id = p_product_id;
   if not found then
@@ -1409,6 +1450,7 @@ begin
   -- ค่าเฉพาะของสินค้า > ค่ากลางที่บัญชีตั้งไว้ > ค่าสำรอง
   v_ship_buf_pct := coalesce(v_c.shipping_buffer_percent,  margin_setting_num('shipping_buffer_percent', 2));
   v_prov_buf_pct := coalesce(v_c.provision_buffer_percent, margin_setting_num('provision_buffer_percent', 2));
+  v_buf          := (v_ship_buf_pct + v_prov_buf_pct) / 100;
 
   v_used_default := (p_shipping_cost is null);
   v_ship := case when v_used_default
@@ -1422,9 +1464,43 @@ begin
   v_profit     := v_net - v_total_cost;
   v_margin     := case when v_net > 0 then v_profit / v_net * 100 else 0 end;
 
-  v_target := coalesce(v_c.target_margin_percent, 0);
-  v_min    := coalesce(v_c.minimum_margin_percent, 0);
-  v_floor  := coalesce(v_c.floor_price, 0);
+  -- ===== ขั้นบันไดตามจำนวน: หยิบขั้นที่ min_qty มากที่สุดที่ยังไม่เกินจำนวนที่สั่ง =====
+  select * into v_step from product_price_tiers
+    where product_id = p_product_id and min_qty <= p_quantity
+    order by min_qty desc limit 1;
+  select * into v_next from product_price_tiers
+    where product_id = p_product_id and min_qty > p_quantity
+    order by min_qty asc limit 1;
+
+  -- ขั้นบันไดมีสิทธิ์เขียนทับเกณฑ์ Margin ของสินค้า (ซื้อเยอะยอมได้ลึกกว่า) ช่องไหนเว้นว่างก็ตกกลับไปใช้ของสินค้า
+  v_target := coalesce(v_step.target_margin_percent,  v_c.target_margin_percent, 0);
+  v_min    := coalesce(v_step.minimum_margin_percent, v_c.minimum_margin_percent, 0);
+
+  -- ต้นทุนคงที่ของดีลนี้ (ยังไม่รวม buffer เพราะ buffer คิดจากยอดขายซึ่งยังไม่รู้)
+  v_fixed := (v_c.cost_price * p_quantity) + v_ship;
+  if 1 - v_buf - (v_min / 100)    > 0 then v_price_min    := (v_fixed / (1 - v_buf - (v_min / 100)))    / p_quantity; end if;
+  if 1 - v_buf - (v_target / 100) > 0 then v_price_target := (v_fixed / (1 - v_buf - (v_target / 100))) / p_quantity; end if;
+
+  -- ===== Floor Price =====
+  -- ถ้ามีขั้นบันไดและตั้งเพดานส่วนลดไว้ ให้คิดจาก "ราคาขายปกติ − ส่วนลดสูงสุดของขั้นนั้น"
+  -- แต่ห้ามต่ำกว่าราคาที่ยังได้ Margin ขั้นต่ำ — กันกรณีต้นทุนขึ้นแล้วส่วนลดเดิมกลายเป็นขาดทุนโดยไม่มีใครรู้
+  if v_step.id is not null and v_step.max_discount_percent is not null and coalesce(v_c.normal_selling_price, 0) > 0 then
+    v_price_disc := v_c.normal_selling_price * (1 - v_step.max_discount_percent / 100);
+    v_floor := greatest(v_price_disc, coalesce(v_price_min, 0));
+    v_floor_source := 'ขั้น ' || v_step.min_qty || ' ชิ้นขึ้นไป · ลดได้ถึง ' || trim(to_char(v_step.max_discount_percent, 'FM999990.##')) || '%';
+    if v_price_min is not null and v_price_min > v_price_disc + 0.005 then
+      v_floor_source := v_floor_source || ' (ดึงกลับตาม Margin ขั้นต่ำ เพราะต้นทุนปัจจุบันลดลึกขนาดนั้นไม่ได้)';
+    end if;
+  elsif v_step.id is not null then
+    -- ตั้งขั้นไว้แต่ไม่ได้ใส่เพดานส่วนลด ใช้ Floor Price ของสินค้าไปก่อน แต่ Margin ยังใช้ของขั้นนี้
+    v_floor := coalesce(v_c.floor_price, 0);
+    v_floor_source := 'ขั้น ' || v_step.min_qty || ' ชิ้นขึ้นไป · ใช้ Floor Price ของสินค้า';
+  else
+    v_floor := coalesce(v_c.floor_price, 0);
+    v_floor_source := 'Floor Price ของสินค้า (ยังไม่ได้ตั้งขั้นบันไดตามจำนวน)';
+  end if;
+
+  v_tier_label := case when v_step.id is not null then 'ขั้น ' || v_step.min_qty || ' ชิ้นขึ้นไป' else null end;
 
   -- Auto Tier — เช็ค Below Floor ก่อนเสมอ ราคาที่ต่ำกว่า Floor หรือไม่มีกำไรต้องไม่ถูกจัดเป็น Tier ที่ดีกว่า
   if v_net <= 0 or (v_floor > 0 and p_offer_price < v_floor) or v_profit <= 0 or v_margin <= 0 then
@@ -1437,17 +1513,22 @@ begin
     v_tier := 'Tier 3 / ต่ำกว่าเกณฑ์';           v_status := 'ต่ำกว่าเกณฑ์';
   end if;
 
-  -- ราคาต่ำสุดที่ควรเสนอ เพื่อให้ยังได้ Margin ขั้นต่ำหลังหัก buffer ทั้งสองตัว
-  v_fixed := (v_c.cost_price * p_quantity) + v_ship;
-  v_denom := 1 - ((v_ship_buf_pct + v_prov_buf_pct) / 100) - (v_min / 100);
-  if v_denom <= 0 then
-    v_suggest := null;
+  -- ราคาต่ำสุดที่ควรเสนอ = สูงกว่าระหว่าง "ราคาที่ได้ Margin ขั้นต่ำ" กับ "Floor Price ที่ใช้จริง"
+  v_round := margin_setting_num('round_suggested_price_to', 1);
+  if v_price_min is null then
     v_suggest_err := 'คำนวณราคาขั้นต่ำไม่ได้ — Buffer รวมกับ Margin ขั้นต่ำเกิน 100% ให้ฝ่ายบัญชีทบทวนค่าเหล่านี้';
   else
-    v_suggest := (v_fixed / v_denom) / p_quantity;
-    if v_floor > 0 and v_suggest < v_floor then v_suggest := v_floor; end if;
-    v_round := margin_setting_num('round_suggested_price_to', 1);
+    v_suggest := greatest(v_price_min, v_floor);
     if v_round > 0 then v_suggest := ceil(v_suggest / v_round) * v_round; end if;
+  end if;
+  if v_price_target is not null then
+    v_price_target := greatest(v_price_target, v_floor);
+    if v_round > 0 then v_price_target := ceil(v_price_target / v_round) * v_round; end if;
+  end if;
+
+  -- ขั้นถัดไป ใช้เป็นไพ่ให้เซลล์ชวนลูกค้าซื้อเพิ่ม (ราคาโดยประมาณ เพราะค่าขนส่งของล็อตใหญ่จริงอาจต่างไป)
+  if v_next.id is not null and v_next.max_discount_percent is not null and coalesce(v_c.normal_selling_price, 0) > 0 then
+    v_next_price := round(v_c.normal_selling_price * (1 - v_next.max_discount_percent / 100), 2);
   end if;
 
   v_recommend := case v_status
@@ -1458,6 +1539,11 @@ begin
   end;
   if v_used_default then
     v_recommend := v_recommend || E'\n(ไม่ได้กรอกค่าขนส่ง — ใช้ค่ามาตรฐาน ' || to_char(v_ship, 'FM999,999,990.00') || ' บาทแทน)';
+  end if;
+  if v_next.id is not null and v_next_price is not null and v_next_price < v_floor then
+    v_recommend := v_recommend || E'\nถ้าลูกค้าเพิ่มเป็น ' || v_next.min_qty || ' ชิ้น จะลดได้ถึง '
+      || trim(to_char(v_next.max_discount_percent, 'FM999990.##')) || '% (ราคาต่ำสุดประมาณ '
+      || to_char(v_next_price, 'FM999,999,990.00') || ' บาท/ชิ้น)';
   end if;
   if v_suggest_err is not null then
     v_recommend := v_recommend || E'\n' || v_suggest_err;
@@ -1480,15 +1566,25 @@ begin
     'margin_percent',        round(v_margin, 2),
     'target_margin_percent', v_target,
     'minimum_margin_percent', v_min,
+    'normal_selling_price',  v_c.normal_selling_price,
     'auto_tier',             v_tier,
     'price_status',          v_status,
-    'floor_price',           v_floor,
+    'floor_price',           round(v_floor, 2),
+    'floor_source',          v_floor_source,
+    'tier_label',            v_tier_label,
+    'tier_min_qty',          v_step.min_qty,
+    'tier_max_discount_percent', v_step.max_discount_percent,
+    'next_tier_min_qty',     v_next.min_qty,
+    'next_tier_max_discount_percent', v_next.max_discount_percent,
+    'next_tier_price',       v_next_price,
     'suggested_min_price',   case when v_suggest is null then null else round(v_suggest, 2) end,
+    'suggested_target_price', case when v_price_target is null then null else round(v_price_target, 2) end,
     'suggested_error',       v_suggest_err,
     'recommendation',        v_recommend
   );
 end;
 $$ language plpgsql stable security definer set search_path = public;
+
 
 -- ===== ตัดกำไรเป็นบาทออกถ้าผู้เรียกไม่ใช่บัญชี/แอดมิน =====
 -- (เซลล์ยังเห็น Margin % ตามที่ requirement ต้องการ แต่ไม่ได้ตัวเลขกำไรตรงๆ ไปลบกลับหาต้นทุน)

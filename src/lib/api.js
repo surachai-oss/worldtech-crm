@@ -1391,3 +1391,25 @@ export async function fetchProductCostHistory({ productId = '', q = '', dateFrom
   if (toIso) query = query.lte('changed_at', toIso)
   return query.then(handle)
 }
+
+// ===== ขั้นบันไดราคาตามจำนวน (บัญชี/แอดมินเท่านั้น — RLS ปิดไม่ให้เซลล์อ่าน) =====
+// เซลล์ไม่ต้องเรียกฟังก์ชันพวกนี้ ขั้นที่ใช้อยู่กับขั้นถัดไปถูกส่งกลับมาพร้อมผลการเช็คราคาอยู่แล้ว
+export const fetchPriceTiers = (productId) =>
+  supabase.from('product_price_tiers').select('*').eq('product_id', productId)
+    .order('min_qty', { ascending: true }).then(handle)
+
+export const upsertPriceTier = (row, updatedBy) =>
+  supabase.from('product_price_tiers')
+    .upsert({ ...row, updated_by: updatedBy || null }, { onConflict: 'product_id,min_qty' })
+    .select().single().then(handle)
+
+export const deletePriceTier = (id) =>
+  supabase.from('product_price_tiers').delete().eq('id', id).then(handle)
+
+// จำนวนขั้นของแต่ละสินค้า — ใช้โชว์ในตารางหน้าต้นทุนสินค้าว่าตัวไหนตั้งขั้นบันไดไว้แล้ว
+export async function fetchPriceTierCounts() {
+  const rows = await supabase.from('product_price_tiers').select('product_id').then(handle)
+  const byProduct = {}
+  rows.forEach(r => { byProduct[r.product_id] = (byProduct[r.product_id] || 0) + 1 })
+  return byProduct
+}
