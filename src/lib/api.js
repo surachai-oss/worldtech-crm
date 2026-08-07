@@ -1285,3 +1285,79 @@ export async function uploadAttachmentToDrive(company, attachment, file) {
   await supabase.from('attachments').update({ drive_file_id: fileId }).eq('id', attachment.id)
   return fileId
 }
+
+// ===== PRICE & MARGIN CALCULATOR =====
+// ต้นทุนจริงอยู่ในตาราง product_costs ที่ RLS ปิดไว้ไม่ให้เซลล์อ่าน — การคำนวณทั้งหมดทำที่ฐานข้อมูล
+// ผ่านฟังก์ชัน security definer แล้วส่งกลับเฉพาะผลลัพธ์ที่ไม่มีต้นทุน (ดู margin_* ใน supabase/schema.sql)
+
+export const PRICE_STATUS_PASS = 'ผ่าน / ขายได้'
+export const PRICE_STATUS_LOW_MARGIN = 'ขายได้ แต่ Margin ต่ำ'
+export const PRICE_STATUS_UNDER = 'ต่ำกว่าเกณฑ์'
+export const PRICE_STATUS_NO_SELL = 'ไม่ควรขาย'
+export const PRICE_STATUS_ORDER = [PRICE_STATUS_PASS, PRICE_STATUS_LOW_MARGIN, PRICE_STATUS_UNDER, PRICE_STATUS_NO_SELL]
+
+export const PRODUCT_COST_STATUS_OPTIONS = ['Active', 'Inactive', 'Discontinued']
+
+// รายการสินค้าพร้อมเกณฑ์ราคาที่เซลล์เห็นได้ (ไม่มีต้นทุน) — has_cost บอกว่าบัญชีกรอกต้นทุนให้แล้วหรือยัง
+export const fetchProductPriceView = () => supabase.rpc('margin_product_view').then(handle)
+
+// คำนวณอย่างเดียว ไม่บันทึกประวัติ — shippingCost = null หมายถึงให้ใช้ค่าขนส่งมาตรฐาน
+export const checkPrice = ({ productId, quantity, offerPrice, shippingCost }) =>
+  supabase.rpc('margin_price_check', {
+    p_product_id: productId,
+    p_quantity: quantity,
+    p_offer_price: offerPrice,
+    p_shipping_cost: shippingCost === '' || shippingCost === null || shippingCost === undefined ? null : shippingCost
+  }).then(handle)
+
+// คำนวณใหม่ฝั่งเซิร์ฟเวอร์แล้วบันทึกลงประวัติ (ไม่เชื่อตัวเลขที่ client ส่งมา)
+export const savePriceCheck = ({ productId, quantity, offerPrice, shippingCost }) =>
+  supabase.rpc('margin_save_price_check', {
+    p_product_id: productId,
+    p_quantity: quantity,
+    p_offer_price: offerPrice,
+    p_shipping_cost: shippingCost === '' || shippingCost === null || shippingCost === undefined ? null : shippingCost
+  }).then(handle)
+
+// ประวัติการเช็คราคา — RLS คัดให้เอง (บัญชี/แอดมินเห็นทั้งหมด เซลล์เห็นเฉพาะของตัวเอง)
+export async function fetchPriceChecks({ q = '', status = '', dateFrom = '', dateTo = '', limit = 300 } = {}) {
+  let query = supabase.from('price_checks').select('*').order('created_at', { ascending: false }).limit(limit)
+  if (status) query = query.eq('price_status', status)
+  const sq = safeLike(q)
+  if (sq) query = query.or(`product_code.ilike.%${sq}%,product_name.ilike.%${sq}%,check_no.ilike.%${sq}%`)
+  const { fromIso, toIso } = dateRangeToIso(dateFrom, dateTo)
+  if (fromIso) query = query.gte('created_at', fromIso)
+  if (toIso) query = query.lte('created_at', toIso)
+  return query.then(handle)
+}
+
+export const deletePriceCheck = (id) => supabase.from('price_checks').delete().eq('id', id).then(handle)
+
+// ===== Cost Master (บัญชี/แอดมินเท่านั้น — เซลล์ยิงมาก็โดน RLS ปฏิเสธ) =====
+
+// รวมสินค้าทุกตัวเข้ากับต้นทุนที่มี เพื่อให้บัญชีเห็นว่าตัวไหนยังไม่ได้กรอก
+export async function fetchProductCosts() {
+  const [products, costs] = await Promise.all([
+    supabase.from('products').select('id,code,name,category,brand').order('code', { ascending: true }).then(handle),
+    supabase.from('product_costs').select('*').then(handle)
+  ])
+  const byId = new Map(costs.map(c => [c.product_id, c]))
+  return products.map(p => ({ ...p, cost: byId.get(p.id) || null }))
+}
+
+export const upsertProductCost = (productId, fields, updatedBy) =>
+  supabase.from('product_costs')
+    .upsert({ ...fields, product_id: productId, updated_by: updatedBy || null }, { onConflict: 'product_id' })
+    .select().single().then(handle)
+
+// category/brand อยู่ที่ตาราง products (เซลล์เห็นได้) ไม่ใช่ที่ตารางต้นทุน
+export const updateProductMeta = (productId, { category, brand }) =>
+  supabase.from('products').update({ category: category ?? null, brand: brand ?? null }).eq('id', productId).select().single().then(handle)
+
+export const fetchMarginSettings = () =>
+  supabase.from('margin_settings').select('*').order('key', { ascending: true }).then(handle)
+
+export const updateMarginSetting = (key, value, updatedBy) =>
+  supabase.from('margin_settings')
+    .update({ value: String(value), updated_by: updatedBy || null, updated_at: new Date().toISOString() })
+    .eq('key', key).select().single().then(handle)

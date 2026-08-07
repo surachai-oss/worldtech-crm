@@ -1229,3 +1229,352 @@ create policy "order_items select" on order_items for select using (
 );
 drop policy if exists "order_items insert" on order_items;
 create policy "order_items insert" on order_items for insert with check (auth.role() = 'authenticated');
+
+-- ============================================================================
+-- ===== PRICE & MARGIN CALCULATOR (เช็คราคา/มาร์จิ้นก่อนเสนอลูกค้า) =====
+-- ============================================================================
+-- แนวคิด: เซลล์กรอกแค่ สินค้า/จำนวน/ราคาที่จะเสนอ/ค่าขนส่งจริง แล้วระบบคำนวณให้เอง
+-- ต้นทุนจริงอยู่ในตาราง product_costs ซึ่ง "เซลล์อ่านไม่ได้เลย" (RLS ปิดสนิท)
+-- การคำนวณทำฝั่งฐานข้อมูลด้วยฟังก์ชัน security definer แล้วส่งกลับเฉพาะผลลัพธ์ที่ไม่มีต้นทุน
+-- ไม่มีระบบอนุมัติราคา — ถ้าต่ำกว่าเกณฑ์ เซลล์เอาสรุปไปคุยหัวหน้าเองนอกระบบ
+
+-- category/brand เป็นข้อมูลสินค้าทั่วไป (เซลล์เห็นได้) จึงอยู่ที่ products ไม่ใช่ที่ตารางต้นทุน
+alter table products add column if not exists category text;
+alter table products add column if not exists brand text;
+
+-- ----- Cost Master: ต้นทุนและเกณฑ์ราคาของแต่ละสินค้า (บัญชี/แอดมินดูแล) -----
+create table if not exists product_costs (
+  product_id               uuid primary key references products(id) on delete cascade,
+  cost_price               numeric not null default 0,  -- ต้นทุนต่อชิ้น — ห้ามส่งออกไปฝั่งเซลล์เด็ดขาด
+  normal_selling_price     numeric,                     -- ราคาขายปกติ
+  target_margin_percent    numeric,                     -- Margin เป้าหมาย เช่น 20
+  minimum_margin_percent   numeric,                     -- Margin ต่ำสุดที่ยังพอรับได้ เช่น 12
+  floor_price              numeric,                     -- ราคาต่ำสุดที่ไม่ควรต่ำกว่า (ต่อชิ้น)
+  shipping_buffer_percent  numeric,                     -- ว่าง = ใช้ค่ากลางจาก margin_settings
+  provision_buffer_percent numeric,                     -- ว่าง = ใช้ค่ากลางจาก margin_settings
+  default_shipping_cost    numeric,                     -- ค่าขนส่งมาตรฐาน ใช้เมื่อเซลล์ไม่กรอก
+  packaging_cost           numeric,                     -- ค่าแพ็กกิ้งต่อชิ้น
+  status                   text default 'Active',       -- Active / Inactive / Discontinued
+  finance_remark           text,
+  updated_by               text,
+  updated_at               timestamptz default now()
+);
+
+drop trigger if exists trg_product_costs_updated on product_costs;
+create trigger trg_product_costs_updated before update on product_costs
+  for each row execute function set_updated_at();
+
+-- ----- ค่ากลางที่บัญชีดูแล (ใช้เมื่อสินค้าไม่ได้ระบุค่าเฉพาะของตัวเอง) -----
+create table if not exists margin_settings (
+  key         text primary key,
+  value       text,
+  description text,
+  owner_role  text,
+  updated_by  text,
+  updated_at  timestamptz default now()
+);
+
+insert into margin_settings (key, value, description, owner_role) values
+  ('shipping_buffer_percent',  '2', 'ค่าเผื่อค่าขนส่ง คิดจากยอดขายรวม (%)',              'Finance'),
+  ('provision_buffer_percent', '2', 'ค่าเผื่อ Provision / กันความเสี่ยง คิดจากยอดขายรวม (%)', 'Finance'),
+  ('default_shipping_cost',    '0', 'ค่าขนส่งมาตรฐาน ใช้เมื่อเซลล์ไม่กรอกค่าขนส่งจริง (บาท)', 'Finance'),
+  ('default_packaging_cost',   '0', 'ค่าแพ็กกิ้งต่อชิ้น (บาท)',                          'Finance'),
+  ('round_suggested_price_to', '1', 'ปัดราคาแนะนำขั้นต่ำขึ้นเป็นจำนวนเท่าของกี่บาท (1 = ปัดเป็นจำนวนเต็ม)', 'Finance')
+on conflict (key) do nothing;
+
+-- ----- ประวัติการเช็คราคา — เป็น log เฉยๆ ไม่ใช่ approval log และไม่มีคอลัมน์ต้นทุน -----
+create sequence if not exists price_check_seq start 1;
+
+create table if not exists price_checks (
+  id                    uuid primary key default uuid_generate_v4(),
+  check_no              text,
+  product_id            uuid references products(id) on delete set null,
+  product_code          text,
+  product_name          text,
+  quantity              numeric not null,
+  offer_price           numeric not null,
+  shipping_cost         numeric not null default 0,
+  used_default_shipping boolean default false,
+  net_sales             numeric not null,
+  shipping_buffer       numeric not null,
+  provision_buffer      numeric not null,
+  total_profit          numeric not null,
+  margin_percent        numeric not null,
+  auto_tier             text,
+  price_status          text,
+  floor_price           numeric,
+  suggested_min_price   numeric,
+  recommendation        text,
+  created_by            uuid references auth.users(id),
+  created_by_name       text,
+  created_at            timestamptz default now()
+);
+
+create index if not exists idx_price_checks_created_at on price_checks (created_at desc);
+
+-- ===== helper: ค่ากลางเป็นตัวเลข =====
+create or replace function margin_setting_num(p_key text, p_fallback numeric) returns numeric as $$
+  select coalesce((select nullif(trim(value), '')::numeric from margin_settings where key = p_key), p_fallback);
+$$ language sql stable security definer set search_path = public;
+
+-- ===== Product Price View: รายการสินค้าพร้อมเกณฑ์ราคาสำหรับเซลล์ — ไม่มี cost_price =====
+create or replace function margin_product_view()
+returns table (
+  product_id               uuid,
+  code                     text,
+  name                     text,
+  category                 text,
+  normal_selling_price     numeric,
+  target_margin_percent    numeric,
+  minimum_margin_percent   numeric,
+  floor_price              numeric,
+  shipping_buffer_percent  numeric,
+  provision_buffer_percent numeric,
+  status                   text,
+  finance_remark           text,
+  has_cost                 boolean
+) as $$
+  select
+    p.id, p.code, p.name, p.category,
+    c.normal_selling_price,
+    coalesce(c.target_margin_percent, 0),
+    coalesce(c.minimum_margin_percent, 0),
+    coalesce(c.floor_price, 0),
+    coalesce(c.shipping_buffer_percent,  margin_setting_num('shipping_buffer_percent', 2)),
+    coalesce(c.provision_buffer_percent, margin_setting_num('provision_buffer_percent', 2)),
+    coalesce(c.status, 'Active'),
+    c.finance_remark,
+    (c.product_id is not null and coalesce(c.cost_price, 0) > 0)
+  from products p
+  left join product_costs c on c.product_id = p.id
+  order by p.code;
+$$ language sql stable security definer set search_path = public;
+
+-- ===== แกนกลางการคำนวณ (ภายในเท่านั้น — ผลลัพธ์มี total_profit จึงไม่ grant ให้ authenticated) =====
+--  NetSales        = OfferPrice × Quantity
+--  ShippingBuffer  = NetSales × ShippingBufferPercent / 100
+--  ProvisionBuffer = NetSales × ProvisionBufferPercent / 100
+--  TotalCost       = (CostPrice × Qty) + ค่าขนส่งจริง + ShippingBuffer + ProvisionBuffer + (PackagingCost × Qty)
+--  TotalProfit     = NetSales − TotalCost
+--  MarginPercent   = TotalProfit / NetSales × 100
+create or replace function margin_compute_price(
+  p_product_id    uuid,
+  p_quantity      numeric,
+  p_offer_price   numeric,
+  p_shipping_cost numeric default null
+) returns json as $$
+declare
+  v_p             products%rowtype;
+  v_c             product_costs%rowtype;
+  v_ship_buf_pct  numeric;
+  v_prov_buf_pct  numeric;
+  v_packaging     numeric;
+  v_used_default  boolean;
+  v_ship          numeric;
+  v_net           numeric;
+  v_ship_buf      numeric;
+  v_prov_buf      numeric;
+  v_total_cost    numeric;
+  v_profit        numeric;
+  v_margin        numeric;
+  v_target        numeric;
+  v_min           numeric;
+  v_floor         numeric;
+  v_tier          text;
+  v_status        text;
+  v_fixed         numeric;
+  v_denom         numeric;
+  v_suggest       numeric;
+  v_suggest_err   text;
+  v_round         numeric;
+  v_recommend     text;
+begin
+  select * into v_p from products where id = p_product_id;
+  if not found then
+    raise exception 'ไม่พบข้อมูลสินค้า';
+  end if;
+
+  select * into v_c from product_costs where product_id = p_product_id;
+  if not found or coalesce(v_c.cost_price, 0) <= 0 then
+    raise exception 'ยังไม่ได้ตั้งต้นทุนของสินค้า % — ให้ฝ่ายบัญชีกรอกต้นทุนในหน้า "ต้นทุนสินค้า" ก่อน', v_p.code;
+  end if;
+  if coalesce(p_quantity, 0) <= 0 then
+    raise exception 'จำนวนต้องมากกว่า 0';
+  end if;
+  if coalesce(p_offer_price, 0) <= 0 then
+    raise exception 'ราคาที่จะเสนอต้องมากกว่า 0';
+  end if;
+
+  -- ค่าเฉพาะของสินค้า > ค่ากลางที่บัญชีตั้งไว้ > ค่าสำรอง
+  v_ship_buf_pct := coalesce(v_c.shipping_buffer_percent,  margin_setting_num('shipping_buffer_percent', 2));
+  v_prov_buf_pct := coalesce(v_c.provision_buffer_percent, margin_setting_num('provision_buffer_percent', 2));
+  v_packaging    := coalesce(v_c.packaging_cost,           margin_setting_num('default_packaging_cost', 0));
+
+  v_used_default := (p_shipping_cost is null);
+  v_ship := case when v_used_default
+                 then coalesce(v_c.default_shipping_cost, margin_setting_num('default_shipping_cost', 0))
+                 else p_shipping_cost end;
+
+  v_net        := p_offer_price * p_quantity;
+  v_ship_buf   := v_net * v_ship_buf_pct / 100;
+  v_prov_buf   := v_net * v_prov_buf_pct / 100;
+  v_total_cost := (v_c.cost_price * p_quantity) + v_ship + v_ship_buf + v_prov_buf + (v_packaging * p_quantity);
+  v_profit     := v_net - v_total_cost;
+  v_margin     := case when v_net > 0 then v_profit / v_net * 100 else 0 end;
+
+  v_target := coalesce(v_c.target_margin_percent, 0);
+  v_min    := coalesce(v_c.minimum_margin_percent, 0);
+  v_floor  := coalesce(v_c.floor_price, 0);
+
+  -- Auto Tier — เช็ค Below Floor ก่อนเสมอ ราคาที่ต่ำกว่า Floor หรือไม่มีกำไรต้องไม่ถูกจัดเป็น Tier ที่ดีกว่า
+  if v_net <= 0 or (v_floor > 0 and p_offer_price < v_floor) or v_profit <= 0 or v_margin <= 0 then
+    v_tier := 'Below Floor / ไม่ควรขาย';       v_status := 'ไม่ควรขาย';
+  elsif v_margin >= v_target then
+    v_tier := 'Tier 1 / ราคาดี';                v_status := 'ผ่าน / ขายได้';
+  elsif v_margin >= v_min then
+    v_tier := 'Tier 2 / ราคาขายได้';            v_status := 'ขายได้ แต่ Margin ต่ำ';
+  else
+    v_tier := 'Tier 3 / ต่ำกว่าเกณฑ์';           v_status := 'ต่ำกว่าเกณฑ์';
+  end if;
+
+  -- ราคาต่ำสุดที่ควรเสนอ เพื่อให้ยังได้ Margin ขั้นต่ำหลังหัก buffer ทั้งสองตัว
+  v_fixed := (v_c.cost_price * p_quantity) + v_ship + (v_packaging * p_quantity);
+  v_denom := 1 - ((v_ship_buf_pct + v_prov_buf_pct) / 100) - (v_min / 100);
+  if v_denom <= 0 then
+    v_suggest := null;
+    v_suggest_err := 'คำนวณราคาขั้นต่ำไม่ได้ — Buffer รวมกับ Margin ขั้นต่ำเกิน 100% ให้ฝ่ายบัญชีทบทวนค่าเหล่านี้';
+  else
+    v_suggest := (v_fixed / v_denom) / p_quantity;
+    if v_floor > 0 and v_suggest < v_floor then v_suggest := v_floor; end if;
+    v_round := margin_setting_num('round_suggested_price_to', 1);
+    if v_round > 0 then v_suggest := ceil(v_suggest / v_round) * v_round; end if;
+  end if;
+
+  v_recommend := case v_status
+    when 'ผ่าน / ขายได้'          then 'ผ่านเกณฑ์ สามารถเสนอราคานี้ได้'
+    when 'ขายได้ แต่ Margin ต่ำ'   then 'ขายได้ แต่ Margin ต่ำกว่าเป้าหมาย ควรพิจารณาจำนวนและเงื่อนไขก่อนเสนอ'
+    when 'ต่ำกว่าเกณฑ์'            then 'ต่ำกว่า Margin ขั้นต่ำ ควรคุยหัวหน้าก่อนเสนอราคานี้ให้ลูกค้า'
+    else 'ไม่แนะนำให้ขาย ราคานี้ต่ำกว่า Floor Price หรืออาจไม่ครอบคลุมต้นทุนรวม'
+  end;
+  if v_used_default then
+    v_recommend := v_recommend || E'\n(ไม่ได้กรอกค่าขนส่ง — ใช้ค่ามาตรฐาน ' || to_char(v_ship, 'FM999,999,990.00') || ' บาทแทน)';
+  end if;
+  if v_suggest_err is not null then
+    v_recommend := v_recommend || E'\n' || v_suggest_err;
+  end if;
+
+  return json_build_object(
+    'product_id',            v_p.id,
+    'product_code',          v_p.code,
+    'product_name',          v_p.name,
+    'quantity',              p_quantity,
+    'offer_price',           p_offer_price,
+    'shipping_cost',         round(v_ship, 2),
+    'used_default_shipping', v_used_default,
+    'net_sales',             round(v_net, 2),
+    'shipping_buffer',       round(v_ship_buf, 2),
+    'provision_buffer',      round(v_prov_buf, 2),
+    'shipping_buffer_percent',  v_ship_buf_pct,
+    'provision_buffer_percent', v_prov_buf_pct,
+    'total_profit',          round(v_profit, 2),
+    'margin_percent',        round(v_margin, 2),
+    'target_margin_percent', v_target,
+    'minimum_margin_percent', v_min,
+    'auto_tier',             v_tier,
+    'price_status',          v_status,
+    'floor_price',           v_floor,
+    'suggested_min_price',   case when v_suggest is null then null else round(v_suggest, 2) end,
+    'suggested_error',       v_suggest_err,
+    'recommendation',        v_recommend
+  );
+end;
+$$ language plpgsql stable security definer set search_path = public;
+
+-- ===== ตัดกำไรเป็นบาทออกถ้าผู้เรียกไม่ใช่บัญชี/แอดมิน =====
+-- (เซลล์ยังเห็น Margin % ตามที่ requirement ต้องการ แต่ไม่ได้ตัวเลขกำไรตรงๆ ไปลบกลับหาต้นทุน)
+create or replace function margin_strip_cost(p_result json) returns json as $$
+  select case when is_admin() or is_finance() then p_result
+              else (p_result::jsonb - 'total_profit')::json end;
+$$ language sql stable security definer set search_path = public;
+
+-- ===== เช็คราคา (ไม่บันทึกประวัติ) =====
+create or replace function margin_price_check(
+  p_product_id    uuid,
+  p_quantity      numeric,
+  p_offer_price   numeric,
+  p_shipping_cost numeric default null
+) returns json as $$
+  select margin_strip_cost(margin_compute_price(p_product_id, p_quantity, p_offer_price, p_shipping_cost));
+$$ language sql stable security definer set search_path = public;
+
+-- ===== เช็คราคาแล้วบันทึกประวัติ (คำนวณใหม่ฝั่งเซิร์ฟเวอร์ ไม่เชื่อตัวเลขที่ client ส่งมา) =====
+create or replace function margin_save_price_check(
+  p_product_id    uuid,
+  p_quantity      numeric,
+  p_offer_price   numeric,
+  p_shipping_cost numeric default null
+) returns json as $$
+declare
+  r json;
+  v_name text;
+  v_no text;
+begin
+  r := margin_compute_price(p_product_id, p_quantity, p_offer_price, p_shipping_cost);
+  select coalesce(full_name, email) into v_name from profiles where id = auth.uid();
+  v_no := 'PC' || to_char(now(), 'YYMM') || lpad(nextval('price_check_seq')::text, 4, '0');
+
+  insert into price_checks (
+    check_no, product_id, product_code, product_name, quantity, offer_price, shipping_cost,
+    used_default_shipping, net_sales, shipping_buffer, provision_buffer, total_profit,
+    margin_percent, auto_tier, price_status, floor_price, suggested_min_price, recommendation,
+    created_by, created_by_name
+  ) values (
+    v_no,
+    (r->>'product_id')::uuid, r->>'product_code', r->>'product_name',
+    (r->>'quantity')::numeric, (r->>'offer_price')::numeric, (r->>'shipping_cost')::numeric,
+    (r->>'used_default_shipping')::boolean, (r->>'net_sales')::numeric,
+    (r->>'shipping_buffer')::numeric, (r->>'provision_buffer')::numeric,
+    (r->>'total_profit')::numeric, (r->>'margin_percent')::numeric,
+    r->>'auto_tier', r->>'price_status', (r->>'floor_price')::numeric,
+    nullif(r->>'suggested_min_price', '')::numeric, r->>'recommendation',
+    auth.uid(), v_name
+  );
+
+  return margin_strip_cost((r::jsonb || jsonb_build_object('check_no', v_no))::json);
+end;
+$$ language plpgsql volatile security definer set search_path = public;
+
+-- margin_compute_price คืนค่ากำไรดิบ จึงห้ามให้เซลล์เรียกตรง — เรียกได้เฉพาะผ่านสองฟังก์ชันข้างบน
+revoke all on function margin_compute_price(uuid, numeric, numeric, numeric) from public, authenticated, anon;
+revoke all on function margin_strip_cost(json) from public, anon;
+grant execute on function margin_setting_num(text, numeric) to authenticated;
+grant execute on function margin_product_view() to authenticated;
+grant execute on function margin_price_check(uuid, numeric, numeric, numeric) to authenticated;
+grant execute on function margin_save_price_check(uuid, numeric, numeric, numeric) to authenticated;
+
+-- ===== RLS =====
+alter table product_costs   enable row level security;
+alter table margin_settings enable row level security;
+alter table price_checks    enable row level security;
+
+-- ----- product_costs: เฉพาะบัญชี/แอดมินเท่านั้นที่เข้าถึงได้ — เซลล์อ่านไม่ได้เลยแม้ยิง API ตรง -----
+drop policy if exists "product_costs select" on product_costs;
+create policy "product_costs select" on product_costs for select using (is_admin() or is_finance());
+drop policy if exists "product_costs write" on product_costs;
+create policy "product_costs write" on product_costs for all
+  using (is_admin() or is_finance()) with check (is_admin() or is_finance());
+
+-- ----- margin_settings: ทุกคนอ่านได้ (ไม่ใช่ความลับ ใช้อธิบายที่มาของตัวเลข) แก้ได้เฉพาะบัญชี/แอดมิน -----
+drop policy if exists "margin_settings select" on margin_settings;
+create policy "margin_settings select" on margin_settings for select using (auth.role() = 'authenticated');
+drop policy if exists "margin_settings write" on margin_settings;
+create policy "margin_settings write" on margin_settings for all
+  using (is_admin() or is_finance()) with check (is_admin() or is_finance());
+
+-- ----- price_checks: บัญชี/แอดมินเห็นทั้งหมด เซลล์เห็นเฉพาะที่ตัวเองเช็ค — ลบได้เฉพาะแอดมิน -----
+drop policy if exists "price_checks select" on price_checks;
+create policy "price_checks select" on price_checks for select using (
+  is_admin() or is_finance() or created_by = auth.uid()
+);
+drop policy if exists "price_checks delete" on price_checks;
+create policy "price_checks delete" on price_checks for delete using (is_admin());

@@ -4,7 +4,7 @@ import { useLanguage } from './LanguageContext'
 const NAV = [
   { section: 'หลัก', items: [{ id: 'dashboard', label: 'แดชบอร์ด' }] },
   { section: 'ข้อมูลลูกค้า', items: [{ id: 'companies', label: 'บริษัทลูกค้า' }, { id: 'leads', label: 'ผู้ติดต่อ' }, { id: 'tasks', label: 'งานติดตาม' }] },
-  { section: 'การขาย', items: [{ id: 'deals', label: 'ดีลการขาย' }, { id: 'quotations', label: 'ใบเสนอราคา' }, { id: 'orders', label: 'ออเดอร์' }] },
+  { section: 'การขาย', items: [{ id: 'deals', label: 'ดีลการขาย' }, { id: 'quotations', label: 'ใบเสนอราคา' }, { id: 'orders', label: 'ออเดอร์' }, { id: 'price-check', label: 'เช็คราคา/มาร์จิ้น' }] },
   { section: 'ข้อมูลสินค้า', items: [{ id: 'products', label: 'สินค้า' }] },
 ]
 const ADMIN_SECTION = { section: 'ผู้ดูแลระบบ', items: [
@@ -15,7 +15,8 @@ export default function Sidebar({ activeView, onNav, user, isAdmin, isFinance, o
   const { lang, setLang, t } = useLanguage()
   const name = user?.name || (lang === 'en' ? 'User' : 'ผู้ใช้งาน')
   // เมนู "ตรวจสอบยอดโอน"/"เอกสารบัญชี" ให้เห็นเฉพาะฝ่ายบัญชี/แอดมิน — เซลล์ทำ/ติดตามคำขอตรวจยอดที่หน้า "ออเดอร์" แทนแล้ว จึงไม่มีเมนูนี้ให้เห็นเลยถ้าไม่ใช่บัญชี/แอดมิน
-  const financeItems = (isFinance || isAdmin) ? [{ id: 'finance-review', label: 'ตรวจสอบยอดโอน' }, { id: 'accounting-documents', label: 'เอกสารบัญชี' }] : []
+  // "ต้นทุนสินค้า" = Cost Master ของระบบเช็คราคา/มาร์จิ้น — บัญชี/แอดมินเท่านั้น (เซลล์เห็นแต่ผลลัพธ์ ไม่เห็นต้นทุน)
+  const financeItems = (isFinance || isAdmin) ? [{ id: 'finance-review', label: 'ตรวจสอบยอดโอน' }, { id: 'accounting-documents', label: 'เอกสารบัญชี' }, { id: 'cost-master', label: 'ต้นทุนสินค้า' }] : []
   const financeSection = financeItems.length ? { section: 'การเงิน', items: financeItems } : null
 
   // ฝ่ายบัญชี (finance ที่ไม่ใช่ admin) ทำงานแค่ตรวจสอบยอดโอน/ออกเอกสารบัญชี + ดูข้อมูลบริษัทลูกค้าเพื่อเทียบข้อมูลกับเซลล์
@@ -23,6 +24,7 @@ export default function Sidebar({ activeView, onNav, user, isAdmin, isFinance, o
   const sections = (isFinance && !isAdmin)
     ? [
         { section: 'ข้อมูลลูกค้า', items: [{ id: 'companies', label: 'บริษัทลูกค้า' }] },
+        { section: 'การขาย', items: [{ id: 'price-check', label: 'เช็คราคา/มาร์จิ้น' }] },
         ...(financeSection ? [financeSection] : []),
         NAV[3], // ข้อมูลสินค้า
       ]

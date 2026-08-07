@@ -17,6 +17,8 @@ import Products from './components/Products'
 import Leads from './components/Leads'
 import FinanceReview from './components/FinanceReview'
 import AccountingDocuments from './components/AccountingDocuments'
+import PriceCheck from './components/PriceCheck'
+import CostMaster from './components/CostMaster'
 import NotificationBell from './components/NotificationBell'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal, LeadModal } from './components/Modals'
@@ -426,6 +428,8 @@ function AppInner({ session }) {
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products perm={perm} />}
+          {view === 'price-check' && <PriceCheck perm={perm} />}
+          {view === 'cost-master' && (isFinance || isAdmin) && <CostMaster currentUserName={currentUser.name} />}
           {view === 'finance-review' && (isFinance || isAdmin) && (
             <FinanceReview reloadKey={reloadKey} currentUserName={currentUser.name} perm={perm} onApprove={actions.approvePayment} onNeedInfo={actions.needInfoPayment} onMismatch={actions.mismatchPayment} onReject={actions.rejectPayment} onDelete={actions.deletePaymentRequestRow} />
           )}

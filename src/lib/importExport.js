@@ -414,3 +414,35 @@ export async function parseLeadImportFile(file) {
   })
   return { validRows, invalidRows }
 }
+
+// ===== ส่งออกประวัติการเช็คราคาเป็นไฟล์ Excel =====
+// คอลัมน์ "กำไรรวม" ใส่ให้เฉพาะบัญชี/แอดมิน — ไฟล์ที่เซลล์ดาวน์โหลดจะไม่มีตัวเลขที่ย้อนหาต้นทุนได้
+const PRICE_CHECK_EXPORT_COLUMNS = [
+  { key: 'check_no', label: 'เลขที่' },
+  { key: 'created_at', label: 'วันที่' },
+  { key: 'product_code', label: 'รหัสสินค้า' },
+  { key: 'product_name', label: 'ชื่อสินค้า' },
+  { key: 'quantity', label: 'จำนวน' },
+  { key: 'offer_price', label: 'ราคาที่เสนอ/ชิ้น' },
+  { key: 'shipping_cost', label: 'ค่าขนส่ง' },
+  { key: 'net_sales', label: 'ยอดขายรวม' },
+  { key: 'shipping_buffer', label: 'Shipping Buffer' },
+  { key: 'provision_buffer', label: 'Provision Buffer' },
+  { key: 'margin_percent', label: 'Margin (%)' },
+  { key: 'auto_tier', label: 'Tier' },
+  { key: 'price_status', label: 'สถานะ' },
+  { key: 'floor_price', label: 'Floor Price' },
+  { key: 'suggested_min_price', label: 'ราคาแนะนำขั้นต่ำ' },
+  { key: 'recommendation', label: 'คำแนะนำ' },
+  { key: 'created_by_name', label: 'ผู้เช็ค' },
+]
+
+export const exportPriceChecksToExcel = (rows, includeProfit = false) => {
+  const columns = includeProfit
+    ? [...PRICE_CHECK_EXPORT_COLUMNS.slice(0, 10), { key: 'total_profit', label: 'กำไรรวม' }, ...PRICE_CHECK_EXPORT_COLUMNS.slice(10)]
+    : PRICE_CHECK_EXPORT_COLUMNS
+  return exportRowsToExcel(columns, rows.map(r => ({
+    ...r,
+    created_at: (r.created_at || '').slice(0, 10)
+  })), 'ประวัติเช็คราคา.xlsx')
+}
