@@ -662,6 +662,7 @@ export const EN_DICT = {
   'ค่าหลังแก้': 'After the change',
   'เริ่มบันทึก': 'First entry',
   'ต้นทุน': 'Cost',
+  'ราคาที่เสนออยู่ตรงไหน (ต่อชิ้น)': 'Where the offer sits (per unit)',
 }
 
 export function LanguageProvider({ children }) {

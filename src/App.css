@@ -84,6 +84,9 @@ th{position:sticky;top:0;z-index:3;background:var(--navy);color:var(--white);pad
 .list-view{flex:1;min-height:0;display:flex;flex-direction:column}
 .list-view .list-card{flex:1;min-height:0;display:flex;flex-direction:column}
 .list-view .list-card .table-wrap{flex:1;min-height:0;overflow:auto}
+/* หน้าที่เนื้อหายาวกว่าจอ (เช่น เช็คราคา) — ให้ทั้งหน้าเลื่อนตามปกติ ไม่ล็อกความสูงแบบ .list-view
+   และเว้นช่องไฟท้ายหน้าไว้ ไม่ให้การ์ดสุดท้ายชนขอบล่าง */
+.scroll-view{padding-bottom:40px}
 td{padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tbody tr{transition:.15s;cursor:pointer}

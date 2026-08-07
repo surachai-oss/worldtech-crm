@@ -19,6 +19,22 @@ const STATUS_CLS = {
 }
 const statusCls = (s) => STATUS_CLS[s] || 'badge-gray'
 
+// สีเน้นประจำสถานะ ใช้กับกรอบการ์ดและตัวเลข Margin — เซลล์ต้องเห็นแต่ไกลว่าอันไหนขายได้ อันไหนห้าม
+const STATUS_COLOR = {
+  [PRICE_STATUS_PASS]: 'var(--success)',
+  [PRICE_STATUS_LOW_MARGIN]: 'var(--warning)',
+  [PRICE_STATUS_UNDER]: 'var(--danger)',
+  [PRICE_STATUS_NO_SELL]: '#4a5568'
+}
+const statusColor = (s) => STATUS_COLOR[s] || '#4a5568'
+const STATUS_TINT = {
+  [PRICE_STATUS_PASS]: '#f0fff7',
+  [PRICE_STATUS_LOW_MARGIN]: '#fffaf0',
+  [PRICE_STATUS_UNDER]: '#fff5f5',
+  [PRICE_STATUS_NO_SELL]: '#f7fafc'
+}
+const statusTint = (s) => STATUS_TINT[s] || '#f7fafc'
+
 const fmtPct = (n) => (n === null || n === undefined || n === '' ? '-' : `${Number(n).toFixed(2)}%`)
 const shipLabel = (r) => (Number(r.shipping_cost) === 0 ? 'ส่งฟรี' : `${fmtCurrency(r.shipping_cost)} บาท`)
 
@@ -104,8 +120,6 @@ function buildSummaryText(results, comparison, note) {
       `ราคาที่จะเสนอ: ${fmtCurrency(r.offer_price)} บาท/ชิ้น`,
       `ค่าขนส่งจริง: ${shipLabel(r)}${r.used_default_shipping ? ' (ใช้ค่ามาตรฐาน)' : ''}`,
       `ยอดขายรวม: ${fmtCurrency(r.net_sales)} บาท`,
-      `Shipping Buffer: ${fmtCurrency(r.shipping_buffer)} บาท`,
-      `Provision Buffer: ${fmtCurrency(r.provision_buffer)} บาท`,
       `Margin คงเหลือ: ${fmtPct(r.margin_percent)}`,
       `Tier ระบบ: ${r.auto_tier}`,
       `สถานะ: ${r.price_status}`,
@@ -126,6 +140,40 @@ function buildSummaryText(results, comparison, note) {
   if (note?.trim()) lines.push('หมายเหตุจากเซลล์:', note.trim(), '')
   lines.push('หมายเหตุ: ระบบไม่ได้แสดงต้นทุนสินค้าใน Summary นี้')
   return lines.join('\n')
+}
+
+// แถบบอกว่าราคาที่เสนออยู่ตรงไหนเทียบกับหมุดสำคัญ — เซลล์จะได้รู้ว่าถ้าขยับราคาขึ้นลง จะข้ามเส้นไหน
+// ใช้เฉพาะตัวเลขที่เซลล์เห็นได้อยู่แล้ว (Floor Price / ราคาแนะนำขั้นต่ำ / ราคาขายปกติ) ไม่มีต้นทุน
+function PriceLadder({ r, normalPrice }) {
+  const { t } = useLanguage()
+  const marks = [
+    { label: 'Floor Price', value: Number(r.floor_price) || 0, color: 'var(--danger)' },
+    { label: t('ราคาแนะนำขั้นต่ำ'), value: Number(r.suggested_min_price) || 0, color: 'var(--warning)' },
+    { label: t('ราคาขายปกติ'), value: Number(normalPrice) || 0, color: 'var(--success)' },
+  ].filter(m => m.value > 0).sort((a, b) => a.value - b.value)
+  if (!marks.length) return null
+
+  const offer = Number(r.offer_price)
+  return (
+    <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6, border: '1px solid var(--border)' }}>
+      <div style={{ fontSize: 11, color: 'var(--text-light)', marginBottom: 6 }}>{t('ราคาที่เสนออยู่ตรงไหน (ต่อชิ้น)')}</div>
+      {marks.map(m => {
+        const above = offer >= m.value
+        return (
+          <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, padding: '2px 0' }}>
+            <span style={{ color: 'var(--text-light)' }}>
+              <span style={{ color: m.color, fontWeight: 700, marginRight: 4 }}>{above ? '✓' : '✕'}</span>{m.label}
+            </span>
+            <span style={{ fontWeight: 600, color: above ? m.color : 'var(--text-light)' }}>{fmtCurrency(m.value)}</span>
+          </div>
+        )
+      })}
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, paddingTop: 6, marginTop: 4, borderTop: '1px dashed var(--border)' }}>
+        <span style={{ color: 'var(--text-light)' }}>{t('ราคาที่เสนอ')}</span>
+        <span style={{ fontWeight: 700, color: 'var(--navy)' }}>{fmtCurrency(offer)}</span>
+      </div>
+    </div>
+  )
 }
 
 function ResultRow({ label, value, strong, hint }) {
@@ -278,7 +326,7 @@ export default function PriceCheck({ perm }) {
   const okResults = results.filter(x => x.result)
 
   return (
-    <div className="list-view">
+    <div className="scroll-view">
       <div className="section-header">
         <div className="section-title">{t('เช็คราคา')}</div>
       </div>
@@ -382,33 +430,54 @@ export default function PriceCheck({ perm }) {
       {results.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(results.length, 1)}, 1fr)`, gap: 12, marginBottom: 14 }}>
           {results.map(entry => (
-            <div className="card" key={entry.no} style={comparison?.bestNo === entry.no ? { outline: '2px solid var(--success)' } : undefined}>
-              <div className="card-header">
+            <div className="card" key={entry.no}
+              style={entry.result
+                ? { borderTop: `4px solid ${statusColor(entry.result.price_status)}`, outline: comparison?.bestNo === entry.no ? '2px solid var(--success)' : undefined }
+                : { borderTop: '4px solid var(--danger)' }}>
+              <div className="card-header" style={{ background: entry.result ? statusTint(entry.result.price_status) : undefined }}>
                 <div className="card-title" style={{ fontSize: 13 }}>
                   {t('ตัวเลือกที่')} {entry.no}
                   {comparison?.bestNo === entry.no && <span className="badge badge-green" style={{ marginLeft: 6, fontSize: 10 }}>{t('คุ้มที่สุด')}</span>}
                   {entry.result?.check_no && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-light)', fontWeight: 400 }}>({entry.result.check_no})</span>}
                 </div>
-                {entry.result && <span className={`badge ${statusCls(entry.result.price_status)}`} style={{ fontSize: 11 }}>{entry.result.price_status}</span>}
+                {entry.result && (
+                  <span className={`badge ${statusCls(entry.result.price_status)}`} style={{ fontSize: 12, fontWeight: 700 }}>{entry.result.price_status}</span>
+                )}
               </div>
               <div className="card-body">
                 {entry.error ? (
                   <div style={{ color: 'var(--danger)', fontSize: 12 }}>{entry.error}</div>
                 ) : (
                   <>
-                    <ResultRow label="Margin" value={fmtPct(entry.result.margin_percent)} strong />
+                    {/* Margin เป็นตัวเลขที่เซลล์ต้องเห็นก่อนอย่างอื่น ทำใหญ่และใส่สีตามสถานะไปเลย */}
+                    <div style={{ textAlign: 'center', padding: '6px 0 10px' }}>
+                      <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.1, color: statusColor(entry.result.price_status) }}>
+                        {fmtPct(entry.result.margin_percent)}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-light)' }}>Margin</div>
+                    </div>
                     <ResultRow label={t('ยอดขายรวม')} value={fmtCurrency(entry.result.net_sales)} strong />
                     <ResultRow label={t('ราคาที่เสนอ/ชิ้น')} value={`${fmtCurrency(entry.result.offer_price)} × ${entry.result.quantity}`} />
                     <ResultRow label={t('ค่าขนส่งที่ใช้คำนวณ')} value={shipLabel(entry.result)}
                       hint={entry.result.used_default_shipping ? `(${t('ค่ามาตรฐาน')})` : null} />
-                    <ResultRow label="Shipping Buffer" value={fmtCurrency(entry.result.shipping_buffer)} hint={`(${fmtPct(entry.result.shipping_buffer_percent)})`} />
-                    <ResultRow label="Provision Buffer" value={fmtCurrency(entry.result.provision_buffer)} hint={`(${fmtPct(entry.result.provision_buffer_percent)})`} />
-                    {canSeeProfit && <ResultRow label={t('กำไรรวม')} value={fmtCurrency(entry.result.total_profit)} strong />}
                     <ResultRow label="Tier" value={entry.result.auto_tier} />
                     <ResultRow label="Floor Price" value={fmtCurrency(entry.result.floor_price)} />
                     <ResultRow label={t('ราคาแนะนำขั้นต่ำ/ชิ้น')}
                       value={entry.result.suggested_min_price ? fmtCurrency(entry.result.suggested_min_price) : t('คำนวณไม่ได้')} strong />
-                    <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6, background: 'var(--gray-bg)', fontSize: 12, whiteSpace: 'pre-line' }}>
+                    {/* ตัวเลข Buffer และกำไรเป็นบาท เซลล์ไม่ต้องเห็น — ดูแค่ Margin % กับสถานะก็พอตัดสินใจได้ */}
+                    {canSeeProfit && (
+                      <>
+                        <ResultRow label="Shipping Buffer" value={fmtCurrency(entry.result.shipping_buffer)} hint={`(${fmtPct(entry.result.shipping_buffer_percent)})`} />
+                        <ResultRow label="Provision Buffer" value={fmtCurrency(entry.result.provision_buffer)} hint={`(${fmtPct(entry.result.provision_buffer_percent)})`} />
+                        <ResultRow label={t('กำไรรวม')} value={fmtCurrency(entry.result.total_profit)} strong />
+                      </>
+                    )}
+                    <PriceLadder r={entry.result} normalPrice={selected?.normal_selling_price} />
+                    <div style={{
+                      marginTop: 10, padding: '8px 10px', borderRadius: 6, fontSize: 12, whiteSpace: 'pre-line',
+                      background: statusTint(entry.result.price_status),
+                      borderLeft: `3px solid ${statusColor(entry.result.price_status)}`
+                    }}>
                       {entry.result.recommendation}
                     </div>
                     <button className="btn btn-outline btn-sm" style={{ marginTop: 10, width: '100%' }}
