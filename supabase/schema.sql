@@ -1578,3 +1578,160 @@ create policy "price_checks select" on price_checks for select using (
 );
 drop policy if exists "price_checks delete" on price_checks;
 create policy "price_checks delete" on price_checks for delete using (is_admin());
+
+-- ============================================================================
+-- ===== ประวัติการแก้ไขต้นทุน + หมายเหตุการเช็คราคา =====
+-- ============================================================================
+-- ใช้ตอบคำถามย้อนหลังว่า "ทำไมลูกค้ารายนี้เคยได้ราคานี้" — ตอนนั้นต้นทุน/Floor Price เป็นเท่าไหร่
+-- และเซลล์บันทึกเหตุผลไว้ว่าอะไร (เช่น ตกลงราคาโปรเจค) — ตารางนี้มีต้นทุน จึงปิดไม่ให้เซลล์อ่านเหมือน product_costs
+
+create table if not exists product_cost_history (
+  id                         uuid primary key default uuid_generate_v4(),
+  product_id                 uuid references products(id) on delete cascade,
+  product_code               text,
+  product_name               text,
+  action                     text,        -- 'created' | 'updated'
+  changed_fields             text[],      -- ชื่อช่องที่เปลี่ยนจริงในครั้งนั้น (ภาษาไทย ใช้โชว์ตรงๆ)
+  cost_price                 numeric,
+  normal_selling_price       numeric,
+  target_margin_percent      numeric,
+  minimum_margin_percent     numeric,
+  floor_price                numeric,
+  shipping_buffer_percent    numeric,
+  provision_buffer_percent   numeric,
+  default_shipping_cost      numeric,
+  status                     text,
+  finance_remark             text,
+  prev_cost_price            numeric,
+  prev_normal_selling_price  numeric,
+  prev_target_margin_percent numeric,
+  prev_minimum_margin_percent numeric,
+  prev_floor_price           numeric,
+  changed_by                 uuid references auth.users(id),
+  changed_by_name            text,
+  changed_at                 timestamptz default now()
+);
+
+create index if not exists idx_product_cost_history_product on product_cost_history (product_id, changed_at desc);
+create index if not exists idx_product_cost_history_changed_at on product_cost_history (changed_at desc);
+
+-- บันทึกอัตโนมัติทุกครั้งที่ต้นทุนถูกเพิ่ม/แก้ไข ไม่ว่าจะแก้จากฟอร์มหรือนำเข้าไฟล์ (ดักที่ระดับตาราง เลี่ยงไม่ได้)
+create or replace function log_product_cost_change() returns trigger as $$
+declare
+  v_p       products%rowtype;
+  v_name    text;
+  v_changed text[] := '{}';
+begin
+  if TG_OP = 'UPDATE' then
+    if new.cost_price               is distinct from old.cost_price               then v_changed := v_changed || 'ต้นทุน/ชิ้น'; end if;
+    if new.normal_selling_price     is distinct from old.normal_selling_price     then v_changed := v_changed || 'ราคาขายปกติ'; end if;
+    if new.target_margin_percent    is distinct from old.target_margin_percent    then v_changed := v_changed || 'Margin เป้าหมาย'; end if;
+    if new.minimum_margin_percent   is distinct from old.minimum_margin_percent   then v_changed := v_changed || 'Margin ขั้นต่ำ'; end if;
+    if new.floor_price              is distinct from old.floor_price              then v_changed := v_changed || 'Floor Price'; end if;
+    if new.shipping_buffer_percent  is distinct from old.shipping_buffer_percent  then v_changed := v_changed || 'Shipping Buffer'; end if;
+    if new.provision_buffer_percent is distinct from old.provision_buffer_percent then v_changed := v_changed || 'Provision Buffer'; end if;
+    if new.default_shipping_cost    is distinct from old.default_shipping_cost    then v_changed := v_changed || 'ค่าขนส่งมาตรฐาน'; end if;
+    if new.status                   is distinct from old.status                   then v_changed := v_changed || 'สถานะ'; end if;
+    if new.finance_remark           is distinct from old.finance_remark           then v_changed := v_changed || 'หมายเหตุจากบัญชี'; end if;
+    -- กดบันทึกโดยไม่ได้แก้อะไรเลย ไม่ต้องเก็บเป็นประวัติ กันรายการรกจนหาของจริงไม่เจอ
+    if array_length(v_changed, 1) is null then return new; end if;
+  end if;
+
+  select * into v_p from products where id = new.product_id;
+  select coalesce(full_name, email) into v_name from profiles where id = auth.uid();
+
+  insert into product_cost_history (
+    product_id, product_code, product_name, action, changed_fields,
+    cost_price, normal_selling_price, target_margin_percent, minimum_margin_percent, floor_price,
+    shipping_buffer_percent, provision_buffer_percent, default_shipping_cost, status, finance_remark,
+    prev_cost_price, prev_normal_selling_price, prev_target_margin_percent, prev_minimum_margin_percent, prev_floor_price,
+    changed_by, changed_by_name
+  ) values (
+    new.product_id, v_p.code, v_p.name,
+    case when TG_OP = 'INSERT' then 'created' else 'updated' end,
+    case when TG_OP = 'INSERT' then array['กรอกต้นทุนครั้งแรก']::text[] else v_changed end,
+    new.cost_price, new.normal_selling_price, new.target_margin_percent, new.minimum_margin_percent, new.floor_price,
+    new.shipping_buffer_percent, new.provision_buffer_percent, new.default_shipping_cost, new.status, new.finance_remark,
+    case when TG_OP = 'UPDATE' then old.cost_price end,
+    case when TG_OP = 'UPDATE' then old.normal_selling_price end,
+    case when TG_OP = 'UPDATE' then old.target_margin_percent end,
+    case when TG_OP = 'UPDATE' then old.minimum_margin_percent end,
+    case when TG_OP = 'UPDATE' then old.floor_price end,
+    auth.uid(), v_name
+  );
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_product_costs_history on product_costs;
+create trigger trg_product_costs_history after insert or update on product_costs
+  for each row execute function log_product_cost_change();
+
+-- เก็บสถานะปัจจุบันของต้นทุนที่มีอยู่แล้วเป็นจุดตั้งต้น เผื่อระบบเคยถูกใช้ก่อนมีตารางประวัติ
+insert into product_cost_history (
+  product_id, product_code, product_name, action, changed_fields,
+  cost_price, normal_selling_price, target_margin_percent, minimum_margin_percent, floor_price,
+  shipping_buffer_percent, provision_buffer_percent, default_shipping_cost, status, finance_remark,
+  changed_by_name, changed_at
+)
+select c.product_id, p.code, p.name, 'created', array['ค่าตั้งต้นก่อนเริ่มเก็บประวัติ']::text[],
+       c.cost_price, c.normal_selling_price, c.target_margin_percent, c.minimum_margin_percent, c.floor_price,
+       c.shipping_buffer_percent, c.provision_buffer_percent, c.default_shipping_cost, c.status, c.finance_remark,
+       c.updated_by, coalesce(c.updated_at, now())
+from product_costs c join products p on p.id = c.product_id
+where not exists (select 1 from product_cost_history h where h.product_id = c.product_id);
+
+-- ----- RLS: มีต้นทุนอยู่ในตาราง จึงเปิดให้เฉพาะบัญชี/แอดมินเหมือน product_costs -----
+alter table product_cost_history enable row level security;
+drop policy if exists "product_cost_history select" on product_cost_history;
+create policy "product_cost_history select" on product_cost_history for select using (is_admin() or is_finance());
+-- ไม่มี policy insert/update/delete = เขียนตรงไม่ได้เลย เข้าได้แค่ผ่าน trigger (security definer)
+
+-- ===== หมายเหตุบนการเช็คราคา — เซลล์บันทึกเหตุผลได้ เช่น "ตกลงราคาโปรเจค A" =====
+alter table price_checks add column if not exists note text;
+-- option_label = ชื่อตัวเลือกตอนเทียบราคาหลายแบบ (ตัวเลือกที่ 1/2/3) ว่างได้ถ้าเช็คเดี่ยว
+alter table price_checks add column if not exists option_label text;
+
+-- เพิ่มพารามิเตอร์ note/option_label — ต้อง drop ของเดิมก่อน ไม่งั้นจะกลายเป็น overload แล้วเรียกแบบ 4 ตัวจะกำกวม
+drop function if exists margin_save_price_check(uuid, numeric, numeric, numeric);
+
+create or replace function margin_save_price_check(
+  p_product_id    uuid,
+  p_quantity      numeric,
+  p_offer_price   numeric,
+  p_shipping_cost numeric default null,
+  p_note          text default null,
+  p_option_label  text default null
+) returns json as $$
+declare
+  r json;
+  v_name text;
+  v_no text;
+begin
+  r := margin_compute_price(p_product_id, p_quantity, p_offer_price, p_shipping_cost);
+  select coalesce(full_name, email) into v_name from profiles where id = auth.uid();
+  v_no := 'PC' || to_char(now(), 'YYMM') || lpad(nextval('price_check_seq')::text, 4, '0');
+
+  insert into price_checks (
+    check_no, product_id, product_code, product_name, quantity, offer_price, shipping_cost,
+    used_default_shipping, net_sales, shipping_buffer, provision_buffer, total_profit,
+    margin_percent, auto_tier, price_status, floor_price, suggested_min_price, recommendation,
+    note, option_label, created_by, created_by_name
+  ) values (
+    v_no,
+    (r->>'product_id')::uuid, r->>'product_code', r->>'product_name',
+    (r->>'quantity')::numeric, (r->>'offer_price')::numeric, (r->>'shipping_cost')::numeric,
+    (r->>'used_default_shipping')::boolean, (r->>'net_sales')::numeric,
+    (r->>'shipping_buffer')::numeric, (r->>'provision_buffer')::numeric,
+    (r->>'total_profit')::numeric, (r->>'margin_percent')::numeric,
+    r->>'auto_tier', r->>'price_status', (r->>'floor_price')::numeric,
+    nullif(r->>'suggested_min_price', '')::numeric, r->>'recommendation',
+    nullif(trim(coalesce(p_note, '')), ''), nullif(trim(coalesce(p_option_label, '')), ''),
+    auth.uid(), v_name
+  );
+
+  return margin_strip_cost((r::jsonb || jsonb_build_object('check_no', v_no))::json);
+end;
+$$ language plpgsql volatile security definer set search_path = public;
+
+grant execute on function margin_save_price_check(uuid, numeric, numeric, numeric, text, text) to authenticated;

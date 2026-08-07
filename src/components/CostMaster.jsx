@@ -7,6 +7,7 @@ import { fmtCurrency } from '../lib/format'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import ImportProductCostsModal from './ImportProductCostsModal'
+import CostHistoryModal from './CostHistoryModal'
 
 // หน้านี้เห็นได้เฉพาะบัญชี/แอดมิน (บังคับจริงด้วย RLS ของ product_costs — เซลล์ยิง API ตรงก็อ่านไม่ได้)
 // เป็นแหล่งข้อมูลเดียวที่หน้า "เช็คราคา" ใช้คำนวณ
@@ -199,6 +200,7 @@ export default function CostMaster({ currentUserName }) {
   const [onlyMissing, setOnlyMissing] = useState(false)
   const [modal, setModal] = useState(null)
   const [showImport, setShowImport] = useState(false)
+  const [historyProduct, setHistoryProduct] = useState(null)
 
   const load = async () => {
     setLoading(true)
@@ -281,6 +283,7 @@ export default function CostMaster({ currentUserName }) {
         <ImportProductCostsModal products={rows} marginSettings={settings} currentUserName={currentUserName}
           onClose={() => setShowImport(false)} onImported={load} />
       )}
+      {historyProduct && <CostHistoryModal product={historyProduct} onClose={() => setHistoryProduct(null)} />}
 
       <div className="filter-bar">
         <input className="filter-input" placeholder={lang === 'en' ? 'Search product...' : 'ค้นหาสินค้า...'}
@@ -327,6 +330,7 @@ export default function CostMaster({ currentUserName }) {
                       <td style={{ fontSize: 11, color: 'var(--text-light)' }}>{c?.updated_by || '-'}</td>
                       <td className="td-actions">
                         <button className="btn btn-outline btn-xs" onClick={() => setModal(r)}>{hasCost ? t('แก้ไข') : t('กรอกต้นทุน')}</button>
+                        {hasCost && <button className="btn btn-outline btn-xs" onClick={() => setHistoryProduct(r)}>{t('ประวัติ')}</button>}
                       </td>
                     </tr>
                   )

@@ -1311,12 +1311,15 @@ export const checkPrice = ({ productId, quantity, offerPrice, shippingCost }) =>
   }).then(handle)
 
 // คำนวณใหม่ฝั่งเซิร์ฟเวอร์แล้วบันทึกลงประวัติ (ไม่เชื่อตัวเลขที่ client ส่งมา)
-export const savePriceCheck = ({ productId, quantity, offerPrice, shippingCost }) =>
+// note = เหตุผลที่เซลล์บันทึกไว้ (เช่น ตกลงราคาโปรเจค) ใช้ตอบย้อนหลังว่าทำไมลูกค้ารายนี้ได้ราคานี้
+export const savePriceCheck = ({ productId, quantity, offerPrice, shippingCost, note, optionLabel }) =>
   supabase.rpc('margin_save_price_check', {
     p_product_id: productId,
     p_quantity: quantity,
     p_offer_price: offerPrice,
-    p_shipping_cost: shippingCost === '' || shippingCost === null || shippingCost === undefined ? null : shippingCost
+    p_shipping_cost: shippingCost === '' || shippingCost === null || shippingCost === undefined ? null : shippingCost,
+    p_note: note || null,
+    p_option_label: optionLabel || null
   }).then(handle)
 
 // ประวัติการเช็คราคา — RLS คัดให้เอง (บัญชี/แอดมินเห็นทั้งหมด เซลล์เห็นเฉพาะของตัวเอง)
@@ -1374,4 +1377,17 @@ export async function bulkUpsertProductCosts(rows, updatedBy) {
     await supabase.from('products').update(r.meta).eq('id', r.product_id).then(handle)
   }
   return costs.length
+}
+
+// ประวัติการแก้ไขต้นทุน — RLS เปิดให้เฉพาะบัญชี/แอดมิน (มีตัวเลขต้นทุนอยู่ในนั้น)
+// ใช้ย้อนดูว่าตอนที่ลูกค้าได้ราคานั้น ต้นทุน/Floor Price ของสินค้าเป็นเท่าไหร่
+export async function fetchProductCostHistory({ productId = '', q = '', dateFrom = '', dateTo = '', limit = 300 } = {}) {
+  let query = supabase.from('product_cost_history').select('*').order('changed_at', { ascending: false }).limit(limit)
+  if (productId) query = query.eq('product_id', productId)
+  const sq = safeLike(q)
+  if (sq) query = query.or(`product_code.ilike.%${sq}%,product_name.ilike.%${sq}%`)
+  const { fromIso, toIso } = dateRangeToIso(dateFrom, dateTo)
+  if (fromIso) query = query.gte('changed_at', fromIso)
+  if (toIso) query = query.lte('changed_at', toIso)
+  return query.then(handle)
 }

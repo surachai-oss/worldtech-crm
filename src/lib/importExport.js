@@ -434,6 +434,8 @@ const PRICE_CHECK_EXPORT_COLUMNS = [
   { key: 'floor_price', label: 'Floor Price' },
   { key: 'suggested_min_price', label: 'ราคาแนะนำขั้นต่ำ' },
   { key: 'recommendation', label: 'คำแนะนำ' },
+  { key: 'option_label', label: 'ตัวเลือก' },
+  { key: 'note', label: 'หมายเหตุ' },
   { key: 'created_by_name', label: 'ผู้เช็ค' },
 ]
 

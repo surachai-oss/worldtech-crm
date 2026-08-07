@@ -640,6 +640,28 @@ export const EN_DICT = {
   'Shipping Buffer / Provision Buffer / ค่าขนส่งมาตรฐาน ไม่มีในไฟล์ — ใช้ค่ากลาง ตั้งรายตัวได้ที่ปุ่มแก้ไข': 'Shipping buffer, provision buffer and standard shipping are not in the file — they use the shared defaults, and can be set per product via Edit',
   'Floor Price ต่ำกว่าต้นทุน': 'Floor price is below cost',
   'ในไฟล์มีชีต "วิธีกรอก" อธิบายทีละช่อง พร้อมสูตรและเกณฑ์ตัดสินสถานะ': 'The file has a "วิธีกรอก" sheet explaining every column, the formula and how the status is decided',
+
+  // ===== เทียบราคาหลายตัวเลือก + ประวัติการแก้ไขต้นทุน =====
+  'กรอกได้ถึง 3 ตัวเลือก เพื่อเทียบว่าแบบไหนคุ้มที่สุด — กรอกแค่ตัวเลือกที่ 1 ก็ได้': 'Enter up to 3 options to compare which is best — filling in option 1 alone is fine',
+  'ตัวเลือกที่': 'Option',
+  'ไม่บังคับ': 'optional',
+  '0 = ส่งฟรี, ว่าง = ค่ามาตรฐาน': '0 = free shipping, blank = standard cost',
+  'คำนวณเปรียบเทียบ': 'Compare',
+  'ระบบแนะนำ': 'Recommendation',
+  'คุ้มที่สุด': 'Best value',
+  'บันทึกประวัติ': 'Save to history',
+  'หมายเหตุ (บันทึกไว้ดูย้อนหลัง)': 'Note (kept for future reference)',
+  'เช่น ตกลงราคาโปรเจค A / ลูกค้าเก่าซื้อซ้ำ / แถมค่าส่งแลกกับสั่งเพิ่ม': 'e.g. project A agreed price / repeat customer / free shipping in exchange for a larger order',
+  'ข้อความนี้จะถูกเก็บไว้กับประวัติตอนกดบันทึก ใช้ตอบย้อนหลังว่าทำไมลูกค้ารายนี้ได้ราคานี้': 'This is stored with the history entry when you save, so you can explain later why this customer got this price',
+  'ประวัติการแก้ไขต้นทุน': 'Cost change history',
+  'ยังไม่มีประวัติการแก้ไข': 'No changes recorded yet',
+  'เรียงจากใหม่ไปเก่า — ใช้เทียบว่าตอนที่ลูกค้าได้ราคานั้น ต้นทุนและเกณฑ์ราคาเป็นเท่าไหร่': 'Newest first — use it to check what the cost and price rules were when a customer got a given price',
+  'ประวัติ': 'History',
+  'เมื่อ': 'When',
+  'การเปลี่ยนแปลง': 'Change',
+  'ค่าหลังแก้': 'After the change',
+  'เริ่มบันทึก': 'First entry',
+  'ต้นทุน': 'Cost',
 }
 
 export function LanguageProvider({ children }) {
