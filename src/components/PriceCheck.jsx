@@ -142,45 +142,11 @@ function buildSummaryText(results, comparison, note) {
   return lines.join('\n')
 }
 
-// แถบบอกว่าราคาที่เสนออยู่ตรงไหนเทียบกับหมุดสำคัญ — เซลล์จะได้รู้ว่าถ้าขยับราคาขึ้นลง จะข้ามเส้นไหน
-// ใช้เฉพาะตัวเลขที่เซลล์เห็นได้อยู่แล้ว (Floor Price / ราคาแนะนำขั้นต่ำ / ราคาขายปกติ) ไม่มีต้นทุน
-function PriceLadder({ r, normalPrice }) {
-  const { t } = useLanguage()
-  const marks = [
-    { label: 'Floor Price', value: Number(r.floor_price) || 0, color: 'var(--danger)' },
-    { label: t('ราคาแนะนำขั้นต่ำ'), value: Number(r.suggested_min_price) || 0, color: 'var(--warning)' },
-    { label: t('ราคาขายปกติ'), value: Number(normalPrice) || 0, color: 'var(--success)' },
-  ].filter(m => m.value > 0).sort((a, b) => a.value - b.value)
-  if (!marks.length) return null
-
-  const offer = Number(r.offer_price)
-  return (
-    <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6, border: '1px solid var(--border)' }}>
-      <div style={{ fontSize: 11, color: 'var(--text-light)', marginBottom: 6 }}>{t('ราคาที่เสนออยู่ตรงไหน (ต่อชิ้น)')}</div>
-      {marks.map(m => {
-        const above = offer >= m.value
-        return (
-          <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, padding: '2px 0' }}>
-            <span style={{ color: 'var(--text-light)' }}>
-              <span style={{ color: m.color, fontWeight: 700, marginRight: 4 }}>{above ? '✓' : '✕'}</span>{m.label}
-            </span>
-            <span style={{ fontWeight: 600, color: above ? m.color : 'var(--text-light)' }}>{fmtCurrency(m.value)}</span>
-          </div>
-        )
-      })}
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, paddingTop: 6, marginTop: 4, borderTop: '1px dashed var(--border)' }}>
-        <span style={{ color: 'var(--text-light)' }}>{t('ราคาที่เสนอ')}</span>
-        <span style={{ fontWeight: 700, color: 'var(--navy)' }}>{fmtCurrency(offer)}</span>
-      </div>
-    </div>
-  )
-}
-
-function ResultRow({ label, value, strong, hint }) {
+function ResultRow({ label, value, strong, hint, color }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, padding: '4px 0', borderBottom: '1px dashed var(--border)' }}>
       <span style={{ fontSize: 11.5, color: 'var(--text-light)' }}>{label}{hint && <span style={{ marginLeft: 4 }}>{hint}</span>}</span>
-      <span style={{ fontSize: strong ? 14 : 12.5, fontWeight: strong ? 700 : 500, color: 'var(--navy)', textAlign: 'right' }}>{value}</span>
+      <span style={{ fontSize: strong ? 14 : 12.5, fontWeight: strong ? 700 : 500, color: color || 'var(--navy)', textAlign: 'right' }}>{value}</span>
     </div>
   )
 }
@@ -449,15 +415,23 @@ export default function PriceCheck({ perm }) {
                   <div style={{ color: 'var(--danger)', fontSize: 12 }}>{entry.error}</div>
                 ) : (
                   <>
-                    {/* Margin เป็นตัวเลขที่เซลล์ต้องเห็นก่อนอย่างอื่น ทำใหญ่และใส่สีตามสถานะไปเลย */}
-                    <div style={{ textAlign: 'center', padding: '6px 0 10px' }}>
-                      <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.1, color: statusColor(entry.result.price_status) }}>
-                        {fmtPct(entry.result.margin_percent)}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-light)' }}>Margin</div>
-                    </div>
+                    <ResultRow label="Margin" value={fmtPct(entry.result.margin_percent)} strong
+                      color={statusColor(entry.result.price_status)} />
                     <ResultRow label={t('ยอดขายรวม')} value={fmtCurrency(entry.result.net_sales)} strong />
                     <ResultRow label={t('ราคาที่เสนอ/ชิ้น')} value={`${fmtCurrency(entry.result.offer_price)} × ${entry.result.quantity}`} />
+                    {/* เทียบกับราคาขายปกติ ให้เซลล์เห็นว่าที่ลูกค้าขอมาถูกกว่าปกติมากแค่ไหน */}
+                    <ResultRow label={t('ราคาขายปกติ/ชิ้น')}
+                      value={selected?.normal_selling_price ? fmtCurrency(selected.normal_selling_price) : '-'} />
+                    {selected?.normal_selling_price > 0 && (() => {
+                      const normal = Number(selected.normal_selling_price)
+                      const diff = Number(entry.result.offer_price) - normal
+                      const pctOff = (diff / normal) * 100
+                      return (
+                        <ResultRow label={t('ต่างจากราคาปกติ')}
+                          value={`${diff > 0 ? '+' : ''}${fmtCurrency(diff)} (${pctOff > 0 ? '+' : ''}${pctOff.toFixed(1)}%)`}
+                          color={diff < 0 ? 'var(--danger)' : 'var(--success)'} />
+                      )
+                    })()}
                     <ResultRow label={t('ค่าขนส่งที่ใช้คำนวณ')} value={shipLabel(entry.result)}
                       hint={entry.result.used_default_shipping ? `(${t('ค่ามาตรฐาน')})` : null} />
                     <ResultRow label="Tier" value={entry.result.auto_tier} />
@@ -472,7 +446,6 @@ export default function PriceCheck({ perm }) {
                         <ResultRow label={t('กำไรรวม')} value={fmtCurrency(entry.result.total_profit)} strong />
                       </>
                     )}
-                    <PriceLadder r={entry.result} normalPrice={selected?.normal_selling_price} />
                     <div style={{
                       marginTop: 10, padding: '8px 10px', borderRadius: 6, fontSize: 12, whiteSpace: 'pre-line',
                       background: statusTint(entry.result.price_status),
