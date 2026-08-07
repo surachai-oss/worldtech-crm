@@ -428,7 +428,7 @@ function AppInner({ session }) {
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products perm={perm} />}
-          {view === 'price-check' && <PriceCheck perm={perm} />}
+          {view === 'price-check' && !isFinance && <PriceCheck perm={perm} />}
           {view === 'cost-master' && (isFinance || isAdmin) && <CostMaster currentUserName={currentUser.name} />}
           {view === 'finance-review' && (isFinance || isAdmin) && (
             <FinanceReview reloadKey={reloadKey} currentUserName={currentUser.name} perm={perm} onApprove={actions.approvePayment} onNeedInfo={actions.needInfoPayment} onMismatch={actions.mismatchPayment} onReject={actions.rejectPayment} onDelete={actions.deletePaymentRequestRow} />

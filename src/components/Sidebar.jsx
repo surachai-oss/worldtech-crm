@@ -24,7 +24,7 @@ export default function Sidebar({ activeView, onNav, user, isAdmin, isFinance, o
   const sections = (isFinance && !isAdmin)
     ? [
         { section: 'ข้อมูลลูกค้า', items: [{ id: 'companies', label: 'บริษัทลูกค้า' }] },
-        { section: 'การขาย', items: [{ id: 'price-check', label: 'เช็คราคา' }] },
+        // ไม่มี "เช็คราคา" — เป็นเครื่องมือของเซลล์ตอนคุยกับลูกค้า บัญชีดูตัวเลขจริงที่ "สรุปกำไร/ส่วนลด" ในหน้าออเดอร์แทน
         ...(financeSection ? [financeSection] : []),
         NAV[3], // ข้อมูลสินค้า
       ]
