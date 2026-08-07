@@ -1392,6 +1392,15 @@ drop policy if exists "product_price_tiers write" on product_price_tiers;
 create policy "product_price_tiers write" on product_price_tiers for all
   using (is_admin() or is_finance()) with check (is_admin() or is_finance());
 
+-- เพดานส่วนลดพิเศษต่อสินค้า (ว่าง = ใช้ค่ากลาง special_discount_percent)
+-- เกินส่วนลดของขั้นแต่ยังไม่เกินเพดานนี้ = "ขายได้ แต่ Margin ต่ำ" (เช็คกับหัวหน้า)
+-- เกินเพดานนี้ = "ต่ำกว่าเกณฑ์" (ต้องคุยหัวหน้าแน่นอน)
+alter table product_costs add column if not exists special_discount_percent numeric;
+
+insert into margin_settings (key, value, description, owner_role) values
+  ('special_discount_percent', '15', 'เพดานส่วนลดพิเศษสูงสุดที่ยอมให้ได้ คิดจากราคาขายปกติ (%)', 'Finance')
+on conflict (key) do nothing;
+
 create or replace function margin_compute_price(
   p_product_id    uuid,
   p_quantity      numeric,
@@ -1416,13 +1425,19 @@ declare
   v_margin        numeric;
   v_target        numeric;
   v_min           numeric;
+  v_normal        numeric;
+  v_ladder        boolean;
+  v_tier_disc     numeric;   -- ส่วนลดที่ขั้นนี้ให้ได้
+  v_special_disc  numeric;   -- เพดานส่วนลดพิเศษของสินค้า (คุยหัวหน้าแล้วถึงให้ได้)
+  v_offer_disc    numeric;   -- ส่วนลดที่ลูกค้าขอมาจริง
+  v_price_tier    numeric;   -- ราคา/ชิ้นที่ตรงกับส่วนลดของขั้นนี้
+  v_price_special numeric;   -- ราคา/ชิ้นที่ตรงกับเพดานส่วนลดพิเศษ
+  v_fixed         numeric;
+  v_price_min     numeric;   -- ราคา/ชิ้นที่ยังได้ Margin ขั้นต่ำพอดี (เส้นตายจากต้นทุนจริง)
+  v_price_target  numeric;
   v_floor         numeric;
   v_floor_source  text;
   v_tier_label    text;
-  v_fixed         numeric;
-  v_price_min     numeric;   -- ราคา/ชิ้นที่ทำให้ได้ Margin ขั้นต่ำพอดี (คำนวณจากต้นทุนจริง)
-  v_price_target  numeric;   -- ราคา/ชิ้นที่ทำให้ถึง Margin เป้าหมายพอดี
-  v_price_disc    numeric;   -- ราคา/ชิ้นที่ได้จากเพดานส่วนลดของขั้นนั้น
   v_next_price    numeric;
   v_suggest       numeric;
   v_suggest_err   text;
@@ -1472,7 +1487,6 @@ begin
     where product_id = p_product_id and min_qty > p_quantity
     order by min_qty asc limit 1;
 
-  -- ขั้นบันไดมีสิทธิ์เขียนทับเกณฑ์ Margin ของสินค้า (ซื้อเยอะยอมได้ลึกกว่า) ช่องไหนเว้นว่างก็ตกกลับไปใช้ของสินค้า
   v_target := coalesce(v_step.target_margin_percent,  v_c.target_margin_percent, 0);
   v_min    := coalesce(v_step.minimum_margin_percent, v_c.minimum_margin_percent, 0);
 
@@ -1481,36 +1495,51 @@ begin
   if 1 - v_buf - (v_min / 100)    > 0 then v_price_min    := (v_fixed / (1 - v_buf - (v_min / 100)))    / p_quantity; end if;
   if 1 - v_buf - (v_target / 100) > 0 then v_price_target := (v_fixed / (1 - v_buf - (v_target / 100))) / p_quantity; end if;
 
-  -- ===== Floor Price =====
-  -- ถ้ามีขั้นบันไดและตั้งเพดานส่วนลดไว้ ให้คิดจาก "ราคาขายปกติ − ส่วนลดสูงสุดของขั้นนั้น"
-  -- แต่ห้ามต่ำกว่าราคาที่ยังได้ Margin ขั้นต่ำ — กันกรณีต้นทุนขึ้นแล้วส่วนลดเดิมกลายเป็นขาดทุนโดยไม่มีใครรู้
-  if v_step.id is not null and v_step.max_discount_percent is not null and coalesce(v_c.normal_selling_price, 0) > 0 then
-    v_price_disc := v_c.normal_selling_price * (1 - v_step.max_discount_percent / 100);
-    v_floor := greatest(v_price_disc, coalesce(v_price_min, 0));
-    v_floor_source := 'ขั้น ' || v_step.min_qty || ' ชิ้นขึ้นไป · ลดได้ถึง ' || trim(to_char(v_step.max_discount_percent, 'FM999990.##')) || '%';
-    if v_price_min is not null and v_price_min > v_price_disc + 0.005 then
-      v_floor_source := v_floor_source || ' (ดึงกลับตาม Margin ขั้นต่ำ เพราะต้นทุนปัจจุบันลดลึกขนาดนั้นไม่ได้)';
-    end if;
-  elsif v_step.id is not null then
-    -- ตั้งขั้นไว้แต่ไม่ได้ใส่เพดานส่วนลด ใช้ Floor Price ของสินค้าไปก่อน แต่ Margin ยังใช้ของขั้นนี้
-    v_floor := coalesce(v_c.floor_price, 0);
-    v_floor_source := 'ขั้น ' || v_step.min_qty || ' ชิ้นขึ้นไป · ใช้ Floor Price ของสินค้า';
+  v_normal := coalesce(v_c.normal_selling_price, 0);
+  if v_normal > 0 then v_offer_disc := (1 - p_offer_price / v_normal) * 100; end if;
+  -- โหมดขั้นบันได ใช้ได้ต่อเมื่อมีราคาขายปกติและมีขั้นที่ตรงกับจำนวนนี้ — ไม่งั้นทำงานแบบเดิมด้วย Floor Price ตัวเดียว
+  v_ladder := (v_normal > 0 and v_step.id is not null);
+
+  if v_ladder then
+    v_tier_disc     := coalesce(v_step.max_discount_percent, 0);
+    v_special_disc  := coalesce(v_c.special_discount_percent, margin_setting_num('special_discount_percent', 15));
+    v_price_tier    := v_normal * (1 - v_tier_disc / 100);
+    v_price_special := v_normal * (1 - v_special_disc / 100);
+    -- เส้น "ไม่ควรขาย" คือราคาที่ยังได้ Margin ขั้นต่ำจากต้นทุนจริง ไม่ใช่เพดานส่วนลด
+    -- (เพดานส่วนลดเป็นแค่เส้นแบ่งว่าต้องไปคุยหัวหน้าหรือยัง)
+    v_floor := coalesce(v_price_min, 0);
+    v_floor_source := 'ขั้น ' || v_step.min_qty || ' ชิ้นขึ้นไป · ส่วนลดปกติ ' || trim(to_char(v_tier_disc, 'FM999990.##'))
+                      || '% · เพดานพิเศษ ' || trim(to_char(v_special_disc, 'FM999990.##')) || '%';
+    v_tier_label := 'ขั้น ' || v_step.min_qty || ' ชิ้นขึ้นไป';
   else
     v_floor := coalesce(v_c.floor_price, 0);
     v_floor_source := 'Floor Price ของสินค้า (ยังไม่ได้ตั้งขั้นบันไดตามจำนวน)';
   end if;
 
-  v_tier_label := case when v_step.id is not null then 'ขั้น ' || v_step.min_qty || ' ชิ้นขึ้นไป' else null end;
-
-  -- Auto Tier — เช็ค Below Floor ก่อนเสมอ ราคาที่ต่ำกว่า Floor หรือไม่มีกำไรต้องไม่ถูกจัดเป็น Tier ที่ดีกว่า
-  if v_net <= 0 or (v_floor > 0 and p_offer_price < v_floor) or v_profit <= 0 or v_margin <= 0 then
-    v_tier := 'Below Floor / ไม่ควรขาย';       v_status := 'ไม่ควรขาย';
-  elsif v_margin >= v_target then
-    v_tier := 'Tier 1 / ราคาดี';                v_status := 'ผ่าน / ขายได้';
-  elsif v_margin >= v_min then
-    v_tier := 'Tier 2 / ราคาขายได้';            v_status := 'ขายได้ แต่ Margin ต่ำ';
+  -- ===== ตัดสินสถานะ =====
+  if v_ladder then
+    -- ไล่ตามส่วนลด: อยู่ในเกณฑ์ของขั้น → ใช้ส่วนลดพิเศษ → เกินเพดาน → ต่ำจนไม่คุ้มต้นทุน
+    -- เทียบกันที่ "% ส่วนลด" ไม่ใช่ตัวเงิน และเผื่อ 0.05 จุด — เซลล์พิมพ์ราคากลมๆ (10% ของ 1,919 = 1,727.10
+    -- แต่จะเสนอ 1,727) ต้องไม่ตกไปอีกระดับเพราะเศษสตางค์
+    if v_profit <= 0 or v_margin <= 0 or (v_price_min is not null and p_offer_price < v_price_min - 0.005) then
+      v_tier := 'Below Floor / ไม่ควรขาย';              v_status := 'ไม่ควรขาย';
+    elsif v_offer_disc <= v_tier_disc + 0.05 then
+      v_tier := 'Tier 1 / อยู่ในส่วนลดของขั้นนี้';        v_status := 'ผ่าน / ขายได้';
+    elsif v_offer_disc <= v_special_disc + 0.05 then
+      v_tier := 'Tier 2 / ใช้ส่วนลดพิเศษ';               v_status := 'ขายได้ แต่ Margin ต่ำ';
+    else
+      v_tier := 'Tier 3 / เกินเพดานส่วนลดพิเศษ';         v_status := 'ต่ำกว่าเกณฑ์';
+    end if;
   else
-    v_tier := 'Tier 3 / ต่ำกว่าเกณฑ์';           v_status := 'ต่ำกว่าเกณฑ์';
+    if v_net <= 0 or (v_floor > 0 and p_offer_price < v_floor) or v_profit <= 0 or v_margin <= 0 then
+      v_tier := 'Below Floor / ไม่ควรขาย';       v_status := 'ไม่ควรขาย';
+    elsif v_margin >= v_target then
+      v_tier := 'Tier 1 / ราคาดี';                v_status := 'ผ่าน / ขายได้';
+    elsif v_margin >= v_min then
+      v_tier := 'Tier 2 / ราคาขายได้';            v_status := 'ขายได้ แต่ Margin ต่ำ';
+    else
+      v_tier := 'Tier 3 / ต่ำกว่าเกณฑ์';           v_status := 'ต่ำกว่าเกณฑ์';
+    end if;
   end if;
 
   -- ราคาต่ำสุดที่ควรเสนอ = สูงกว่าระหว่าง "ราคาที่ได้ Margin ขั้นต่ำ" กับ "Floor Price ที่ใช้จริง"
@@ -1527,22 +1556,38 @@ begin
   end if;
 
   -- ขั้นถัดไป ใช้เป็นไพ่ให้เซลล์ชวนลูกค้าซื้อเพิ่ม (ราคาโดยประมาณ เพราะค่าขนส่งของล็อตใหญ่จริงอาจต่างไป)
-  if v_next.id is not null and v_next.max_discount_percent is not null and coalesce(v_c.normal_selling_price, 0) > 0 then
-    v_next_price := round(v_c.normal_selling_price * (1 - v_next.max_discount_percent / 100), 2);
+  if v_next.id is not null and v_next.max_discount_percent is not null and v_normal > 0 then
+    v_next_price := round(v_normal * (1 - v_next.max_discount_percent / 100), 2);
   end if;
 
-  v_recommend := case v_status
-    when 'ผ่าน / ขายได้'          then 'ผ่านเกณฑ์ สามารถเสนอราคานี้ได้'
-    when 'ขายได้ แต่ Margin ต่ำ'   then 'ขายได้ แต่ Margin ต่ำกว่าเป้าหมาย ควรพิจารณาจำนวนและเงื่อนไขก่อนเสนอ'
-    when 'ต่ำกว่าเกณฑ์'            then 'ต่ำกว่า Margin ขั้นต่ำ ควรคุยหัวหน้าก่อนเสนอราคานี้ให้ลูกค้า'
-    else 'ไม่แนะนำให้ขาย ราคานี้ต่ำกว่า Floor Price หรืออาจไม่ครอบคลุมต้นทุนรวม'
-  end;
+  -- ===== คำแนะนำ =====
+  if v_ladder then
+    v_recommend := case v_status
+      when 'ผ่าน / ขายได้' then 'อยู่ในส่วนลดที่ขั้นนี้ให้ได้ (' || trim(to_char(v_tier_disc, 'FM999990.##')) || '%) เสนอราคานี้ได้เลย'
+      when 'ขายได้ แต่ Margin ต่ำ' then 'เกินส่วนลดปกติของขั้นนี้ (' || trim(to_char(v_tier_disc, 'FM999990.##'))
+           || '%) แต่ยังไม่เกินเพดานพิเศษ ' || trim(to_char(v_special_disc, 'FM999990.##')) || '% — ควรเช็คกับหัวหน้าก่อนยืนยัน'
+      when 'ต่ำกว่าเกณฑ์' then 'เกินเพดานส่วนลดพิเศษ ' || trim(to_char(v_special_disc, 'FM999990.##'))
+           || '% ต้องคุยหัวหน้าก่อนเสนอราคานี้ให้ลูกค้า'
+      else 'ไม่แนะนำให้ขาย ราคานี้ต่ำจนไม่เหลือ Margin ขั้นต่ำ'
+    end;
+    if v_offer_disc is not null then
+      v_recommend := 'ลูกค้าขอส่วนลด ' || trim(to_char(v_offer_disc, 'FM999990.##')) || '% — ' || v_recommend;
+    end if;
+  else
+    v_recommend := case v_status
+      when 'ผ่าน / ขายได้'          then 'ผ่านเกณฑ์ สามารถเสนอราคานี้ได้'
+      when 'ขายได้ แต่ Margin ต่ำ'   then 'ขายได้ แต่ Margin ต่ำกว่าเป้าหมาย ควรพิจารณาจำนวนและเงื่อนไขก่อนเสนอ'
+      when 'ต่ำกว่าเกณฑ์'            then 'ต่ำกว่า Margin ขั้นต่ำ ควรคุยหัวหน้าก่อนเสนอราคานี้ให้ลูกค้า'
+      else 'ไม่แนะนำให้ขาย ราคานี้ต่ำกว่า Floor Price หรืออาจไม่ครอบคลุมต้นทุนรวม'
+    end;
+  end if;
+
   if v_used_default then
     v_recommend := v_recommend || E'\n(ไม่ได้กรอกค่าขนส่ง — ใช้ค่ามาตรฐาน ' || to_char(v_ship, 'FM999,999,990.00') || ' บาทแทน)';
   end if;
-  if v_next.id is not null and v_next_price is not null and v_next_price < v_floor then
+  if v_next.id is not null and v_next_price is not null and v_next_price < p_offer_price then
     v_recommend := v_recommend || E'\nถ้าลูกค้าเพิ่มเป็น ' || v_next.min_qty || ' ชิ้น จะลดได้ถึง '
-      || trim(to_char(v_next.max_discount_percent, 'FM999990.##')) || '% (ราคาต่ำสุดประมาณ '
+      || trim(to_char(v_next.max_discount_percent, 'FM999990.##')) || '% (ราคา '
       || to_char(v_next_price, 'FM999,999,990.00') || ' บาท/ชิ้น)';
   end if;
   if v_suggest_err is not null then
@@ -1566,14 +1611,19 @@ begin
     'margin_percent',        round(v_margin, 2),
     'target_margin_percent', v_target,
     'minimum_margin_percent', v_min,
-    'normal_selling_price',  v_c.normal_selling_price,
+    'normal_selling_price',  nullif(v_normal, 0),
     'auto_tier',             v_tier,
     'price_status',          v_status,
     'floor_price',           round(v_floor, 2),
     'floor_source',          v_floor_source,
+    'ladder',                v_ladder,
     'tier_label',            v_tier_label,
     'tier_min_qty',          v_step.min_qty,
-    'tier_max_discount_percent', v_step.max_discount_percent,
+    'tier_discount_percent', v_tier_disc,
+    'special_discount_percent', v_special_disc,
+    'offer_discount_percent', case when v_offer_disc is null then null else round(v_offer_disc, 2) end,
+    'tier_price',            case when v_price_tier is null then null else round(v_price_tier, 2) end,
+    'special_price',         case when v_price_special is null then null else round(v_price_special, 2) end,
     'next_tier_min_qty',     v_next.min_qty,
     'next_tier_max_discount_percent', v_next.max_discount_percent,
     'next_tier_price',       v_next_price,
@@ -1584,6 +1634,7 @@ begin
   );
 end;
 $$ language plpgsql stable security definer set search_path = public;
+
 
 
 -- ===== ตัดกำไรเป็นบาทออกถ้าผู้เรียกไม่ใช่บัญชี/แอดมิน =====

@@ -435,9 +435,17 @@ export default function PriceCheck({ perm }) {
                     <ResultRow label={t('ค่าขนส่งที่ใช้คำนวณ')} value={shipLabel(entry.result)}
                       hint={entry.result.used_default_shipping ? `(${t('ค่ามาตรฐาน')})` : null} />
                     <ResultRow label="Tier" value={entry.result.auto_tier} />
-                    {entry.result.tier_label && (
-                      <ResultRow label={t('เกณฑ์ที่ใช้')}
-                        value={`${entry.result.tier_label}${entry.result.tier_max_discount_percent != null ? ` · ลดได้ถึง ${Number(entry.result.tier_max_discount_percent)}%` : ''}`} />
+                    {entry.result.ladder && (
+                      <>
+                        <ResultRow label={t('ส่วนลดที่ลูกค้าขอ')}
+                          value={entry.result.offer_discount_percent != null ? `${Number(entry.result.offer_discount_percent).toFixed(2)}%` : '-'}
+                          strong color={statusColor(entry.result.price_status)} />
+                        <ResultRow label={t('ส่วนลดปกติของขั้นนี้')}
+                          value={`${Number(entry.result.tier_discount_percent)}%  (${fmtCurrency(entry.result.tier_price)})`}
+                          hint={entry.result.tier_label ? `· ${entry.result.tier_label}` : null} />
+                        <ResultRow label={t('เพดานส่วนลดพิเศษ')}
+                          value={`${Number(entry.result.special_discount_percent)}%  (${fmtCurrency(entry.result.special_price)})`} />
+                      </>
                     )}
                     <ResultRow label="Floor Price" value={fmtCurrency(entry.result.floor_price)} />
                     <ResultRow label={t('ราคาแนะนำขั้นต่ำ/ชิ้น')}

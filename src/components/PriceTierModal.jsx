@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchPriceTiers, upsertPriceTier, deletePriceTier } from '../lib/api'
+import { fetchPriceTiers, upsertPriceTier, deletePriceTier, applyStandardPriceTiers, STANDARD_PRICE_TIERS, STANDARD_SPECIAL_DISCOUNT } from '../lib/api'
 import { fmtCurrency } from '../lib/format'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
@@ -19,6 +19,7 @@ export default function PriceTierModal({ product, currentUserName, onClose, onCh
   const [saving, setSaving] = useState(false)
 
   const normal = Number(product.cost?.normal_selling_price) || 0
+  const special = product.cost?.special_discount_percent ?? STANDARD_SPECIAL_DISCOUNT
 
   const load = async () => {
     setLoading(true)
@@ -55,6 +56,18 @@ export default function PriceTierModal({ product, currentUserName, onClose, onCh
     finally { setSaving(false) }
   }
 
+  const applyStandard = async () => {
+    if (!(await confirm(`ใส่เกณฑ์มาตรฐาน ${STANDARD_PRICE_TIERS.length} ขั้นให้สินค้านี้? ขั้นที่จำนวนตรงกันจะถูกเขียนทับ`))) return
+    setSaving(true)
+    try {
+      await applyStandardPriceTiers([product.id], currentUserName)
+      toast('ใส่เกณฑ์มาตรฐานแล้ว', 'success')
+      await load()
+      onChanged?.()
+    } catch (e) { toast('ทำไม่สำเร็จ: ' + e.message, 'error') }
+    finally { setSaving(false) }
+  }
+
   const remove = async (row) => {
     if (!(await confirm(`ลบขั้น "${row.min_qty} ชิ้นขึ้นไป"?`))) return
     try { await deletePriceTier(row.id); toast('ลบสำเร็จ', 'success'); await load(); onChanged?.() }
@@ -85,7 +98,14 @@ export default function PriceTierModal({ product, currentUserName, onClose, onCh
             {normal > 0
               ? <div style={{ marginTop: 4 }}>{t('ราคาขายปกติของสินค้านี้')}: <b>{fmtCurrency(normal)}</b> {t('บาท/ชิ้น')}</div>
               : <div style={{ marginTop: 4, color: 'var(--danger)' }}>{t('สินค้านี้ยังไม่ได้กรอกราคาขายปกติ — ส่วนลดจะคำนวณเป็นราคาไม่ได้ ต้องกรอกก่อน')}</div>}
+            <div style={{ marginTop: 4 }}>
+              {t('เพดานส่วนลดพิเศษ')}: <b>{special}%</b> — {t('ขอเกินส่วนลดของขั้นแต่ไม่เกินเพดานนี้ = เช็คกับหัวหน้า / เกินเพดาน = ต้องคุยหัวหน้า')}
+            </div>
           </div>
+
+          <button className="btn btn-outline btn-sm" style={{ marginBottom: 12 }} disabled={saving} onClick={applyStandard}>
+            {t('ใส่เกณฑ์มาตรฐาน')} ({STANDARD_PRICE_TIERS.map(x => `${x.max_discount_percent}%`).join(' / ')})
+          </button>
 
           <div className="table-wrap">
             <table>

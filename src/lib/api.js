@@ -1406,6 +1406,30 @@ export const upsertPriceTier = (row, updatedBy) =>
 export const deletePriceTier = (id) =>
   supabase.from('product_price_tiers').delete().eq('id', id).then(handle)
 
+// เกณฑ์ส่วนลดมาตรฐานของบริษัท — min_qty เป็นแบบ "ตั้งแต่" จึงเท่ากับ "มากกว่า N ตัว" ที่อยู่ในตารางราคา
+// ขั้นแรก 1-3 ตัว ส่วนลด 0% = ซื้อน้อยให้ใช้ราคาขายปกติ
+export const STANDARD_PRICE_TIERS = [
+  { min_qty: 1, max_discount_percent: 0, note: '1-3 ตัว ใช้ราคาขายปกติ' },
+  { min_qty: 4, max_discount_percent: 2.5, note: 'มากกว่า 3 ตัว' },
+  { min_qty: 11, max_discount_percent: 5, note: 'มากกว่า 10 ตัว' },
+  { min_qty: 31, max_discount_percent: 7, note: 'มากกว่า 30 ตัว' },
+  { min_qty: 51, max_discount_percent: 10, note: 'มากกว่า 50 ตัว' },
+  { min_qty: 101, max_discount_percent: 12, note: 'มากกว่า 100 ตัว' },
+]
+
+// เพดานส่วนลดพิเศษ (Special DIS) ไม่ใช่ขั้นตามจำนวน แต่เป็นเส้นแบ่งว่าต้องคุยหัวหน้าหรือยัง
+export const STANDARD_SPECIAL_DISCOUNT = 15
+
+// ใส่เกณฑ์มาตรฐานให้สินค้าที่ระบุ (ทับขั้นเดิมที่ min_qty ตรงกัน ขั้นอื่นที่เคยตั้งเองไว้ไม่ถูกลบ)
+export async function applyStandardPriceTiers(productIds, updatedBy) {
+  const rows = productIds.flatMap(pid =>
+    STANDARD_PRICE_TIERS.map(t => ({ ...t, product_id: pid, updated_by: updatedBy || null }))
+  )
+  if (!rows.length) return 0
+  await supabase.from('product_price_tiers').upsert(rows, { onConflict: 'product_id,min_qty' }).then(handle)
+  return productIds.length
+}
+
 // จำนวนขั้นของแต่ละสินค้า — ใช้โชว์ในตารางหน้าต้นทุนสินค้าว่าตัวไหนตั้งขั้นบันไดไว้แล้ว
 export async function fetchPriceTierCounts() {
   const rows = await supabase.from('product_price_tiers').select('product_id').then(handle)

@@ -686,6 +686,15 @@ export const EN_DICT = {
   'ชิ้น': 'units',
   'จะลดได้ถึง': 'the discount can go to',
   'ราคาต่ำสุดประมาณ': 'floor approx.',
+  'ส่วนลดที่ลูกค้าขอ': 'Discount requested',
+  'ส่วนลดปกติของขั้นนี้': 'Allowed at this step',
+  'เพดานส่วนลดพิเศษ': 'Special discount cap',
+  'เพดานส่วนลดพิเศษ (%)': 'Special discount cap (%)',
+  'ขอเกินส่วนลดของขั้นแต่ไม่เกินเพดานนี้ = เช็คกับหัวหน้า / เกินเพดาน = ต้องคุยหัวหน้า': 'Past the step discount but within this cap = check with your manager; past the cap = must be discussed',
+  'ขอเกินส่วนลดของขั้น แต่ไม่เกินเพดานนี้ = เช็คกับหัวหน้า / เกินเพดาน = ต้องคุยหัวหน้า': 'Past the step discount but within this cap = check with your manager; past the cap = must be discussed',
+  'ใส่เกณฑ์มาตรฐาน': 'Apply standard steps',
+  'ตั้งขั้นบันไดมาตรฐานให้ทุกสินค้า': 'Apply standard steps to all products',
+  'กำลังตั้งค่า...': 'Applying...',
 }
 
 export function LanguageProvider({ children }) {

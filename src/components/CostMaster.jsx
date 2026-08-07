@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   fetchProductCosts, upsertProductCost, updateProductMeta,
-  fetchMarginSettings, updateMarginSetting, fetchPriceTierCounts, PRODUCT_COST_STATUS_OPTIONS
+  fetchMarginSettings, updateMarginSetting, fetchPriceTierCounts, applyStandardPriceTiers,
+  STANDARD_PRICE_TIERS, PRODUCT_COST_STATUS_OPTIONS
 } from '../lib/api'
 import { fmtCurrency } from '../lib/format'
 import { useUi } from './UiContext'
@@ -19,7 +20,7 @@ const pct = (n) => (n === null || n === undefined || n === '' ? '-' : `${Number(
 const EMPTY = {
   cost_price: '', normal_selling_price: '', target_margin_percent: '', minimum_margin_percent: '',
   floor_price: '', shipping_buffer_percent: '', provision_buffer_percent: '',
-  default_shipping_cost: '', status: 'Active', finance_remark: '',
+  default_shipping_cost: '', special_discount_percent: '', status: 'Active', finance_remark: '',
   category: '', brand: ''
 }
 
@@ -36,6 +37,7 @@ function CostModal({ product, onClose, onSave }) {
     shipping_buffer_percent: c.shipping_buffer_percent ?? '',
     provision_buffer_percent: c.provision_buffer_percent ?? '',
     default_shipping_cost: c.default_shipping_cost ?? '',
+    special_discount_percent: c.special_discount_percent ?? '',
     status: c.status || 'Active',
     finance_remark: c.finance_remark || '',
     category: product.category || '',
@@ -117,9 +119,17 @@ function CostModal({ product, onClose, onSave }) {
               <input className="form-control" value={f.category} onChange={set('category')} />
             </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">{t('แบรนด์')}</label>
-            <input className="form-control" value={f.brand} onChange={set('brand')} />
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">{t('แบรนด์')}</label>
+              <input className="form-control" value={f.brand} onChange={set('brand')} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">{t('เพดานส่วนลดพิเศษ (%)')}</label>
+              <input className="form-control" type="number" step="0.01" value={f.special_discount_percent}
+                onChange={set('special_discount_percent')} placeholder={t('ว่าง = ใช้ค่ากลาง')} />
+              <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('ขอเกินส่วนลดของขั้น แต่ไม่เกินเพดานนี้ = เช็คกับหัวหน้า / เกินเพดาน = ต้องคุยหัวหน้า')}</div>
+            </div>
           </div>
           <div className="form-group">
             <label className="form-label">{t('หมายเหตุจากบัญชี')}</label>
@@ -192,7 +202,7 @@ function MarginSettingsCard({ rows, onSave }) {
 }
 
 export default function CostMaster({ currentUserName }) {
-  const { toast } = useUi()
+  const { toast, confirm } = useUi()
   const { t, lang } = useLanguage()
   const [rows, setRows] = useState([])
   const [settings, setSettings] = useState([])
@@ -204,6 +214,7 @@ export default function CostMaster({ currentUserName }) {
   const [historyProduct, setHistoryProduct] = useState(null)
   const [tierProduct, setTierProduct] = useState(null)
   const [tierCounts, setTierCounts] = useState({})
+  const [applyingTiers, setApplyingTiers] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -243,6 +254,7 @@ export default function CostMaster({ currentUserName }) {
         shipping_buffer_percent: num(f.shipping_buffer_percent),
         provision_buffer_percent: num(f.provision_buffer_percent),
         default_shipping_cost: num(f.default_shipping_cost),
+        special_discount_percent: num(f.special_discount_percent),
         status: f.status,
         finance_remark: f.finance_remark || null
       }, currentUserName)
@@ -252,6 +264,22 @@ export default function CostMaster({ currentUserName }) {
       toast('บันทึกต้นทุนสำเร็จ', 'success')
       await load()
     } catch (e) { toast('บันทึกไม่สำเร็จ: ' + e.message, 'error') }
+  }
+
+  // ตั้งเกณฑ์ส่วนลดมาตรฐานให้ทุกสินค้าที่มีต้นทุนแล้วในครั้งเดียว — ขั้นที่จำนวนตรงกันถูกเขียนทับ ขั้นที่ตั้งเองเพิ่มไว้ไม่หาย
+  const applyStandardToAll = async () => {
+    const targets = rows.filter(r => r.cost && Number(r.cost.cost_price) > 0)
+    if (!targets.length) { toast('ยังไม่มีสินค้าที่กรอกต้นทุนไว้', 'error'); return }
+    const noPrice = targets.filter(r => !(Number(r.cost.normal_selling_price) > 0)).length
+    const warn = noPrice ? `\n(${noPrice} รายการยังไม่มีราคาขายปกติ ขั้นบันไดจะยังไม่มีผลจนกว่าจะกรอก)` : ''
+    if (!(await confirm(`ตั้งขั้นบันไดมาตรฐาน ${STANDARD_PRICE_TIERS.length} ขั้นให้สินค้า ${targets.length} รายการ?${warn}`))) return
+    setApplyingTiers(true)
+    try {
+      await applyStandardPriceTiers(targets.map(r => r.id), currentUserName)
+      toast(`ตั้งขั้นบันไดให้ ${targets.length} รายการแล้ว`, 'success')
+      await load()
+    } catch (e) { toast('ทำไม่สำเร็จ: ' + e.message, 'error') }
+    finally { setApplyingTiers(false) }
   }
 
   const onSaveSetting = async (key, value) => {
@@ -272,6 +300,9 @@ export default function CostMaster({ currentUserName }) {
           {missingCount > 0 && (
             <span className="badge badge-orange">{t('ยังไม่ได้กรอกต้นทุน')} {missingCount} {t('รายการ')}</span>
           )}
+          <button className="btn btn-outline btn-sm" onClick={applyStandardToAll} disabled={applyingTiers}>
+            {applyingTiers ? t('กำลังตั้งค่า...') : t('ตั้งขั้นบันไดมาตรฐานให้ทุกสินค้า')}
+          </button>
           <button className="btn btn-outline btn-sm" onClick={() => setShowImport(true)}>{t('นำเข้าจากไฟล์')}</button>
         </div>
       </div>
