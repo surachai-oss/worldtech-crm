@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   fetchProductCosts, upsertProductCost, updateProductMeta,
-  fetchMarginSettings, updateMarginSetting, fetchPriceTierCounts, applyStandardPriceTiers,
+  fetchMarginSettings, updateMarginSetting, applyStandardPriceTiers,
   STANDARD_PRICE_TIERS, PRODUCT_COST_STATUS_OPTIONS
 } from '../lib/api'
 import { fmtCurrency } from '../lib/format'
@@ -213,16 +213,14 @@ export default function CostMaster({ currentUserName }) {
   const [showImport, setShowImport] = useState(false)
   const [historyProduct, setHistoryProduct] = useState(null)
   const [tierProduct, setTierProduct] = useState(null)
-  const [tierCounts, setTierCounts] = useState({})
   const [applyingTiers, setApplyingTiers] = useState(false)
 
   const load = async () => {
     setLoading(true)
     try {
-      const [products, ms, tiers] = await Promise.all([fetchProductCosts(), fetchMarginSettings(), fetchPriceTierCounts()])
+      const [products, ms] = await Promise.all([fetchProductCosts(), fetchMarginSettings()])
       setRows(products)
       setSettings(ms)
-      setTierCounts(tiers)
     } catch (e) {
       toast('โหลดข้อมูลต้นทุนไม่สำเร็จ: ' + e.message, 'error')
     } finally { setLoading(false) }
@@ -369,7 +367,7 @@ export default function CostMaster({ currentUserName }) {
                       <td style={{ fontSize: 11, color: 'var(--text-light)' }}>{c?.updated_by || '-'}</td>
                       <td className="td-actions">
                         <button className="btn btn-outline btn-xs" onClick={() => setModal(r)}>{hasCost ? t('แก้ไข') : t('กรอกต้นทุน')}</button>
-                        {hasCost && <button className="btn btn-outline btn-xs" onClick={() => setTierProduct(r)}>{t('ขั้นบันได')}{tierCounts[r.id] ? ` (${tierCounts[r.id]})` : ''}</button>}
+                        {hasCost && <button className="btn btn-outline btn-xs" onClick={() => setTierProduct(r)}>{t('ขั้นบันได')}{r.tiers?.length ? ` (${r.tiers.length})` : ''}</button>}
                         {hasCost && <button className="btn btn-outline btn-xs" onClick={() => setHistoryProduct(r)}>{t('ประวัติ')}</button>}
                       </td>
                     </tr>

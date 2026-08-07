@@ -697,6 +697,10 @@ export const EN_DICT = {
   'กำลังตั้งค่า...': 'Applying...',
   'ราคาเท่าทุน/ชิ้น': 'Break-even price / unit',
   'ต่ำกว่านี้คือขาดทุน': 'below this is a loss',
+  'ขั้นบันไดที่จะใช้': 'Tiers that will apply',
+  'เพดาน': 'cap',
+  'ยังไม่มี': 'not set',
+  'ช่องส่วนลดขั้นบันไดเติมเกณฑ์มาตรฐานมาให้แล้ว แก้ทับได้ ถ้าลบทิ้งระบบจะใช้ค่ามาตรฐานแทน': 'The tier discount columns come pre-filled with the standard steps — edit them freely; clear a cell and the standard value is used',
 }
 
 export function LanguageProvider({ children }) {

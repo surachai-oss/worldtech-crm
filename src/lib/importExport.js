@@ -495,10 +495,55 @@ export const PRODUCT_COST_IMPORT_COLUMNS = [
     required: 'ไม่บังคับ', example: 'ตู้เย็น',
     hint: 'ข้อความอิสระ ใช้จัดกลุ่มสินค้าเวลาดูรายการ',
   },
+  // ===== ขั้นบันไดส่วนลด — เติมเกณฑ์มาตรฐานมาให้แล้ว แก้ทับได้ ถ้าลบทิ้งระบบจะใช้ค่ามาตรฐานแทน =====
+  {
+    key: 'tier_1', label: 'ส่วนลด 1-3 ตัว (%)', numeric: true, tierQty: 1,
+    required: 'ไม่บังคับ', example: '0',
+    hint: 'ซื้อ 1-3 ตัว ลดได้กี่ % — 0 คือให้ใช้ราคาขายปกติ',
+  },
+  {
+    key: 'tier_4', label: 'ส่วนลด 4+ ตัว (%)', numeric: true, tierQty: 4,
+    required: 'ไม่บังคับ', example: '2.5',
+    hint: 'ตั้งแต่ 4 ตัวขึ้นไป (มากกว่า 3 ตัว)',
+  },
+  {
+    key: 'tier_11', label: 'ส่วนลด 11+ ตัว (%)', numeric: true, tierQty: 11,
+    required: 'ไม่บังคับ', example: '5',
+    hint: 'ตั้งแต่ 11 ตัวขึ้นไป (มากกว่า 10 ตัว)',
+  },
+  {
+    key: 'tier_31', label: 'ส่วนลด 31+ ตัว (%)', numeric: true, tierQty: 31,
+    required: 'ไม่บังคับ', example: '7',
+    hint: 'ตั้งแต่ 31 ตัวขึ้นไป (มากกว่า 30 ตัว)',
+  },
+  {
+    key: 'tier_51', label: 'ส่วนลด 51+ ตัว (%)', numeric: true, tierQty: 51,
+    required: 'ไม่บังคับ', example: '10',
+    hint: 'ตั้งแต่ 51 ตัวขึ้นไป (มากกว่า 50 ตัว)',
+  },
+  {
+    key: 'tier_101', label: 'ส่วนลด 101+ ตัว (%)', numeric: true, tierQty: 101,
+    required: 'ไม่บังคับ', example: '12',
+    hint: 'ตั้งแต่ 101 ตัวขึ้นไป (มากกว่า 100 ตัว)',
+  },
+  {
+    key: 'special_discount_percent', label: 'เพดานส่วนลดพิเศษ (%)', numeric: true,
+    required: 'ไม่บังคับ', example: '15',
+    hint: 'ส่วนลดสูงสุดที่ยอมให้ได้ ขอเกินขั้นแต่ไม่เกินเพดานนี้ = เช็คกับหัวหน้า / เกินเพดาน = ต้องคุยหัวหน้า',
+  },
 ]
 
-// ช่องที่บัญชีต้องกรอกเอง (ไม่นับรหัส/ชื่อที่เติมมาให้) — ใช้ตัดสินว่าแถวไหน "ยังไม่ได้กรอก" แล้วข้ามไป
-const COST_FILLABLE_KEYS = PRODUCT_COST_IMPORT_COLUMNS.filter(c => !c.locked).map(c => c.key)
+// เกณฑ์มาตรฐานของบริษัท ใช้เติมใน template และเป็นค่าตั้งต้นเมื่อช่องนั้นถูกเว้นว่าง
+const TIER_COLUMNS = PRODUCT_COST_IMPORT_COLUMNS.filter(c => c.tierQty)
+const STANDARD_TIER_DISCOUNT = { 1: 0, 4: 2.5, 11: 5, 31: 7, 51: 10, 101: 12 }
+const STANDARD_SPECIAL = 15
+
+// ใช้ตัดสินว่าแถวไหน "ยังไม่ได้กรอก" แล้วข้ามไป
+// นับเฉพาะช่องต้นทุน/ราคา ไม่รวมรหัส-ชื่อที่เติมมาให้ และไม่รวมขั้นบันได/เพดานส่วนลด
+// เพราะสองอย่างหลังถูกเติมค่ามาตรฐานมาให้ทุกแถวอยู่แล้ว ถ้านับด้วยจะไม่มีแถวไหน "ว่าง" เลย
+const COST_FILLABLE_KEYS = PRODUCT_COST_IMPORT_COLUMNS
+  .filter(c => !c.locked && !c.tierQty && c.key !== 'special_discount_percent')
+  .map(c => c.key)
 
 // เขียนชีต "วิธีกรอก" — อธิบายทีละช่อง + สูตรที่ระบบใช้ + เกณฑ์ตัดสินสถานะ
 // settings: [{ key, value }] จาก margin_settings เอามาโชว์ค่า buffer จริงที่ใช้อยู่ ไม่ใช่เลขที่ hardcode ไว้ในคำอธิบาย
@@ -548,15 +593,22 @@ function addCostHowToSheet(workbook, settings = []) {
   line('ค่า Buffer และค่าขนส่งมาตรฐานไม่มีในไฟล์นี้ ใช้ค่ากลางของระบบ ถ้าสินค้าตัวไหนต้องใช้ค่าเฉพาะ ตั้งได้ที่ปุ่ม "แก้ไข" ในหน้าต้นทุนสินค้า')
   sheet.addRow([])
 
+  title('ขั้นบันไดส่วนลดทำงานอย่างไร')
+  line('• ระบบดูจำนวนที่เซลล์กรอก แล้วหยิบขั้นที่ "จำนวนตั้งแต่" มากที่สุดที่ยังไม่เกินจำนวนนั้น')
+  line('  เช่นกรอก 80 ตัว → เข้าขั้น 51+ ส่วนลด 10%')
+  line('• ส่วนลดคิดจากราคาขายปกติ ดังนั้นสินค้าต้องมีราคาขายปกติก่อน ขั้นบันไดถึงจะมีผล')
+  line('• เพดานส่วนลดพิเศษเป็นเส้นแยก ไม่ผูกกับจำนวน — เป็นส่วนลดสูงสุดที่ยอมให้ได้เมื่อคุยกับหัวหน้าแล้ว')
+  sheet.addRow([])
+
   title('ระบบตัดสินสถานะอย่างไร (ไล่จากบนลงล่าง เจอข้อไหนก่อนใช้ข้อนั้น)')
   const head2 = sheet.addRow(['สถานะที่เซลล์เห็น', 'เงื่อนไข', 'แปลว่า'])
   head2.font = { bold: true }
   head2.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F3F6' } } })
   const rules = [
-    ['ไม่ควรขาย', 'ราคาที่เสนอ < Floor Price  หรือ  กำไร ≤ 0', 'ต่ำกว่าราคาขั้นต่ำหรือขาดทุน ไม่ควรเสนอ'],
-    ['ผ่าน / ขายได้', 'Margin ≥ Margin เป้าหมาย', 'เสนอราคานี้ได้เลย'],
-    ['ขายได้ แต่ Margin ต่ำ', 'Margin ≥ Margin ขั้นต่ำ (แต่ยังไม่ถึงเป้าหมาย)', 'ขายได้ แต่ควรดูจำนวนและเงื่อนไขก่อน'],
-    ['ต่ำกว่าเกณฑ์', 'Margin < Margin ขั้นต่ำ (แต่ยังมีกำไรและไม่ต่ำกว่า Floor Price)', 'ยังมีกำไร แต่ต้องคุยหัวหน้าก่อนเสนอ'],
+    ['ไม่ควรขาย', 'กำไรเป็นศูนย์หรือติดลบ (ต่ำกว่าราคาเท่าทุนที่รวม Buffer แล้ว)', 'ขายแล้วเสียเงินจริง ไม่ควรเสนอ'],
+    ['ต่ำกว่าเกณฑ์', 'ส่วนลดเกินเพดานพิเศษ หรือ Margin ต่ำกว่าขั้นต่ำที่รับได้', 'ยังมีกำไร แต่ต่ำกว่าที่ตกลงกันไว้ ต้องคุยหัวหน้าก่อน'],
+    ['ผ่าน / ขายได้', 'ส่วนลดไม่เกินที่ขั้นนั้นให้ได้', 'เสนอราคานี้ได้เลย'],
+    ['ขายได้ แต่ Margin ต่ำ', 'เกินส่วนลดของขั้น แต่ไม่เกินเพดานพิเศษ', 'ขายได้ แต่ควรเช็คกับหัวหน้าก่อนยืนยัน'],
   ]
   rules.forEach(([a, b, c]) => {
     const r = sheet.addRow([a, b, c])
@@ -566,9 +618,10 @@ function addCostHowToSheet(workbook, settings = []) {
   sheet.addRow([])
 
   title('ข้อควรระวัง')
-  line('• Floor Price ไม่ควรต่ำกว่าต้นทุน/ชิ้น ไม่งั้นระบบจะยอมให้เสนอราคาที่ขาดทุนได้')
-  line('• Margin ขั้นต่ำ ไม่ควรสูงกว่า Margin เป้าหมาย')
-  line('• ถ้าเว้น Margin เป้าหมายและ Margin ขั้นต่ำไว้ ระบบถือเป็น 0 ทั้งคู่ เกือบทุกราคาจะขึ้นว่า "ผ่าน / ขายได้" — ควรกรอกเสมอ')
+  line('• สินค้าต้องมีราคาขายปกติ ไม่งั้นขั้นบันไดใช้ไม่ได้ ระบบจะตกกลับไปใช้ Floor Price ตัวเดียวแบบเดิม')
+  line('• Margin ขั้นต่ำคือ "ต่ำสุดที่รับได้" ไม่ใช่จุดขาดทุน ต่ำกว่านั้นแต่ยังมีกำไรระบบขึ้นว่า "ต่ำกว่าเกณฑ์" ไม่ใช่ห้ามขาย')
+  line('• เส้นห้ามขายจริงคือราคาเท่าทุน ระบบคำนวณจากต้นทุนปัจจุบันให้เอง ไม่ต้องกรอก')
+  line('• ถ้าต้นทุนขึ้นจนส่วนลดที่ตั้งไว้ทำให้ Margin ต่ำกว่าขั้นต่ำ ระบบจะเตือนให้ทบทวนเกณฑ์ส่วนลด')
   line('• สินค้าที่ยังไม่มีต้นทุนจะไม่ขึ้นให้เซลล์เลือกในหน้าเช็คราคา')
   line('• เซลล์ไม่เห็นตัวเลขต้นทุนในไฟล์นี้และในระบบ เห็นแค่ Margin เป็นเปอร์เซ็นต์กับสถานะ')
 }
@@ -587,7 +640,10 @@ export async function downloadProductCostTemplate(products = [], settings = []) 
 
   products.forEach(p => {
     const c = p.cost || {}
-    sheet.addRow({
+    // เติมขั้นบันไดที่ตั้งไว้แล้ว ถ้ายังไม่เคยตั้งก็เติมเกณฑ์มาตรฐาน — ไฟล์จึงโชว์เสมอว่าระบบจะใช้ตัวเลขอะไร
+    const byQty = {}
+    ;(p.tiers || []).forEach(t => { byQty[t.min_qty] = t.max_discount_percent })
+    const row = {
       code: p.code,
       name: p.name,
       cost_price: c.cost_price ?? '',
@@ -596,7 +652,10 @@ export async function downloadProductCostTemplate(products = [], settings = []) 
       minimum_margin_percent: c.minimum_margin_percent ?? '',
       floor_price: c.floor_price ?? '',
       category: p.category ?? '',
-    })
+      special_discount_percent: c.special_discount_percent ?? STANDARD_SPECIAL,
+    }
+    TIER_COLUMNS.forEach(col => { row[col.key] = byQty[col.tierQty] ?? STANDARD_TIER_DISCOUNT[col.tierQty] })
+    sheet.addRow(row)
   })
 
   // รหัส/ชื่อสินค้าเป็นตัวจับคู่กับระบบ — ทำพื้นเทาไว้เป็นสัญญาณว่าไม่ต้องแก้ (ไม่ล็อกชีต กันไฟล์แก้ไขไม่ได้)
@@ -675,8 +734,13 @@ export async function parseProductCostImportFile(file, productsByCode) {
         minimum_margin_percent: nums.minimum_margin_percent,
         floor_price: nums.floor_price,
         status: 'Active',
+        special_discount_percent: nums.special_discount_percent ?? STANDARD_SPECIAL,
       },
       meta: { category: row.category || null },
+      tiers: TIER_COLUMNS.map(col => ({
+        min_qty: col.tierQty,
+        max_discount_percent: nums[col.key] ?? STANDARD_TIER_DISCOUNT[col.tierQty],
+      })),
     })
   })
 

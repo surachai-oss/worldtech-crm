@@ -67,6 +67,7 @@ export default function ImportProductCostsModal({ products, marginSettings = [],
                 <div style={{ marginTop: 6 }}>{t('แถวไหนไม่ได้กรอกอะไรเลยจะถูกข้าม กรอกเฉพาะสินค้าที่ต้องการได้')}</div>
                 <div>{t('แถวที่กรอกต้องมีต้นทุน/ชิ้น เสมอ — ค่าเดิมของสินค้านั้นจะถูกเขียนทับด้วยค่าในไฟล์')}</div>
                 <div>{t('Shipping Buffer / Provision Buffer / ค่าขนส่งมาตรฐาน ไม่มีในไฟล์ — ใช้ค่ากลาง ตั้งรายตัวได้ที่ปุ่มแก้ไข')}</div>
+                <div style={{ marginTop: 6 }}>{t('ช่องส่วนลดขั้นบันไดเติมเกณฑ์มาตรฐานมาให้แล้ว แก้ทับได้ ถ้าลบทิ้งระบบจะใช้ค่ามาตรฐานแทน')}</div>
                 <div style={{ marginTop: 6 }}>{t('ในไฟล์มีชีต "วิธีกรอก" อธิบายทีละช่อง พร้อมสูตรและเกณฑ์ตัดสินสถานะ')}</div>
               </div>
             </>
@@ -100,17 +101,28 @@ export default function ImportProductCostsModal({ products, marginSettings = [],
                 <div className="card" style={{ maxHeight: 240, overflow: 'auto' }}>
                   <div className="table-wrap">
                     <table>
-                      <thead><tr><th>{t('รหัสสินค้า')}</th><th>{t('ชื่อสินค้า')}</th><th>{t('ต้นทุน/ชิ้น')}</th><th>Floor Price</th><th>{t('เป้าหมาย/ขั้นต่ำ')}</th></tr></thead>
+                      <thead><tr><th>{t('รหัสสินค้า')}</th><th>{t('ต้นทุน/ชิ้น')}</th><th>{t('ราคาขายปกติ')}</th><th>{t('ขั้นบันไดที่จะใช้')}</th></tr></thead>
                       <tbody>
-                        {parsed.validRows.slice(0, 20).map((r, i) => (
-                          <tr key={i}>
-                            <td style={{ fontWeight: 600 }}>{r.code}</td>
-                            <td>{r.name}</td>
-                            <td>{fmtCurrency(r.cost.cost_price)}</td>
-                            <td>{r.cost.floor_price != null ? fmtCurrency(r.cost.floor_price) : '-'}</td>
-                            <td style={{ fontSize: 12 }}>{r.cost.target_margin_percent ?? '-'}% / {r.cost.minimum_margin_percent ?? '-'}%</td>
-                          </tr>
-                        ))}
+                        {parsed.validRows.slice(0, 20).map((r, i) => {
+                          const normal = Number(r.cost.normal_selling_price) || 0
+                          return (
+                            <tr key={i}>
+                              <td style={{ fontWeight: 600 }}>{r.code}<div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>{r.name}</div></td>
+                              <td>{fmtCurrency(r.cost.cost_price)}</td>
+                              <td>{normal ? fmtCurrency(normal) : <span style={{ color: 'var(--danger)', fontSize: 11 }}>{t('ยังไม่มี')}</span>}</td>
+                              <td style={{ fontSize: 11, lineHeight: 1.5 }}>
+                                {/* โชว์ราคาที่คำนวณได้จริงของทุกขั้น ก่อนกดยืนยัน จะได้เห็นว่าตัวเลขสมเหตุสมผลไหม */}
+                                {(r.tiers || []).map(tr => (
+                                  <span key={tr.min_qty} style={{ marginRight: 10, whiteSpace: 'nowrap' }}>
+                                    <b>{tr.min_qty}+</b> {tr.max_discount_percent}%
+                                    {normal > 0 && <span style={{ color: 'var(--text-light)' }}> ({fmtCurrency(normal * (1 - tr.max_discount_percent / 100))})</span>}
+                                  </span>
+                                ))}
+                                <span style={{ color: 'var(--text-light)' }}>· {t('เพดาน')} {r.cost.special_discount_percent}%</span>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>

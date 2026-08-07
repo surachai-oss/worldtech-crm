@@ -1340,12 +1340,15 @@ export const deletePriceCheck = (id) => supabase.from('price_checks').delete().e
 
 // รวมสินค้าทุกตัวเข้ากับต้นทุนที่มี เพื่อให้บัญชีเห็นว่าตัวไหนยังไม่ได้กรอก
 export async function fetchProductCosts() {
-  const [products, costs] = await Promise.all([
+  const [products, costs, tiers] = await Promise.all([
     supabase.from('products').select('id,code,name,category,brand').order('code', { ascending: true }).then(handle),
-    supabase.from('product_costs').select('*').then(handle)
+    supabase.from('product_costs').select('*').then(handle),
+    supabase.from('product_price_tiers').select('*').order('min_qty', { ascending: true }).then(handle)
   ])
   const byId = new Map(costs.map(c => [c.product_id, c]))
-  return products.map(p => ({ ...p, cost: byId.get(p.id) || null }))
+  const tiersById = {}
+  tiers.forEach(t => { (tiersById[t.product_id] ||= []).push(t) })
+  return products.map(p => ({ ...p, cost: byId.get(p.id) || null, tiers: tiersById[p.id] || [] }))
 }
 
 export const upsertProductCost = (productId, fields, updatedBy) =>
@@ -1370,6 +1373,12 @@ export const updateMarginSetting = (key, value, updatedBy) =>
 export async function bulkUpsertProductCosts(rows, updatedBy) {
   const costs = rows.map(r => ({ ...r.cost, product_id: r.product_id, updated_by: updatedBy || null }))
   await supabase.from('product_costs').upsert(costs, { onConflict: 'product_id' }).then(handle)
+
+  // ขั้นบันได: ช่องไหนไม่ได้กรอกในไฟล์ ตัวแยกไฟล์เติมค่ามาตรฐานมาให้แล้ว (ดู parseProductCostImportFile)
+  const tiers = rows.flatMap(r => (r.tiers || []).map(t => ({ ...t, product_id: r.product_id, updated_by: updatedBy || null })))
+  if (tiers.length) {
+    await supabase.from('product_price_tiers').upsert(tiers, { onConflict: 'product_id,min_qty' }).then(handle)
+  }
 
   // category/brand อยู่คนละตาราง (products) และอัปเดตเฉพาะแถวที่ไฟล์ระบุมาจริง
   const withMeta = rows.filter(r => r.meta && (r.meta.category || r.meta.brand))
@@ -1430,10 +1439,3 @@ export async function applyStandardPriceTiers(productIds, updatedBy) {
   return productIds.length
 }
 
-// จำนวนขั้นของแต่ละสินค้า — ใช้โชว์ในตารางหน้าต้นทุนสินค้าว่าตัวไหนตั้งขั้นบันไดไว้แล้ว
-export async function fetchPriceTierCounts() {
-  const rows = await supabase.from('product_price_tiers').select('product_id').then(handle)
-  const byProduct = {}
-  rows.forEach(r => { byProduct[r.product_id] = (byProduct[r.product_id] || 0) + 1 })
-  return byProduct
-}
