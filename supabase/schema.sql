@@ -2100,3 +2100,142 @@ drop policy if exists "order_items update" on order_items;
 create policy "order_items update" on order_items for update using (is_admin()) with check (is_admin());
 drop policy if exists "order_items delete" on order_items;
 create policy "order_items delete" on order_items for delete using (is_admin());
+
+-- ============================================================================
+-- ===== สัดส่วนต้นทุนต่อออเดอร์ (รองรับสินค้า Grade B และกรณีอื่นในอนาคต) =====
+-- ============================================================================
+-- สินค้า Grade B ต้นทุนจริงต่ำกว่าของใหม่ ถ้าใช้ต้นทุนเต็มไปคำนวณกำไรจะดูแย่กว่าความจริง
+-- ออกแบบให้ไม่ฝังตัวเลขไว้ในโค้ด: เก็บ 3 ค่าแยกกัน
+--   base_unit_cost      = ต้นทุนเต็มของสินค้า ณ วันเปิดออเดอร์ (ไม่เปลี่ยน)
+--   cost_factor_percent = คิดต้นทุนกี่ % ของราคาเต็ม (Grade B = 80 ตามค่ากลาง, ปกติ = 100)
+--   unit_cost           = ผลลัพธ์ที่รายงานเอาไปใช้ = base × factor / 100
+-- เปลี่ยนค่ากลางได้ที่หน้า "ต้นทุนสินค้า" (มีผลกับออเดอร์ที่เปิดใหม่)
+-- และปรับเป็นรายออเดอร์ได้ทีหลังผ่าน margin_set_order_cost_factor (ออเดอร์เก่าไม่ถูกกระทบ)
+alter table order_item_costs add column if not exists base_unit_cost numeric;
+alter table order_item_costs add column if not exists cost_factor_percent numeric default 100;
+
+insert into margin_settings (key, value, description, owner_role) values
+  ('grade_b_cost_factor', '80', 'ออเดอร์สินค้า Grade B คิดต้นทุนกี่ % ของต้นทุนเต็ม (80 = ลบ 20%)', 'Finance')
+on conflict (key) do nothing;
+
+create or replace function snapshot_order_item_cost() returns trigger as $$
+declare
+  v_cost   numeric;
+  v_normal numeric;
+  v_type   text;
+  v_factor numeric;
+begin
+  if new.product_id is null then return new; end if;
+
+  select cost_price, normal_selling_price into v_cost, v_normal
+    from product_costs where product_id = new.product_id;
+  if not found then return new; end if;
+
+  select order_type into v_type from orders where id = new.order_id;
+  v_factor := case when v_type = 'Grade B' then margin_setting_num('grade_b_cost_factor', 80) else 100 end;
+
+  insert into order_item_costs (order_item_id, order_id, product_id, base_unit_cost, cost_factor_percent, unit_cost, normal_selling_price)
+  values (new.id, new.order_id, new.product_id, v_cost, v_factor, round(v_cost * v_factor / 100, 4), v_normal)
+  on conflict (order_item_id) do nothing;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+-- แถวเดิมยังไม่มี base_unit_cost — ถือว่าที่เก็บไว้คือต้นทุนเต็ม (factor 100)
+update order_item_costs
+set base_unit_cost = unit_cost, cost_factor_percent = coalesce(cost_factor_percent, 100)
+where base_unit_cost is null;
+
+-- ออเดอร์ Grade B ที่เปิดไว้ก่อนมีกฎนี้ ยังคิดต้นทุนเต็มอยู่ ปรับให้ตรงกับเกณฑ์ (รันซ้ำไม่ทับซ้ำเพราะเช็ค factor = 100)
+update order_item_costs oic
+set cost_factor_percent = margin_setting_num('grade_b_cost_factor', 80),
+    unit_cost = round(oic.base_unit_cost * margin_setting_num('grade_b_cost_factor', 80) / 100, 4)
+from orders o
+where o.id = oic.order_id
+  and o.order_type = 'Grade B'
+  and coalesce(oic.cost_factor_percent, 100) = 100
+  and oic.base_unit_cost is not null;
+
+-- ===== ปรับสัดส่วนต้นทุนของออเดอร์ใดออเดอร์หนึ่ง (บัญชี/แอดมิน) =====
+-- ใช้เมื่อล็อตนั้นได้ต้นทุนต่างจากเกณฑ์ปกติ เช่น Grade B ที่สภาพแย่กว่าปกติเลยลดลึกกว่า 20%
+create or replace function margin_set_order_cost_factor(p_order_id uuid, p_percent numeric)
+returns void as $$
+declare
+  v_name text;
+  v_no   text;
+  v_old  numeric;
+begin
+  if not (is_admin() or is_finance()) then
+    raise exception 'ปรับสัดส่วนต้นทุนได้เฉพาะฝ่ายบัญชีและผู้ดูแลระบบ';
+  end if;
+  if p_percent is null or p_percent <= 0 or p_percent > 200 then
+    raise exception 'สัดส่วนต้นทุนต้องอยู่ระหว่าง 1-200%%';
+  end if;
+
+  select order_no into v_no from orders where id = p_order_id;
+  if v_no is null then raise exception 'ไม่พบออเดอร์นี้'; end if;
+
+  select max(cost_factor_percent) into v_old from order_item_costs where order_id = p_order_id;
+
+  update order_item_costs
+  set cost_factor_percent = p_percent,
+      unit_cost = round(coalesce(base_unit_cost, unit_cost) * p_percent / 100, 4)
+  where order_id = p_order_id;
+
+  select coalesce(full_name, email) into v_name from profiles where id = auth.uid();
+  insert into audit_logs (entity_type, entity_id, action, actor_id, actor_name, detail)
+  values ('order', p_order_id, 'cost_factor', auth.uid(), v_name,
+          'ปรับสัดส่วนต้นทุนออเดอร์ ' || v_no || ' จาก ' || coalesce(v_old, 100)::text || '% เป็น ' || p_percent::text || '%');
+end;
+$$ language plpgsql volatile security definer set search_path = public;
+
+grant execute on function margin_set_order_cost_factor(uuid, numeric) to authenticated;
+
+-- ===== รายงานเดิม + สัดส่วนต้นทุนที่ใช้ =====
+-- เปลี่ยนคอลัมน์ที่คืนค่า ต้อง drop ก่อน (postgres แก้ return type ของฟังก์ชันเดิมไม่ได้)
+drop function if exists margin_order_report(date, date);
+
+create or replace function margin_order_report(p_from date default null, p_to date default null)
+returns table (
+  order_id        uuid,
+  order_no        text,
+  order_date      timestamptz,
+  customer_name   text,
+  sales_name      text,
+  order_status    text,
+  order_type      text,
+  cost_factor     numeric,
+  product_id      uuid,
+  product_code    text,
+  product_name    text,
+  quantity        numeric,
+  unit_price      numeric,
+  line_sales      numeric,
+  line_cost       numeric,
+  line_normal     numeric
+) as $$
+begin
+  if not (is_admin() or is_finance()) then
+    raise exception 'ดูรายงานนี้ได้เฉพาะฝ่ายบัญชีและผู้ดูแลระบบ';
+  end if;
+
+  return query
+  select
+    o.id, o.order_no, o.created_at, o.customer_name, o.sales_name, o.status, o.order_type,
+    coalesce(oic.cost_factor_percent, 100),
+    oi.product_id, p.code, coalesce(p.name, oi.description),
+    oi.quantity, oi.unit_price,
+    oi.quantity * oi.unit_price,
+    oi.quantity * coalesce(oic.unit_cost, 0),
+    oi.quantity * coalesce(oic.normal_selling_price, 0)
+  from orders o
+  join order_items oi on oi.order_id = o.id
+  left join order_item_costs oic on oic.order_item_id = oi.id
+  left join products p on p.id = oi.product_id
+  where (p_from is null or o.created_at >= p_from::timestamptz)
+    and (p_to is null or o.created_at < (p_to::timestamptz + interval '1 day'))
+  order by o.created_at desc, oi.sort_order;
+end;
+$$ language plpgsql stable security definer set search_path = public;
+
+grant execute on function margin_order_report(date, date) to authenticated;

@@ -1480,3 +1480,8 @@ export async function updateOrderWithItems(orderId, fields, items, { actorName, 
   })
   return totals
 }
+
+// ปรับสัดส่วนต้นทุนของออเดอร์หนึ่งใบ (บัญชี/แอดมิน) — ใช้เมื่อล็อตนั้นได้ต้นทุนต่างจากเกณฑ์ปกติ
+// ค่ากลางของ Grade B ตั้งที่ margin_settings.grade_b_cost_factor (มีผลกับออเดอร์ที่เปิดใหม่)
+export const setOrderCostFactor = (orderId, percent) =>
+  supabase.rpc('margin_set_order_cost_factor', { p_order_id: orderId, p_percent: percent }).then(handle)

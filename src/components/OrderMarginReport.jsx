@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchOrderMarginReport } from '../lib/api'
+import { fetchOrderMarginReport, setOrderCostFactor } from '../lib/api'
 import { exportRowsToExcel } from '../lib/importExport'
 import { fmtCurrency, fmtDate, currentMonthRange } from '../lib/format'
 import { useUi } from './UiContext'
@@ -88,7 +88,8 @@ export default function OrderMarginReport() {
     if (view === 'order') {
       return groupLines(active, l => l.order_id, l => ({
         order_no: l.order_no, order_date: l.order_date, customer_name: l.customer_name,
-        sales_name: l.sales_name, order_status: l.order_status
+        sales_name: l.sales_name, order_status: l.order_status,
+        order_type: l.order_type, cost_factor: Number(l.cost_factor) || 100
       }))
     }
     if (view === 'product') {
@@ -98,6 +99,22 @@ export default function OrderMarginReport() {
     }
     return groupLines(active, l => l.sales_name || '-', l => ({ sales_name: l.sales_name || '-' }))
   }, [active, view])
+
+  // ปรับสัดส่วนต้นทุนของออเดอร์นั้น เช่น Grade B ล็อตที่สภาพแย่กว่าปกติ อยากคิดต้นทุน 70% แทน 80%
+  const adjustFactor = async (row) => {
+    const input = window.prompt(
+      `ออเดอร์ ${row.order_no}: คิดต้นทุนกี่ % ของต้นทุนเต็ม?\n100 = ต้นทุนเต็ม, 80 = ลบ 20%`,
+      String(row.cost_factor ?? 100)
+    )
+    if (input === null) return
+    const pct2 = Number(input)
+    if (!(pct2 > 0 && pct2 <= 200)) { toast('กรุณากรอกตัวเลขระหว่าง 1-200', 'error'); return }
+    try {
+      await setOrderCostFactor(row.key, pct2)
+      toast('ปรับสัดส่วนต้นทุนแล้ว', 'success')
+      setLines(await fetchOrderMarginReport({ dateFrom: fromDate, dateTo: toDate }))
+    } catch (e) { toast('ปรับไม่สำเร็จ: ' + e.message, 'error') }
+  }
 
   const doExport = async () => {
     setExporting(true)
@@ -185,6 +202,7 @@ export default function OrderMarginReport() {
                   <th>{view === 'order' ? t('เลขออเดอร์') : view === 'product' ? t('สินค้า') : t('เซลล์')}</th>
                   {view === 'order' && <th>{t('ลูกค้า')}</th>}
                   {view === 'order' && <th>{t('วันที่')}</th>}
+                  {view === 'order' && <th>{t('ต้นทุนที่คิด')}</th>}
                   {view !== 'order' && <th>{t('ออเดอร์')}</th>}
                   <th>{t('จำนวน')}</th>
                   <th>{t('ยอดขาย')}</th>
@@ -204,6 +222,13 @@ export default function OrderMarginReport() {
                     </td>
                     {view === 'order' && <td style={{ fontSize: 12 }}>{r.customer_name || '-'}<div style={{ fontSize: 11, color: 'var(--text-light)' }}>{r.sales_name || ''}</div></td>}
                     {view === 'order' && <td style={{ fontSize: 12 }}>{fmtDate(r.order_date)}</td>}
+                    {view === 'order' && (
+                      <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                        <span style={{ fontWeight: 600, color: r.cost_factor === 100 ? 'var(--text-light)' : '#c05621' }}>{r.cost_factor}%</span>
+                        {r.order_type === 'Grade B' && <span className="badge badge-orange" style={{ marginLeft: 4, fontSize: 10 }}>GB</span>}
+                        <button className="btn btn-outline btn-xs" style={{ marginLeft: 6 }} onClick={() => adjustFactor(r)}>{t('ปรับ')}</button>
+                      </td>
+                    )}
                     {view !== 'order' && <td>{r.orderCount}</td>}
                     <td>{r.qty}</td>
                     <td style={{ fontWeight: 600 }}>{fmtCurrency(r.sales)}</td>
@@ -222,6 +247,7 @@ export default function OrderMarginReport() {
           <div>{t('ต้นทุนที่ใช้คือต้นทุน ณ วันที่เปิดออเดอร์ ไม่ใช่ต้นทุนวันนี้ — ออเดอร์เก่าจึงยังสะท้อนราคาทุนตอนนั้น')}</div>
           <div>{t('กำไรขั้นต้น = ยอดขาย − ต้นทุนสินค้า ยังไม่ได้หักค่าขนส่งจริงและ Buffer ตัวเลขจึงสูงกว่า Margin ในหน้าเช็คราคาเล็กน้อย')}</div>
           <div>{t('ส่วนลดเทียบกับราคาขายปกติ ณ วันที่เปิดออเดอร์ นับเฉพาะรายการที่มีราคาขายปกติบันทึกไว้')}</div>
+          <div>{t('"ต้นทุนที่คิด" คือคิดต้นทุนกี่ % ของราคาเต็ม — ออเดอร์ Grade B ใช้ค่ากลางจากหน้าต้นทุนสินค้า ปรับรายออเดอร์ได้ที่ปุ่ม "ปรับ"')}</div>
         </div>
       </div>
     </div>
