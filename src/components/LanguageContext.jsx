@@ -721,6 +721,27 @@ export const EN_DICT = {
   'ต้นทุนที่ใช้คือต้นทุน ณ วันที่เปิดออเดอร์ ไม่ใช่ต้นทุนวันนี้ — ออเดอร์เก่าจึงยังสะท้อนราคาทุนตอนนั้น': 'Costs are those at the time the order was opened, not today, so older orders still reflect the cost back then',
   'กำไรขั้นต้น = ยอดขาย − ต้นทุนสินค้า ยังไม่ได้หักค่าขนส่งจริงและ Buffer ตัวเลขจึงสูงกว่า Margin ในหน้าเช็คราคาเล็กน้อย': 'Gross profit = sales − product cost, before actual shipping and buffers, so it reads slightly higher than the margin on the price check page',
   'ส่วนลดเทียบกับราคาขายปกติ ณ วันที่เปิดออเดอร์ นับเฉพาะรายการที่มีราคาขายปกติบันทึกไว้': 'Discount is against the normal selling price at the time of the order, counting only lines that had one recorded',
+
+  // ===== แก้ไขออเดอร์ (แอดมิน) =====
+  'แก้ไขออเดอร์': 'Edit order',
+  'บันทึกการแก้ไข': 'Save changes',
+  'เหตุผลที่แก้ไข': 'Reason for the change',
+  'เช่น เซลล์คีย์จำนวนผิดจาก 10 เป็น 100 / ราคาต่อชิ้นผิด': 'e.g. quantity keyed as 100 instead of 10 / wrong unit price',
+  'ออเดอร์ถูกออกแบบให้แก้ไม่ได้หลังบันทึก — หน้านี้เป็นข้อยกเว้นสำหรับแอดมิน ใช้เมื่อกรอกผิดแต่เอกสารอื่นถูกต้องแล้ว': 'Orders are meant to be unchangeable once saved — this screen is an admin exception, for when the entry is wrong but everything else already went out correctly',
+  'ทุกการแก้ไขถูกบันทึกไว้ว่าใครแก้ แก้อะไร และเพราะอะไร': 'Every change is recorded: who, what and why',
+  'ถ้ายอดรวมเปลี่ยน ต้องไปแก้ใบแจ้งหนี้/ใบกำกับภาษีและคำขอตรวจยอดที่ออกไปแล้วให้ตรงกันเองด้วย ระบบไม่ได้แก้ให้': 'If the total changes, any invoice, tax invoice or payment request already issued must be corrected to match — the system does not do it for you',
+  'ช่องเหล่านี้แก้ไม่ได้ ถ้าผิดต้องยกเลิกแล้วเปิดใหม่': 'These cannot be changed — if they are wrong, cancel and open a new order',
+  'ชื่อรายการ': 'Item name',
+  'ประเภทส่วนลดท้ายบิล': 'Bill discount type',
+  'ส่วนลดท้ายบิล': 'Bill discount',
+  '-- ไม่มีส่วนลด --': '-- No discount --',
+  'เปอร์เซ็นต์': 'Percent',
+  'จำนวนเงิน': 'Amount',
+  'รวมก่อนส่วนลด': 'Subtotal',
+  'ยอดรวมใหม่': 'New total',
+  'เดิม': 'was',
+  'ต่างกัน': 'difference',
+  '-- ไม่ระบุ --': '-- None --',
 }
 
 export function LanguageProvider({ children }) {

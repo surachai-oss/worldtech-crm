@@ -1444,3 +1444,39 @@ export async function applyStandardPriceTiers(productIds, updatedBy) {
 // คืนข้อมูลรายบรรทัดสินค้า ให้หน้าเว็บรวมยอดเองตามมุมที่อยากดู
 export const fetchOrderMarginReport = ({ dateFrom = '', dateTo = '' } = {}) =>
   supabase.rpc('margin_order_report', { p_from: dateFrom || null, p_to: dateTo || null }).then(handle)
+
+// แก้ไขออเดอร์ที่บันทึกแล้ว — แอดมินเท่านั้น (RLS + trigger ฝั่ง DB บังคับอีกชั้น)
+// ใช้เมื่อเซลล์กรอกจำนวน/ราคาผิดแต่เอกสารอื่นออกไปถูกต้องหมดแล้ว การยกเลิกแล้วเปิดใหม่จะแพงเกินไป
+// สำคัญ: อัปเดตรายการเดิมในที่เดิม ไม่ลบทิ้งแล้วใส่ใหม่ ไม่งั้น order_item_costs (ต้นทุน ณ วันเปิดออเดอร์)
+// จะถูก cascade ทิ้งแล้วถูกสร้างใหม่ด้วยต้นทุน "วันนี้" ทำให้รายงานกำไรย้อนหลังเพี้ยน
+export async function updateOrderWithItems(orderId, fields, items, { actorName, reason } = {}) {
+  const totals = computeDealTotals(items, { type: fields.discount_type, value: fields.discount_value })
+  const before = await listOrderItems(orderId)
+
+  await supabase.from('orders').update({ ...fields, value: totals.grandTotal }).eq('id', orderId).then(handle)
+
+  const keepIds = new Set(items.filter(it => it.id).map(it => it.id))
+  const removed = before.filter(b => !keepIds.has(b.id))
+  if (removed.length) {
+    await supabase.from('order_items').delete().in('id', removed.map(r => r.id)).then(handle)
+  }
+  for (const [i, it] of items.entries()) {
+    const payload = {
+      product_id: it.product_id || null, description: it.description,
+      quantity: Number(it.quantity) || 0, unit_price: Number(it.unit_price) || 0, sort_order: i
+    }
+    if (it.id) await supabase.from('order_items').update(payload).eq('id', it.id).then(handle)
+    else await supabase.from('order_items').insert({ ...payload, order_id: orderId }).then(handle)
+  }
+
+  // trigger ฝั่ง DB บันทึกช่องที่เปลี่ยนของตัวออเดอร์ไว้แล้ว — อันนี้เพิ่มเหตุผลกับสรุปรายการสินค้าที่ trigger ไม่รู้
+  const itemSummary = []
+  if (removed.length) itemSummary.push(`ลบ ${removed.length} รายการ`)
+  const added = items.filter(it => !it.id).length
+  if (added) itemSummary.push(`เพิ่ม ${added} รายการ`)
+  await writeAuditLog({
+    entity_type: 'order', entity_id: orderId, action: 'edit', actor_name: actorName,
+    detail: `เหตุผล: ${reason}${itemSummary.length ? ' | รายการสินค้า: ' + itemSummary.join(', ') : ''} | ยอดรวมใหม่ ${totals.grandTotal}`
+  })
+  return totals
+}

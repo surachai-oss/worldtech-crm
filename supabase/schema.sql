@@ -367,6 +367,8 @@ end;
 $$ language plpgsql security definer set search_path = public;
 grant execute on function peek_order_no(text) to authenticated;
 
+-- !! นิยามนี้ถูกเขียนทับที่ท้ายไฟล์ (ส่วน "ให้แอดมินแก้ไขออเดอร์ที่บันทึกแล้วได้") ซึ่งเพิ่มข้อยกเว้นให้แอดมิน
+--    ที่ต้องประกาศซ้ำท้ายไฟล์เพราะเวอร์ชันใหม่เรียก is_admin() ซึ่งนิยามอยู่หลังจุดนี้
 -- บังคับกฎ "แก้ไขไม่ได้หลังบันทึก ต้องยกเลิกเท่านั้น" ที่ระดับฐานข้อมูล (กันเผลอแก้ผ่านทางอื่นนอกแอป) —
 -- อนุญาตแค่เปลี่ยนสถานะเป็น Cancelled พร้อม cancel_reason/cancelled_at เท่านั้น ห้ามแก้ฟิลด์อื่นหรือแก้ออเดอร์ที่ยกเลิกไปแล้ว
 create or replace function guard_orders_immutable() returns trigger as $$
@@ -2016,3 +2018,85 @@ end;
 $$ language plpgsql stable security definer set search_path = public;
 
 grant execute on function margin_order_report(date, date) to authenticated;
+
+-- ============================================================================
+-- ===== ให้แอดมินแก้ไขออเดอร์ที่บันทึกแล้วได้ =====
+-- ============================================================================
+-- เดิมออเดอร์แก้ไม่ได้เลย ผิดต้องยกเลิกแล้วเปิดใหม่ — แต่ถ้าเอกสารบัญชีออกไปแล้วและถูกต้องหมด
+-- ผิดแค่จำนวน/ราคาในระบบ การยกเลิกแปลว่าต้องรื้อทั้งชุด จึงเปิดให้แอดมินแก้เฉพาะจุดได้
+-- ข้อแลกเปลี่ยน: ออเดอร์ไม่ใช่ snapshot ที่แตะไม่ได้อีกต่อไป จึงต้องมี log ทุกครั้งที่แก้ (ดู trigger ด้านล่าง)
+-- เซลล์ยังแก้ไม่ได้เหมือนเดิม ทำได้แค่ยกเลิก
+create or replace function guard_orders_immutable() returns trigger as $$
+begin
+  -- แอดมินแก้ได้ทุกช่อง — ทุกการแก้ถูกบันทึกไว้ที่ audit_logs โดย trigger log_order_edit
+  if is_admin() then
+    return new;
+  end if;
+  if old.status = 'Cancelled' then
+    raise exception 'ออเดอร์นี้ถูกยกเลิกไปแล้ว แก้ไขไม่ได้อีก';
+  end if;
+  if new.status = 'Active' and (
+    new.order_no is distinct from old.order_no or
+    new.quotation_id is distinct from old.quotation_id or
+    new.company_id is distinct from old.company_id or
+    new.sales_id is distinct from old.sales_id or
+    new.shipping_address is distinct from old.shipping_address or
+    new.value is distinct from old.value or
+    new.company_tax_id is distinct from old.company_tax_id or
+    new.company_address is distinct from old.company_address or
+    new.company_phone is distinct from old.company_phone or
+    new.company_email is distinct from old.company_email or
+    new.remark is distinct from old.remark or
+    new.order_type is distinct from old.order_type or
+    new.discount_type is distinct from old.discount_type or
+    new.discount_value is distinct from old.discount_value
+  ) then
+    raise exception 'ออเดอร์ที่บันทึกแล้วแก้ไขไม่ได้ ถ้าลงข้อมูลผิดต้องยกเลิกแล้วเปิดออเดอร์ใหม่';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+-- บันทึกทุกการแก้ไขออเดอร์ลง audit_logs อัตโนมัติ — ดักที่ระดับตาราง แอปจะลืมเขียนไม่ได้
+-- (การยกเลิกมี log ของตัวเองอยู่แล้ว จึงข้ามกรณีที่สถานะเปลี่ยน)
+create or replace function log_order_edit() returns trigger as $$
+declare
+  v_name    text;
+  v_changed text[] := '{}';
+begin
+  if new.status is distinct from old.status then return new; end if;
+
+  if new.value is distinct from old.value then
+    v_changed := v_changed || ('ยอดรวม ' || coalesce(old.value, 0)::text || ' → ' || coalesce(new.value, 0)::text);
+  end if;
+  if new.shipping_address is distinct from old.shipping_address then v_changed := v_changed || 'ที่อยู่จัดส่ง'; end if;
+  if new.shipping_contact_name is distinct from old.shipping_contact_name then v_changed := v_changed || 'ชื่อผู้รับ'; end if;
+  if new.shipping_contact_phone is distinct from old.shipping_contact_phone then v_changed := v_changed || 'เบอร์ผู้รับ'; end if;
+  if new.remark is distinct from old.remark then v_changed := v_changed || 'หมายเหตุ'; end if;
+  if new.discount_type is distinct from old.discount_type or new.discount_value is distinct from old.discount_value then
+    v_changed := v_changed || 'ส่วนลดท้ายบิล';
+  end if;
+  if new.company_tax_id is distinct from old.company_tax_id or new.company_address is distinct from old.company_address
+     or new.company_phone is distinct from old.company_phone or new.company_email is distinct from old.company_email then
+    v_changed := v_changed || 'ข้อมูลบริษัทในออเดอร์';
+  end if;
+
+  if array_length(v_changed, 1) is null then return new; end if;
+
+  select coalesce(full_name, email) into v_name from profiles where id = auth.uid();
+  insert into audit_logs (entity_type, entity_id, action, actor_id, actor_name, detail)
+  values ('order', new.id, 'edit', auth.uid(), v_name,
+          'แก้ไขออเดอร์ ' || coalesce(new.order_no, '') || ': ' || array_to_string(v_changed, ' | '));
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_orders_edit_log on orders;
+create trigger trg_orders_edit_log after update on orders
+  for each row execute function log_order_edit();
+
+-- ----- order_items: เดิมไม่มี policy update/delete เลย (แก้ไม่ได้) เปิดให้เฉพาะแอดมิน -----
+drop policy if exists "order_items update" on order_items;
+create policy "order_items update" on order_items for update using (is_admin()) with check (is_admin());
+drop policy if exists "order_items delete" on order_items;
+create policy "order_items delete" on order_items for delete using (is_admin());

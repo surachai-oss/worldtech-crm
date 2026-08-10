@@ -8,6 +8,7 @@ import { OrderDetailModal } from './OrderModal'
 import AccountingDocModal from './AccountingDocModal'
 import OrderPaymentModal from './OrderPaymentModal'
 import OrderMarginReport from './OrderMarginReport'
+import OrderEditModal from './OrderEditModal'
 
 // เอาคำขอตรวจยอดล่าสุดของออเดอร์มาโชว์สถานะที่ปุ่ม — เลือกใบที่ยัง "ไม่ถูกปฏิเสธ" ก่อน (ตรงกับใบที่เปิดป็อปอัปแล้วจะเจอ) ถ้าถูกปฏิเสธหมดค่อยโชว์ใบล่าสุดที่ถูกปฏิเสธ
 function latestPaymentRequest(order) {
@@ -50,7 +51,7 @@ function ActionStack({ button, badge, fixedWidth = false }) {
   )
 }
 
-export default function Orders({ reloadKey, companies, perm, currentUser, settings, onAdd, onCancel }) {
+export default function Orders({ reloadKey, companies, perm, currentUser, settings, onAdd, onCancel, onChanged }) {
   const { toast } = useUi()
   const { t, lang } = useLanguage()
   const [status, setStatus] = useState('')
@@ -66,6 +67,8 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
   const [exporting, setExporting] = useState(false)
   // สรุปกำไรเห็นได้เฉพาะบัญชี/แอดมิน — เริ่มต้นซ่อนไว้ กันบังรายการออเดอร์ที่เป็นงานหลักของหน้านี้
   const [showReport, setShowReport] = useState(false)
+  const [editOrder, setEditOrder] = useState(null)
+  const [localBump, setLocalBump] = useState(0)
 
   // rows คือรายการที่กรองตามตัวกรองปัจจุบันอยู่แล้ว (หน้านี้ไม่มี pagination) จึง export ตรงจาก rows ได้เลยไม่ต้องดึงซ้ำ
   const doExport = async () => {
@@ -89,7 +92,7 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
         .finally(() => { if (alive) setLoading(false) })
     }, 250)
     return () => { alive = false; clearTimeout(t) }
-  }, [status, q, fromDate, toDate, reloadKey, toast])
+  }, [status, q, fromDate, toDate, reloadKey, localBump, toast])
 
   const openDetail = async (order) => {
     try { setDetail({ order, items: await listOrderItems(order.id) }) }
@@ -128,6 +131,10 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
       </div>
       {detail && <OrderDetailModal order={detail.order} items={detail.items} onClose={() => setDetail(null)} onCancel={onCancel} />}
       {docModalOrder && <AccountingDocModal order={docModalOrder} currentUser={currentUser} onClose={() => setDocModalOrder(null)} />}
+      {editOrder && (
+        <OrderEditModal order={editOrder} currentUserName={currentUser?.name}
+          onClose={() => setEditOrder(null)} onSaved={() => { setLocalBump(b => b + 1); onChanged?.() }} />
+      )}
       {paymentModalOrder && <OrderPaymentModal order={paymentModalOrder} companies={companies} perm={perm} currentUser={currentUser} settings={settings} onClose={() => setPaymentModalOrder(null)} />}
       <div className="card list-card">
         <div className="table-wrap">
@@ -149,6 +156,10 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
                       <td><span className={`badge ${o.status === ORDER_STATUS.ACTIVE ? 'badge-green' : 'badge-gray'}`}>{o.status === ORDER_STATUS.ACTIVE ? t('ใช้งานอยู่') : t('ยกเลิกแล้ว')}</span></td>
                       <td className="td-actions" style={{ alignItems: 'flex-start', gap: 16 }}>
                         <ActionStack button={<button className="btn btn-outline btn-xs" onClick={() => openDetail(o)}>{t('ดูรายละเอียด')}</button>} />
+                        {/* แก้ไขออเดอร์ที่บันทึกแล้ว — แอดมินเท่านั้น สำหรับกรณีคีย์ผิดแต่เอกสารอื่นออกไปถูกแล้ว */}
+                        {perm?.isAdmin && o.status === ORDER_STATUS.ACTIVE && (
+                          <ActionStack button={<button className="btn btn-outline btn-xs" onClick={() => setEditOrder(o)}>{t('แก้ไข')}</button>} />
+                        )}
                         {o.status === ORDER_STATUS.ACTIVE && (
                           <ActionStack
                             fixedWidth
