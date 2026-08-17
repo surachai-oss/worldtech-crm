@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { normalizeLeadSource } from '../../src/lib/leadOptions.js'
 
 // รับข้อมูลจากฟอร์มลีดสาธารณะ (ไม่ต้อง login) — ใช้ Service Role Key เขียนเข้า Supabase แทน
 // เพื่อไม่ต้องเปิด RLS ให้ anon insert เข้าตาราง leads ตรงๆ (กันสแปม/ข้อมูลมั่วเขียนเข้าระบบได้ง่ายเกินไป)
@@ -39,7 +40,13 @@ export default async (req) => {
     email: (body?.email || '').trim().slice(0, MAX_LEN.email) || null,
     interested_product: (body?.interested_product || '').trim().slice(0, MAX_LEN.interested_product) || null,
     message: (body?.message || '').trim().slice(0, MAX_LEN.message) || null,
-    source: (body?.source || '').trim().slice(0, MAX_LEN.source) || null,
+    // ยุบช่องทางที่มาให้เป็นค่ามาตรฐานตั้งแต่ตอนบันทึก (source มาจาก query param ของลิงก์ ใครส่งอะไรมาก็ได้)
+    // ถ้าจับคู่ไม่ได้ เก็บค่าดิบไว้ตามเดิม เพื่อให้ฝ่ายขายเห็นในระบบว่าลิงก์ไหนแท็กผิดแล้วตามแก้ที่ต้นทางได้
+    source: (() => {
+      const raw = (body?.source || '').trim().slice(0, MAX_LEN.source)
+      if (!raw) return null
+      return normalizeLeadSource(raw) || raw
+    })(),
     position: (body?.position || '').trim().slice(0, MAX_LEN.position) || null,
     business_type: (body?.business_type || '').trim().slice(0, MAX_LEN.business_type) || null,
     appliance_interest: sanitizeApplianceInterest(body?.appliance_interest),

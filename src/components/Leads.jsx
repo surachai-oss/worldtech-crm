@@ -8,6 +8,7 @@ import { useLanguage } from './LanguageContext'
 import EditableSelect from './EditableSelect'
 import Pagination from './Pagination'
 import ImportLeadsModal from './ImportLeadsModal'
+import { normalizeLeadSource, LEAD_SOURCE_INVALID } from '../lib/leadOptions'
 
 export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onEdit, onCreateCompany, onStatusChange, onDelete, onLogActivity }) {
   const { toast } = useUi()
@@ -97,9 +98,10 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>{t('สรุปตามช่องทางที่มา')}</div>
             <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', margin: 0 }}>
               {sourceKeys.map((src, i) => (
-                <div className={`kpi-card ${kpiColor(i)}`} key={src}>
-                  <div className="kpi-label">{src}</div>
-                  <div className="kpi-value">{sourceSummary[src]}</div>
+                // ใบ "ช่องทางไม่ถูกต้อง" ให้แดงเสมอ ไม่ไล่สีตามลำดับ เพื่อให้เห็นว่ามีข้อมูลค้างต้องแก้
+                <div className={`kpi-card ${src === LEAD_SOURCE_INVALID ? 'red' : kpiColor(i)}`} key={src}>
+                  <div className="kpi-label" style={src === LEAD_SOURCE_INVALID ? { color: 'var(--danger)' } : undefined}>{t(src)}</div>
+                  <div className="kpi-value" style={src === LEAD_SOURCE_INVALID ? { color: 'var(--danger)' } : undefined}>{sourceSummary[src]}</div>
                 </div>
               ))}
             </div>
@@ -135,7 +137,18 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
                     <td style={{ fontSize: 12 }}>{l.position || '-'}{l.business_type ? <div style={{ color: 'var(--text-light)' }}>{l.business_type}</div> : null}</td>
                     <td style={{ fontSize: 12 }}>{(l.appliance_interest?.length ? l.appliance_interest.join(', ') : l.interested_product) || '-'}</td>
                     <td style={{ fontSize: 12 }}>{l.purchase_reason || '-'}</td>
-                    <td style={{ fontSize: 12 }}>{l.source || '-'}</td>
+                    {/* โชว์ค่ามาตรฐานที่ยุบแล้ว — ถ้ากรอกมาแบบที่ระบบไม่รู้จัก ขึ้นแดงพร้อมค่าดิบให้เห็นว่าต้องแก้อะไร */}
+                    <td style={{ fontSize: 12 }}>{(() => {
+                      const canon = normalizeLeadSource(l.source)
+                      if (canon === '') return '-'
+                      if (canon === null) return (
+                        <span title={`${t(LEAD_SOURCE_INVALID)}: "${l.source}"`}>
+                          <span className="badge badge-red" style={{ fontSize: 10 }}>{t('ช่องทางไม่ถูก')}</span>
+                          <div style={{ color: 'var(--danger)', fontSize: 11 }}>{l.source}</div>
+                        </span>
+                      )
+                      return canon
+                    })()}</td>
                     <td><EditableSelect listKey="lead_statuses" value={l.status} onChange={v => onStatusChange(l.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 150 }} /></td>
                     <td style={{ fontSize: 12 }}>{fmtDate(l.created_at)}</td>
                     <td className="td-actions">

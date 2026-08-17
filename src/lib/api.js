@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient'
+import { normalizeLeadSource, LEAD_SOURCE_UNKNOWN, LEAD_SOURCE_INVALID } from './leadOptions'
 import { toLocalDateStr } from './format'
 
 // ===== CONSTANTS (ค่าคงที่ระบบที่ไม่ให้ผู้ใช้แก้เอง) =====
@@ -670,9 +671,12 @@ export async function fetchLeadsSourceSummary({ status = '', q = '', dateFrom = 
   if (toIso) query = query.lte('created_at', toIso)
   const { data, error } = await query
   if (error) throw error
+  // ยุบค่าที่เขียนต่างกันแต่ความหมายเดียวกันให้เป็นการ์ดเดียว (LINE / Line / LINE? → Line)
+  // ค่าที่จับคู่ไม่ได้กองไว้ใบเดียวชื่อ "ช่องทางไม่ถูกต้อง" เพื่อให้เห็นว่ามีข้อมูลต้องแก้ ไม่ใช่ปล่อยแตกเป็นใบละ 1
   const bySource = {}
   data.forEach(r => {
-    const key = r.source || 'ไม่ระบุที่มา'
+    const canon = normalizeLeadSource(r.source)
+    const key = canon === '' ? LEAD_SOURCE_UNKNOWN : (canon ?? LEAD_SOURCE_INVALID)
     bySource[key] = (bySource[key] || 0) + 1
   })
   return bySource

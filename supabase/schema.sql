@@ -2239,3 +2239,52 @@ end;
 $$ language plpgsql stable security definer set search_path = public;
 
 grant execute on function margin_order_report(date, date) to authenticated;
+
+-- ============================================================================
+-- ===== ยุบช่องทางที่มาของลีดให้เป็นค่ามาตรฐาน =====
+-- ============================================================================
+-- ค่าที่เข้ามาจริงเขียนไม่เหมือนกัน (LINE / Line / LINE? / WEB SEARCH / WEB RESEARCH) เพราะ source
+-- มาจาก query param ของลิงก์ฟอร์ม ทำให้การ์ดสรุปในหน้า "ผู้ติดต่อ" แตกเป็นหลายใบทั้งที่ความหมายเดียวกัน
+-- ต่อจากนี้ฝั่งแอปยุบให้ตอนบันทึกแล้ว (ดู normalizeLeadSource ใน src/lib/leadOptions.js) บล็อกนี้แก้ข้อมูลเก่า
+-- "Web Research" (เซลล์ไปหาเจอจากเว็บ) ไม่ได้ยุบรวมกับ "เว็บไซต์" (ลูกค้าเข้ามาจากเว็บเราเอง) เพราะคนละความหมาย
+
+-- Web Research ใช้งานจริงอยู่แล้วแต่ยังไม่มีในตัวเลือก ทำให้ระบบมองว่าเป็นค่าที่ไม่รู้จัก
+insert into picklists (list_key, value, sort_order) values ('lead_sources', 'Web Research', 8)
+on conflict (list_key, value) do nothing;
+
+update leads l
+set source = m.canon
+from (
+  select id, regexp_replace(lower(btrim(source)), '[[:space:]?!.,_@/\\+()-]+', '', 'g') as k
+  from leads where source is not null and btrim(source) <> ''
+) n
+join (values
+  ('line', 'Line'), ('ไลน์', 'Line'), ('lineoa', 'Line'), ('lineat', 'Line'), ('lineofficial', 'Line'),
+  ('facebook', 'Facebook'), ('fb', 'Facebook'), ('เฟสบุ๊ค', 'Facebook'), ('เฟสบุ๊ก', 'Facebook'), ('เฟซบุ๊ก', 'Facebook'),
+  ('meta', 'Facebook'), ('messenger', 'Facebook'),
+  ('webresearch', 'Web Research'), ('websearch', 'Web Research'), ('web', 'Web Research'),
+  ('google', 'Web Research'), ('googlesearch', 'Web Research'), ('research', 'Web Research'),
+  ('ค้นหาจากเว็บ', 'Web Research'), ('ค้นหาเว็บ', 'Web Research'),
+  ('website', 'เว็บไซต์'), ('เว็บไซต์', 'เว็บไซต์'), ('เวบไซต์', 'เว็บไซต์'), ('เว็บไซท์', 'เว็บไซต์'), ('เว็บ', 'เว็บไซต์'),
+  ('แนะนำโดยลูกค้าเดิม', 'แนะนำโดยลูกค้าเดิม'), ('แนะนำ', 'แนะนำโดยลูกค้าเดิม'), ('referral', 'แนะนำโดยลูกค้าเดิม'), ('refer', 'แนะนำโดยลูกค้าเดิม'),
+  ('งานอีเวนต์ออกบูธ', 'งานอีเวนต์/ออกบูธ'), ('อีเวนต์', 'งานอีเวนต์/ออกบูธ'), ('ออกบูธ', 'งานอีเวนต์/ออกบูธ'),
+  ('event', 'งานอีเวนต์/ออกบูธ'), ('exhibition', 'งานอีเวนต์/ออกบูธ'),
+  ('โทรเข้ามาเอง', 'โทรเข้ามาเอง'), ('โทรเข้า', 'โทรเข้ามาเอง'), ('walkin', 'โทรเข้ามาเอง'), ('inbound', 'โทรเข้ามาเอง'), ('โทรศัพท์', 'โทรเข้ามาเอง'),
+  ('อื่นๆ', 'อื่นๆ'), ('other', 'อื่นๆ'), ('others', 'อื่นๆ')
+) as m(k, canon) on m.k = n.k
+where l.id = n.id and l.source is distinct from m.canon;
+
+-- ที่มาของบริษัทลูกค้า (companies.lead_source) ใช้ตัวเลือกชุดเดียวกัน ยุบให้ตรงกันไปด้วย
+update companies c
+set lead_source = m.canon
+from (
+  select id, regexp_replace(lower(btrim(lead_source)), '[[:space:]?!.,_@/\\+()-]+', '', 'g') as k
+  from companies where lead_source is not null and btrim(lead_source) <> ''
+) n
+join (values
+  ('line', 'Line'), ('ไลน์', 'Line'), ('lineoa', 'Line'),
+  ('facebook', 'Facebook'), ('fb', 'Facebook'),
+  ('webresearch', 'Web Research'), ('websearch', 'Web Research'), ('google', 'Web Research'),
+  ('website', 'เว็บไซต์'), ('เว็บไซต์', 'เว็บไซต์'), ('เวบไซต์', 'เว็บไซต์')
+) as m(k, canon) on m.k = n.k
+where c.id = n.id and c.lead_source is distinct from m.canon;
