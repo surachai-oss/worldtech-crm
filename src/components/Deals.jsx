@@ -149,10 +149,12 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
 
 export default function Deals({ perm, deals, companies, quotations = [], onAdd, onAddStage, onEdit, onDelete, onCreateQuotation }) {
   const { t, lang } = useLanguage()
+  const { toast } = useUi()
   const { list } = usePicklists()
   const [fromDate, setFromDate] = useState(() => currentMonthRange().first)
   const [toDate, setToDate] = useState(() => currentMonthRange().last)
   const [q, setQ] = useState('')
+  const [exporting, setExporting] = useState(false)
   const [salesMode, setSalesMode] = useState(null) // null = ปิด, 'day'/'week'/'month' = เปิด popup ของช่วงนั้น
   const [followMode, setFollowMode] = useState(null)
 
@@ -181,11 +183,44 @@ export default function Deals({ perm, deals, companies, quotations = [], onAdd, 
   // ดีลที่มีใบเสนอราคาอ้างอิงอยู่แล้ว (quotations.deal_id) — ใช้เปลี่ยนสีปุ่ม "ออกใบเสนอราคา" ให้เห็นว่าออกไปแล้ว
   const dealIdsWithQuotation = new Set(quotations.map(q => q.deal_id).filter(Boolean))
 
+  // ส่งออกตามที่เห็นบนบอร์ดจริง: ดีลที่ยังเปิดอยู่ทั้งหมด (ผ่านการค้นหา) + ดีลที่ปิดแล้วเฉพาะในช่วงวันที่ที่กรอง
+  const visibleDeals = [
+    ...searchedDeals.filter(d => !OPEN_STAGES_EXCLUDED.includes(d.stage)),
+    ...closedFiltered,
+  ]
+
+  const stageOrder = list('deal_stages')
+
+  const doExport = async () => {
+    setExporting(true)
+    try {
+      const rows = visibleDeals
+        .slice()
+        .sort((a, b) => stageOrder.indexOf(a.stage) - stageOrder.indexOf(b.stage) || (Number(b.value) || 0) - (Number(a.value) || 0))
+        .map(d => ({
+          period: OPEN_STAGES_EXCLUDED.includes(d.stage) ? t('ปิดแล้ว') : t('กำลังดำเนินการ'),
+          name: d.name,
+          company: companies.find(c => c.id === d.company_id)?.name || '-',
+          stage: d.stage,
+          date: fmtDate(d.close_date || d.follow_up_date || d.created_at),
+          value: Number(d.value) || 0,
+          owner: d.owner || '-',
+        }))
+      await exportDealsToExcel(rows, 'ดีลการขาย.xlsx')
+    } catch (e) { toast('ส่งออกไม่สำเร็จ: ' + e.message, 'error') }
+    finally { setExporting(false) }
+  }
+
   return (
     <div>
       <div className="section-header">
         <div className="section-title">{t('ดีลการขาย')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({deals.length} {t('ดีล')} · {fmtCurrency(totalVal)})</span></div>
-        <button className="btn btn-primary" onClick={onAdd}>{t('+ เพิ่มดีล')}</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting || !visibleDeals.length}>
+            {exporting ? t('กำลังส่งออก...') : t('ส่งออกเป็น Excel')}
+          </button>
+          <button className="btn btn-primary" onClick={onAdd}>{t('+ เพิ่มดีล')}</button>
+        </div>
       </div>
       {/* กล่องสรุป 2 ใบ (ยอดขายปิดสำเร็จ + ยอดที่ต้องติดตาม) ชิดซ้าย + ตัวกรองวันที่ชิดขวา — กดปุ่มช่วงเวลาเพื่อเปิด popup รายละเอียด */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>

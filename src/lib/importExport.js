@@ -244,6 +244,10 @@ const LEAD_EXPORT_COLUMNS = [
   { key: 'source', label: 'ที่มา' },
   { key: 'status', label: 'สถานะ' },
   { key: 'created_at', label: 'วันที่' },
+  // สรุปประวัติการติดต่อไว้ในแถวเดียวกับผู้ติดต่อด้วย — เปิดชีตแรกก็เห็นครบ ไม่ต้องไปไล่จับคู่กับชีตที่สองเอง
+  { key: 'activity_count', label: 'จำนวนครั้งที่ติดต่อ' },
+  { key: 'last_activity_date', label: 'ติดต่อล่าสุด' },
+  { key: 'activity_log', label: 'ประวัติการติดต่อ' },
 ]
 
 // ประวัติการติดต่อ (activities ที่ผูกกับ lead_id) — ใส่เป็นชีตที่สองในไฟล์เดียวกัน ให้ดูควบคู่กับข้อมูลผู้ติดต่อได้เลย
@@ -260,16 +264,38 @@ const LEAD_HISTORY_COLUMNS = [
 export async function exportLeadsToExcel(rows, history = []) {
   const workbook = new ExcelJS.Workbook()
 
+  // จัดกลุ่มประวัติตามผู้ติดต่อไว้ก่อน ใช้ทั้งสรุปในชีตแรกและรายละเอียดในชีตที่สอง
+  const historyByLead = new Map()
+  history.forEach(a => {
+    if (!historyByLead.has(a.lead_id)) historyByLead.set(a.lead_id, [])
+    historyByLead.get(a.lead_id).push(a)
+  })
+  historyByLead.forEach(list => list.sort((a, b) => String(b.activity_date || '').localeCompare(String(a.activity_date || ''))))
+
   const leadSheet = workbook.addWorksheet('ผู้ติดต่อ')
-  leadSheet.columns = LEAD_EXPORT_COLUMNS.map(c => ({ header: c.label, key: c.key, width: 24 }))
+  leadSheet.columns = LEAD_EXPORT_COLUMNS.map(c => ({
+    header: c.label, key: c.key, width: c.key === 'activity_log' ? 60 : 24
+  }))
   leadSheet.getRow(1).font = { bold: true }
   rows.forEach(r => {
+    const acts = historyByLead.get(r.id) || []
     const row = {
       ...r,
       created_at: (r.created_at || '').slice(0, 10),
-      appliance_interest: r.appliance_interest?.length ? r.appliance_interest.join(', ') : (r.interested_product || '')
+      appliance_interest: r.appliance_interest?.length ? r.appliance_interest.join(', ') : (r.interested_product || ''),
+      activity_count: acts.length,
+      last_activity_date: (acts[0]?.activity_date || '').slice(0, 10),
+      activity_log: acts.map(a => [
+        (a.activity_date || '').slice(0, 10),
+        a.type,
+        a.subject,
+        a.detail,
+        a.recorded_by ? `โดย ${a.recorded_by}` : ''
+      ].filter(Boolean).join(' · ')).join('\n'),
     }
-    leadSheet.addRow(LEAD_EXPORT_COLUMNS.reduce((o, c) => ({ ...o, [c.key]: row[c.key] ?? '' }), {}))
+    const added = leadSheet.addRow(LEAD_EXPORT_COLUMNS.reduce((o, c) => ({ ...o, [c.key]: row[c.key] ?? '' }), {}))
+    // ประวัติหลายบรรทัดในช่องเดียว ต้องเปิด wrap ไม่งั้นเห็นบรรทัดแรกบรรทัดเดียว
+    if (acts.length) added.getCell('activity_log').alignment = { wrapText: true, vertical: 'top' }
   })
 
   const leadById = new Map(rows.map(r => [r.id, r]))
