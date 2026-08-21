@@ -156,6 +156,8 @@ function MarginSettingsCard({ rows, onSave }) {
   const { t } = useLanguage()
   const [draft, setDraft] = useState({})
   const [savingKey, setSavingKey] = useState('')
+  // ค่ากลางตั้งครั้งเดียวแล้วแทบไม่แตะอีก ซ่อนไว้ได้จะได้ไม่บังตารางสินค้าซึ่งเป็นงานหลักของหน้านี้
+  const [open, setOpen] = useState(false)
 
   const save = async (key) => {
     setSavingKey(key)
@@ -167,10 +169,16 @@ function MarginSettingsCard({ rows, onSave }) {
     <div className="card" style={{ marginBottom: 14 }}>
       <div className="card-header">
         <div className="card-title">{t('ค่ากลางที่ใช้คำนวณ')}</div>
-        <span style={{ fontSize: 11, color: 'var(--text-light)' }}>
-          {t('ถ้าสินค้าตัวไหนกรอกค่าเฉพาะของตัวเองไว้ ระบบจะใช้ค่าของสินค้านั้นก่อน')}
-        </span>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-light)' }}>
+            {t('ถ้าสินค้าตัวไหนกรอกค่าเฉพาะของตัวเองไว้ ระบบจะใช้ค่าของสินค้านั้นก่อน')}
+          </span>
+          <button className="btn btn-outline btn-xs" onClick={() => setOpen(v => !v)}>
+            {open ? t('ซ่อน') : t('แสดง')}
+          </button>
+        </div>
       </div>
+      {open && (
       <div className="card-body">
         <table>
           <thead><tr><th>{t('ค่า')}</th><th style={{ width: 140 }}>{t('ค่าปัจจุบัน')}</th><th>{t('คำอธิบาย')}</th><th style={{ width: 90 }}></th></tr></thead>
@@ -197,6 +205,7 @@ function MarginSettingsCard({ rows, onSave }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   )
 }

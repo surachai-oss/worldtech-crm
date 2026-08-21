@@ -2288,3 +2288,48 @@ join (values
   ('website', 'เว็บไซต์'), ('เว็บไซต์', 'เว็บไซต์'), ('เวบไซต์', 'เว็บไซต์')
 ) as m(k, canon) on m.k = n.k
 where c.id = n.id and c.lead_source is distinct from m.canon;
+
+-- ============================================================================
+-- ===== ตารางโครงสร้างราคาสำหรับเซลล์ =====
+-- ============================================================================
+-- เซลล์อ่านตาราง product_price_tiers ตรงๆ ไม่ได้ (RLS เปิดเฉพาะบัญชี/แอดมิน)
+-- ฟังก์ชันนี้แปลงขั้นบันไดเป็น "ราคาต่อชิ้น" ให้ดูได้ทั้งตารางโดยไม่ต้องกดคำนวณทีละครั้ง
+-- ปลอดภัยเพราะทุกตัวเลขมาจาก ราคาขายปกติ × ส่วนลด — ไม่มีอะไรที่ย้อนกลับไปหาต้นทุนได้
+create or replace function margin_product_price_structure(p_product_id uuid)
+returns json as $$
+declare
+  v_normal  numeric;
+  v_special numeric;
+  v_rows    json;
+begin
+  select normal_selling_price,
+         coalesce(special_discount_percent, margin_setting_num('special_discount_percent', 15))
+    into v_normal, v_special
+  from product_costs where product_id = p_product_id;
+  if not found then return null; end if;
+
+  -- max_qty มาจาก min_qty ของขั้นถัดไป ลบหนึ่ง — ขั้นสุดท้ายเป็น null แปลว่า "ขึ้นไป"
+  select coalesce(json_agg(x order by x.min_qty), '[]'::json) into v_rows
+  from (
+    select
+      t.min_qty,
+      lead(t.min_qty) over (order by t.min_qty) - 1 as max_qty,
+      coalesce(t.max_discount_percent, 0) as discount_percent,
+      case when coalesce(v_normal, 0) > 0
+           then round(v_normal * (1 - coalesce(t.max_discount_percent, 0) / 100), 2) end as unit_price,
+      t.note
+    from product_price_tiers t
+    where t.product_id = p_product_id
+  ) x;
+
+  return json_build_object(
+    'normal_selling_price',     v_normal,
+    'special_discount_percent', v_special,
+    'special_price', case when coalesce(v_normal, 0) > 0
+                          then round(v_normal * (1 - v_special / 100), 2) end,
+    'tiers', v_rows
+  );
+end;
+$$ language plpgsql stable security definer set search_path = public;
+
+grant execute on function margin_product_price_structure(uuid) to authenticated;

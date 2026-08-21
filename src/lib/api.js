@@ -1489,3 +1489,8 @@ export async function updateOrderWithItems(orderId, fields, items, { actorName, 
 // ค่ากลางของ Grade B ตั้งที่ margin_settings.grade_b_cost_factor (มีผลกับออเดอร์ที่เปิดใหม่)
 export const setOrderCostFactor = (orderId, percent) =>
   supabase.rpc('margin_set_order_cost_factor', { p_order_id: orderId, p_percent: percent }).then(handle)
+
+// ตารางโครงสร้างราคาของสินค้า (ขั้นบันไดแปลงเป็นราคาต่อชิ้นแล้ว) — เซลล์เรียกได้ ไม่มีตัวเลขต้นทุน
+// คืน null ถ้าสินค้านั้นยังไม่ได้ตั้งต้นทุน
+export const fetchPriceStructure = (productId) =>
+  supabase.rpc('margin_product_price_structure', { p_product_id: productId }).then(handle)

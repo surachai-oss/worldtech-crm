@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  fetchProductPriceView, checkPrice,
+  fetchProductPriceView, checkPrice, fetchPriceStructure,
   PRICE_STATUS_PASS, PRICE_STATUS_LOW_MARGIN, PRICE_STATUS_UNDER, PRICE_STATUS_NO_SELL
 } from '../lib/api'
 import { fmtCurrency } from '../lib/format'
@@ -140,6 +140,83 @@ function buildSummaryText(results, comparison) {
   return lines.join('\n')
 }
 
+// ===== ตารางโครงสร้างราคา =====
+// ให้เซลล์เห็นทั้งบันไดในตาราง ไม่ต้องกดคำนวณทีละจำนวนเพื่อจะรู้ว่าขายได้เท่าไหร่
+// แถวที่ตรงกับจำนวนที่กำลังกรอกอยู่จะถูกไฮไลต์ เชื่อมกับสิ่งที่กำลังทำ
+function qtyLabel(tier) {
+  if (tier.max_qty == null) return `${tier.min_qty}+ ตัว`
+  if (tier.max_qty === tier.min_qty) return `${tier.min_qty} ตัว`
+  return `${tier.min_qty}-${tier.max_qty} ตัว`
+}
+
+function PriceStructureTable({ data, highlightQtys = [] }) {
+  const { t } = useLanguage()
+  if (!data) return null
+  const tiers = data.tiers || []
+  const normal = Number(data.normal_selling_price) || 0
+
+  if (!normal) {
+    return <div style={{ fontSize: 12, color: 'var(--danger)' }}>{t('สินค้านี้ยังไม่ได้กรอกราคาขายปกติ — ยังแสดงโครงสร้างราคาไม่ได้')}</div>
+  }
+  if (!tiers.length) {
+    return <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('สินค้านี้ยังไม่ได้ตั้งขั้นบันไดตามจำนวน — ใช้ราคาขายปกติกับทุกจำนวน')}</div>
+  }
+
+  // จำนวนที่กรอกอยู่ตกอยู่ขั้นไหน (ขั้นที่ min_qty มากสุดที่ยังไม่เกินจำนวนนั้น) — เกณฑ์เดียวกับที่ระบบใช้คำนวณ
+  const tierIndexFor = (qty) => {
+    let idx = -1
+    tiers.forEach((tr, i) => { if (qty >= tr.min_qty) idx = i })
+    return idx
+  }
+  const activeIdx = new Set(highlightQtys.filter(q => q > 0).map(tierIndexFor).filter(i => i >= 0))
+
+  return (
+    <>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{t('จำนวน')}</th>
+              <th>{t('ส่วนลดที่ให้ได้')}</th>
+              <th>{t('ราคา/ชิ้น')}</th>
+              <th>{t('ยอดขั้นต่ำของขั้นนี้')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tiers.map((tr, i) => {
+              const on = activeIdx.has(i)
+              return (
+                <tr key={tr.min_qty} style={on ? { background: '#f0fff7' } : undefined}>
+                  <td style={{ fontWeight: on ? 700 : 500, color: 'var(--navy)' }}>
+                    {qtyLabel(tr)}
+                    {on && <span className="badge badge-green" style={{ marginLeft: 6, fontSize: 10 }}>{t('ขั้นที่ใช้อยู่')}</span>}
+                  </td>
+                  <td>{Number(tr.discount_percent) > 0 ? `${Number(tr.discount_percent)}%` : <span style={{ color: 'var(--text-light)' }}>{t('ไม่ลด')}</span>}</td>
+                  <td style={{ fontWeight: 700, color: 'var(--success)' }}>{fmtCurrency(tr.unit_price)}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{fmtCurrency(Number(tr.unit_price) * Number(tr.min_qty))}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* เพดานพิเศษไม่ใช่ขั้นตามจำนวน เลยแยกออกมาจากตาราง ไม่ให้เข้าใจผิดว่าเป็นอีกขั้นหนึ่ง */}
+      <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6, background: '#fffaf0', borderLeft: '3px solid var(--warning)', fontSize: 12 }}>
+        <b>{t('เพดานส่วนลดพิเศษ')} {Number(data.special_discount_percent)}% = {fmtCurrency(data.special_price)} {t('บาท/ชิ้น')}</b>
+        <div style={{ color: 'var(--text-light)', marginTop: 2 }}>
+          {t('ใช้ได้ทุกจำนวน — ต่ำกว่าราคาของขั้นแต่ไม่ต่ำกว่าราคานี้ = เช็คกับหัวหน้าก่อน / ต่ำกว่าราคานี้ = เกินเกณฑ์ ต้องคุยหัวหน้า')}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-light)', lineHeight: 1.6 }}>
+        <div>{t('ราคาในตารางคิดจากราคาขายปกติ')} {fmtCurrency(normal)} {t('บาท/ชิ้น')}</div>
+        <div>{t('ยังไม่รวมค่าขนส่ง — ถ้าดีลนั้นมีค่าขนส่งจริง ให้กรอกในช่องด้านบนแล้วกดคำนวณ Margin จะต่างจากตารางนี้')}</div>
+      </div>
+    </>
+  )
+}
+
 function ResultRow({ label, value, strong, hint, color }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, padding: '4px 0', borderBottom: '1px dashed var(--border)' }}>
@@ -161,7 +238,19 @@ export default function PriceCheck({ perm }) {
   const [options, setOptions] = useState(() => [blankOption(), blankOption(), blankOption()])
   const [calculating, setCalculating] = useState(false)
   const [results, setResults] = useState([])   // [{ no, result, error }]
+  const [structure, setStructure] = useState(null)
+  const [showStructure, setShowStructure] = useState(true)
 
+
+  // โครงสร้างราคาของสินค้าที่เลือก — โหลดครั้งเดียวตอนเปลี่ยนสินค้า ไม่ต้องรอกดคำนวณ
+  useEffect(() => {
+    if (!productId) { setStructure(null); return }
+    let alive = true
+    fetchPriceStructure(productId)
+      .then(r => { if (alive) setStructure(r) })
+      .catch(e => { if (alive) toast('โหลดโครงสร้างราคาไม่สำเร็จ: ' + e.message, 'error') })
+    return () => { alive = false }
+  }, [productId, toast])
 
   useEffect(() => {
     fetchProductPriceView()
@@ -325,6 +414,25 @@ export default function PriceCheck({ perm }) {
           </div>
         </div>
       </div>
+
+      {productId && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="card-header">
+            <div className="card-title">{t('โครงสร้างราคา')}{selected ? ` — ${selected.code}` : ''}</div>
+            <button className="btn btn-outline btn-xs" onClick={() => setShowStructure(v => !v)}>
+              {showStructure ? t('ซ่อน') : t('แสดง')}
+            </button>
+          </div>
+          {showStructure && (
+            <div className="card-body">
+              <PriceStructureTable
+                data={structure}
+                highlightQtys={filledIdx.map(i => Number(options[i].quantity))}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {comparison && (
         <div className="card" style={{ marginBottom: 14, borderLeft: '4px solid var(--yellow)' }}>
