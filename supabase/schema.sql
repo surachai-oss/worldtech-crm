@@ -1977,6 +1977,10 @@ create policy "order_item_costs select" on order_item_costs for select using (is
 
 -- ===== รายงานระดับรายการสินค้าของออเดอร์จริง (บัญชี/แอดมินเท่านั้น) =====
 -- คืนข้อมูลดิบรายบรรทัด ให้หน้าเว็บไปรวมยอดเองตามมุมที่อยากดู (รายออเดอร์ / รายสินค้า / รายเซลล์)
+-- ต้อง drop ก่อนเสมอ ไม่ใช่ create or replace เฉยๆ — เวอร์ชันท้ายไฟล์คืนคอลัมน์ต่างจากตรงนี้
+-- ถ้าไม่ drop เวลารันไฟล์ซ้ำจะพัง "cannot change return type of existing function"
+drop function if exists margin_order_report(date, date);
+
 create or replace function margin_order_report(p_from date default null, p_to date default null)
 returns table (
   order_id        uuid,
