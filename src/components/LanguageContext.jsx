@@ -747,7 +747,6 @@ export const EN_DICT = {
   'แสดง': 'Show',
   'ส่วนลดที่ให้ได้': 'Discount allowed',
   'ราคา/ชิ้น': 'Price / unit',
-  'ยอดขั้นต่ำของขั้นนี้': 'Minimum order value',
   'ขั้นที่ใช้อยู่': 'current step',
   'ไม่ลด': 'none',
   'สินค้านี้ยังไม่ได้กรอกราคาขายปกติ — ยังแสดงโครงสร้างราคาไม่ได้': 'This product has no normal selling price yet, so the structure cannot be shown',

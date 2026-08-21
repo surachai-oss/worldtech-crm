@@ -179,7 +179,6 @@ function PriceStructureTable({ data, highlightQtys = [] }) {
               <th>{t('จำนวน')}</th>
               <th>{t('ส่วนลดที่ให้ได้')}</th>
               <th>{t('ราคา/ชิ้น')}</th>
-              <th>{t('ยอดขั้นต่ำของขั้นนี้')}</th>
             </tr>
           </thead>
           <tbody>
@@ -193,7 +192,6 @@ function PriceStructureTable({ data, highlightQtys = [] }) {
                   </td>
                   <td>{Number(tr.discount_percent) > 0 ? `${Number(tr.discount_percent)}%` : <span style={{ color: 'var(--text-light)' }}>{t('ไม่ลด')}</span>}</td>
                   <td style={{ fontWeight: 700, color: 'var(--success)' }}>{fmtCurrency(tr.unit_price)}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{fmtCurrency(Number(tr.unit_price) * Number(tr.min_qty))}</td>
                 </tr>
               )
             })}
