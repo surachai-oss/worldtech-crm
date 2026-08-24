@@ -308,6 +308,11 @@ alter table orders add column if not exists shipping_subdistrict text;  -- ต�
 alter table orders add column if not exists shipping_district text;     -- อำเภอ / เขต
 alter table orders add column if not exists shipping_province text;     -- จังหวัด
 alter table orders add column if not exists shipping_postcode text;     -- รหัสไปรษณีย์
+-- ชื่ออังกฤษทางการของกรมการปกครอง เก็บ snapshot คู่กับชื่อไทย เพื่อให้ระบบปลายทาง (JST/ขนส่ง/เอกสารภาษาอังกฤษ)
+-- ใช้ได้เลยโดยไม่ต้องเดาคำทับศัพท์เอง — ว่างได้ ถ้าที่อยู่นั้นกรอกเองไม่ตรงกับรายชื่อทางการ
+alter table orders add column if not exists shipping_subdistrict_en text;
+alter table orders add column if not exists shipping_district_en text;
+alter table orders add column if not exists shipping_province_en text;
 
 -- order_type = ประเภทออเดอร์ที่เซลล์เลือกก่อนรันเลข ('ปกติ' รันเป็น WT, 'Grade B' รันเป็น GB) — ดู gen_order_no() ด้านล่าง
 alter table orders add column if not exists order_type text not null default 'ปกติ' check (order_type in ('ปกติ', 'Grade B'));

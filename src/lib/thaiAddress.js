@@ -3,28 +3,33 @@
 // เก็บเป็น JSON แยกไฟล์แล้วโหลดแบบ lazy ตอนเปิดฟอร์มออเดอร์ครั้งแรก (~55 KB gzip)
 // ไม่รวมเข้า bundle หลักเพราะหน้าอื่นไม่ได้ใช้
 //
-// รูปแบบ: [ [จังหวัด, [ [อำเภอ, [ [ตำบล, รหัสไปรษณีย์], ... ]], ... ]], ... ]
+// รูปแบบ: [ [จังหวัด, จังหวัด_EN, [ [อำเภอ, อำเภอ_EN, [ [ตำบล, ตำบล_EN, รหัสไปรษณีย์], ... ]], ... ]], ... ]
+// เก็บชื่ออังกฤษไว้ด้วยเพื่อให้ส่งต่อระบบอื่น (JST / ขนส่ง / เอกสารภาษาอังกฤษ) ได้โดยไม่ต้องเดาคำทับศัพท์
 // อำเภอของกรุงเทพฯ ตัด "เขต" ออกแล้ว เก็บชื่อเปล่าเหมือนจังหวัดอื่น — คำนำหน้าให้ฝั่งแสดงผลเติมเอง
 
 let cache = null
 
 function buildIndex(raw) {
   const provinces = []
-  const byProvince = new Map()   // จังหวัด -> [[อำเภอ, [[ตำบล, รหัส], ...]], ...]
+  const byProvince = new Map()   // จังหวัด -> [[อำเภอ, อำเภอ_EN, [[ตำบล, ตำบล_EN, รหัส], ...]], ...]
   const byPostcode = new Map()   // รหัสไปรษณีย์ -> [[จังหวัด, อำเภอ, ตำบล], ...]
+  const english = new Map()      // "จังหวัด" / "จังหวัด|อำเภอ" / "จังหวัด|อำเภอ|ตำบล" -> ชื่ออังกฤษ
 
-  raw.forEach(([province, districts]) => {
+  raw.forEach(([province, provinceEn, districts]) => {
     provinces.push(province)
     byProvince.set(province, districts)
-    districts.forEach(([district, subs]) => {
-      subs.forEach(([subdistrict, postcode]) => {
+    english.set(province, provinceEn)
+    districts.forEach(([district, districtEn, subs]) => {
+      english.set(`${province}|${district}`, districtEn)
+      subs.forEach(([subdistrict, subdistrictEn, postcode]) => {
+        english.set(`${province}|${district}|${subdistrict}`, subdistrictEn)
         if (!postcode) return
         if (!byPostcode.has(postcode)) byPostcode.set(postcode, [])
         byPostcode.get(postcode).push([province, district, subdistrict])
       })
     })
   })
-  return { provinces, byProvince, byPostcode }
+  return { provinces, byProvince, byPostcode, english }
 }
 
 // โหลดครั้งเดียวแล้วใช้ซ้ำ — คืน promise เดิมถ้ามีคนเรียกซ้อน
@@ -42,12 +47,23 @@ export const listDistricts = (idx, province) =>
   (idx?.byProvince.get(province) ?? []).map(([d]) => d)
 export const listSubdistricts = (idx, province, district) => {
   const row = (idx?.byProvince.get(province) ?? []).find(([d]) => d === district)
-  return row ? row[1].map(([s]) => s) : []
+  return row ? row[2].map(([s]) => s) : []
 }
 export function findPostcode(idx, province, district, subdistrict) {
   const row = (idx?.byProvince.get(province) ?? []).find(([d]) => d === district)
-  const sub = row?.[1].find(([s]) => s === subdistrict)
-  return sub ? sub[1] : ''
+  const sub = row?.[2].find(([s]) => s === subdistrict)
+  return sub ? sub[2] : ''
+}
+
+// ชื่ออังกฤษทางการของแต่ละระดับ — ใช้ส่งต่อระบบอื่นและพิมพ์เอกสารภาษาอังกฤษ
+// คืนค่าว่างถ้าชื่อไทยที่ส่งมาไม่ตรงกับข้อมูล (เช่น ที่อยู่เก่าที่พิมพ์เอง)
+export function findEnglish(idx, province, district, subdistrict) {
+  const get = (k) => (k && idx?.english.get(k)) || ''
+  return {
+    province: get(province),
+    district: get(province && district ? `${province}|${district}` : ''),
+    subdistrict: get(province && district && subdistrict ? `${province}|${district}|${subdistrict}` : ''),
+  }
 }
 
 // กรุงเทพฯ ใช้ แขวง/เขต จังหวัดอื่นใช้ ต./อ.
@@ -123,7 +139,7 @@ export function parseThaiAddress(raw, idx) {
     const provs = idx.provinces.filter(p => namesFor(p).some(n => text.includes(n)))
     triples = []
     for (const p of provs) {
-      for (const [d, subs] of idx.byProvince.get(p)) {
+      for (const [d, , subs] of idx.byProvince.get(p)) {
         for (const [s] of subs) triples.push([p, d, s])
       }
     }

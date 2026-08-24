@@ -3,7 +3,7 @@ import { listQuotationItems, computeDealTotals, fetchActiveOrderQuotationIds, li
 import { fmtCurrency, composeShippingAddress } from '../lib/format'
 import {
   loadThaiAddress, parseThaiAddress, listProvinces, listDistricts, listSubdistricts,
-  findPostcode, isBangkok,
+  findPostcode, findEnglish, isBangkok,
 } from '../lib/thaiAddress'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
@@ -75,6 +75,8 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
   }
 
   const bkk = isBangkok(ship.province)
+  // ชื่ออังกฤษทางการของที่เลือกไว้ — โชว์ให้เห็นและบันทึกไปด้วย ระบบปลายทางจะได้ไม่ต้องเดาคำทับศัพท์
+  const shipEn = findEnglish(addrIdx, ship.province, ship.district, ship.subdistrict)
   const [shippingContactName, setShippingContactName] = useState('')
   const [shippingContactPhone, setShippingContactPhone] = useState('')
   const [remark, setRemark] = useState('')
@@ -156,6 +158,9 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
       shipping_district: ship.district.trim() || null,
       shipping_province: ship.province.trim() || null,
       shipping_postcode: ship.postcode.trim() || null,
+      shipping_subdistrict_en: shipEn.subdistrict || null,
+      shipping_district_en: shipEn.district || null,
+      shipping_province_en: shipEn.province || null,
       shipping_contact_name: shippingContactName.trim() || null,
       shipping_contact_phone: shippingContactPhone.trim() || null, remark: remark.trim() || null,
       sales_id: currentUser.id, sales_name: currentUser.name,
@@ -319,8 +324,13 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
           </div>
           {/* โชว์ที่อยู่ที่ประกอบแล้ว เพราะข้อความนี้คือสิ่งที่จะไปขึ้นบนใบพิมพ์จริง */}
           {composeShippingAddress(ship) && (
-            <div style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--gray-bg)', fontSize: 12, marginBottom: 10 }}>
-              <span style={{ color: 'var(--text-light)' }}>{t('ที่อยู่ที่จะพิมพ์')}: </span>{composeShippingAddress(ship)}
+            <div style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--gray-bg)', fontSize: 12, marginBottom: 10, lineHeight: 1.6 }}>
+              <div><span style={{ color: 'var(--text-light)' }}>{t('ที่อยู่ที่จะพิมพ์')}: </span>{composeShippingAddress(ship)}</div>
+              {shipEn.province && (
+                <div style={{ color: 'var(--text-light)' }}>
+                  EN: {[shipEn.subdistrict, shipEn.district, shipEn.province, ship.postcode].filter(Boolean).join(', ')}
+                </div>
+              )}
             </div>
           )}
 
