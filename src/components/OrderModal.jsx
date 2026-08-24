@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { listQuotationItems, computeDealTotals, fetchActiveOrderQuotationIds, listProducts, genOrderNo, peekOrderNo } from '../lib/api'
-import { fmtCurrency } from '../lib/format'
+import { fmtCurrency, composeShippingAddress } from '../lib/format'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import SearchableSelect from './SearchableSelect'
@@ -32,7 +32,9 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
   const [companyInfo, setCompanyInfo] = useState({ tax_id: '', address: '', phone: '', email: '' })
   const [quotNo, setQuotNo] = useState('')
   const [items, setItems] = useState([{ ...EMPTY_ITEM }])
-  const [shippingAddress, setShippingAddress] = useState('')
+  // ที่อยู่จัดส่งแยกช่อง — เก็บลงคอลัมน์ของตัวเอง แล้วประกอบเป็นข้อความลง shipping_address ให้ใบพิมพ์ใช้ต่อ
+  const [ship, setShip] = useState({ line1: '', subdistrict: '', district: '', province: '', postcode: '' })
+  const setShipField = (k) => (e) => setShip(s => ({ ...s, [k]: e.target.value }))
   const [shippingContactName, setShippingContactName] = useState('')
   const [shippingContactPhone, setShippingContactPhone] = useState('')
   const [remark, setRemark] = useState('')
@@ -92,7 +94,9 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
     if (!orderNo) { toast('กำลังรันเลขออเดอร์ กรุณารอสักครู่', 'error'); return }
     if (!quotationId) { toast('กรุณาเลือกใบเสนอราคา', 'error'); return }
     if (!cleanItems.length) { toast('กรุณาใส่รายการสินค้าอย่างน้อย 1 รายการ', 'error'); return }
-    if (!shippingAddress.trim()) { toast('กรุณากรอกที่อยู่จัดส่ง', 'error'); return }
+    if (!ship.line1.trim()) { toast('กรุณากรอกบ้านเลขที่/ที่อยู่', 'error'); return }
+    if (!ship.province.trim()) { toast('กรุณากรอกจังหวัด', 'error'); return }
+    if (!shippingContactPhone.trim()) { toast('กรุณากรอกเบอร์โทรติดต่อ', 'error'); return }
     const confirmMsg = lang === 'en'
       ? `Confirm saving order ${orderNo}?\n\nOnce saved, this order cannot be edited — you can only cancel it and open a new one if there's a mistake.`
       : `ยืนยันบันทึกออเดอร์เลขที่ ${orderNo}?\n\nหลังบันทึกแล้วจะแก้ไขข้อมูลไม่ได้อีก หากลงข้อมูลผิดต้องยกเลิกออเดอร์นี้แล้วเปิดออเดอร์ใหม่เท่านั้น`
@@ -106,7 +110,13 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
       order_no: realOrderNo, order_type: orderType, quotation_id: quotationId, quot_no: quotNo, company_id: companyId || null, customer_name: customerName,
       company_tax_id: companyInfo.tax_id || null, company_address: companyInfo.address || null,
       company_phone: companyInfo.phone || null, company_email: companyInfo.email || null,
-      shipping_address: shippingAddress.trim(), shipping_contact_name: shippingContactName.trim() || null,
+      shipping_address: composeShippingAddress(ship),
+      shipping_line1: ship.line1.trim() || null,
+      shipping_subdistrict: ship.subdistrict.trim() || null,
+      shipping_district: ship.district.trim() || null,
+      shipping_province: ship.province.trim() || null,
+      shipping_postcode: ship.postcode.trim() || null,
+      shipping_contact_name: shippingContactName.trim() || null,
       shipping_contact_phone: shippingContactPhone.trim() || null, remark: remark.trim() || null,
       sales_id: currentUser.id, sales_name: currentUser.name,
       discount_type: discountType || null, discount_value: discountValue || 0,
@@ -205,8 +215,28 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
 
           <label className="form-label" style={{ marginTop: 4 }}>{t('ที่อยู่จัดส่ง')}</label>
           <div className="form-group">
-            <label className="form-label required">{t('ที่อยู่สำหรับจัดส่งสินค้า')}</label>
-            <textarea className="form-control" rows={2} value={shippingAddress} onChange={e => setShippingAddress(e.target.value)} />
+            <label className="form-label required">{t('บ้านเลขที่ / หมู่ / ถนน')}</label>
+            <input className="form-control" value={ship.line1} onChange={setShipField('line1')} placeholder={t('เช่น 79 ม.5 ถ.ศรีนครินทร์')} />
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">{t('ตำบล / แขวง')}</label>
+              <input className="form-control" value={ship.subdistrict} onChange={setShipField('subdistrict')} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">{t('อำเภอ / เขต')}</label>
+              <input className="form-control" value={ship.district} onChange={setShipField('district')} />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label required">{t('จังหวัด')}</label>
+              <input className="form-control" value={ship.province} onChange={setShipField('province')} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">{t('รหัสไปรษณีย์')}</label>
+              <input className="form-control" inputMode="numeric" maxLength={5} value={ship.postcode} onChange={setShipField('postcode')} />
+            </div>
           </div>
           <div className="form-row">
             <div className="form-group">
@@ -214,10 +244,16 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
               <input className="form-control" value={shippingContactName} onChange={e => setShippingContactName(e.target.value)} />
             </div>
             <div className="form-group">
-              <label className="form-label">{t('เบอร์โทรผู้รับ (ถ้ามี)')}</label>
+              <label className="form-label required">{t('เบอร์โทรติดต่อ')}</label>
               <input className="form-control" value={shippingContactPhone} onChange={e => setShippingContactPhone(e.target.value)} />
             </div>
           </div>
+          {/* โชว์ที่อยู่ที่ประกอบแล้ว เพราะข้อความนี้คือสิ่งที่จะไปขึ้นบนใบพิมพ์จริง */}
+          {composeShippingAddress(ship) && (
+            <div style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--gray-bg)', fontSize: 12, marginBottom: 10 }}>
+              <span style={{ color: 'var(--text-light)' }}>{t('ที่อยู่ที่จะพิมพ์')}: </span>{composeShippingAddress(ship)}
+            </div>
+          )}
 
           <div className="form-group">
             <label className="form-label">{t('หมายเหตุ')}</label>
@@ -277,7 +313,8 @@ export function OrderDetailModal({ order, items, onClose, onCancel }) {
           {order.company_phone && <Row label={t('โทรศัพท์บริษัท')} value={order.company_phone} />}
           {order.company_email && <Row label={t('อีเมลบริษัท')} value={order.company_email} />}
           <Row label={t('ที่อยู่จัดส่ง')} value={order.shipping_address} />
-          {order.shipping_contact_name && <Row label={t('ผู้รับ')} value={`${order.shipping_contact_name}${order.shipping_contact_phone ? ` (${order.shipping_contact_phone})` : ''}`} />}
+          {order.shipping_contact_name && <Row label={t('ผู้รับ')} value={order.shipping_contact_name} />}
+          {order.shipping_contact_phone && <Row label={t('เบอร์โทรติดต่อ')} value={order.shipping_contact_phone} />}
           {order.remark && <Row label={t('หมายเหตุ')} value={order.remark} />}
           <Row label={t('เซลล์ผู้เปิดออเดอร์')} value={order.sales_name || '-'} />
           <Row label={t('สถานะ')} value={<span className={`badge ${order.status === 'Active' ? 'badge-green' : 'badge-gray'}`}>{order.status === 'Active' ? t('ใช้งานอยู่') : t('ยกเลิกแล้ว')}</span>} />

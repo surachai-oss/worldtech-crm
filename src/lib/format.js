@@ -106,3 +106,22 @@ export function fmtFileSize(bytes) {
   while (n >= 1024 && i < units.length - 1) { n /= 1024; i++ }
   return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
 }
+
+// ===== ที่อยู่จัดส่งแบบแยกช่อง =====
+// ประกอบเป็นข้อความบรรทัดเดียวสำหรับเก็บลง orders.shipping_address ซึ่งใบพิมพ์/หน้ารายละเอียด
+// และคำขอเอกสารบัญชียังอ่านอยู่ — ช่องไหนไม่ได้กรอกจะถูกข้าม ไม่ทิ้งคำนำหน้าค้างไว้
+export function composeShippingAddress({ line1, subdistrict, district, province, postcode } = {}) {
+  const clean = (v) => String(v ?? '').trim()
+  const sub = clean(subdistrict)
+  const dis = clean(district)
+  const prov = clean(province)
+  // กรุงเทพฯ ใช้ "แขวง/เขต" ส่วนต่างจังหวัดใช้ "ต./อ." — ดูจากชื่อจังหวัดที่กรอก
+  const bkk = /กรุงเทพ/.test(prov)
+  return [
+    clean(line1),
+    sub && `${bkk ? 'แขวง' : 'ต.'}${sub}`,
+    dis && `${bkk ? 'เขต' : 'อ.'}${dis}`,
+    prov && (bkk ? prov : `จ.${prov}`),
+    clean(postcode),
+  ].filter(Boolean).join(' ')
+}

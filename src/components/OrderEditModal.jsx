@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { listOrderItems, updateOrderWithItems, computeDealTotals, listProducts } from '../lib/api'
-import { fmtCurrency } from '../lib/format'
+import { fmtCurrency, composeShippingAddress } from '../lib/format'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import SearchableSelect from './SearchableSelect'
@@ -17,8 +17,14 @@ export default function OrderEditModal({ order, currentUserName, onClose, onSave
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [reason, setReason] = useState('')
+  // ออเดอร์เก่ามีแต่ข้อความก้อนเดียว ยังไม่มีช่องแยก — เอามาใส่บรรทัดแรกไว้ก่อน ให้แอดมินแยกเองตอนแก้
+  const legacyAddress = !order.shipping_province && !order.shipping_line1 ? (order.shipping_address || '') : ''
   const [f, setF] = useState({
-    shipping_address: order.shipping_address || '',
+    shipping_line1: order.shipping_line1 || legacyAddress,
+    shipping_subdistrict: order.shipping_subdistrict || '',
+    shipping_district: order.shipping_district || '',
+    shipping_province: order.shipping_province || '',
+    shipping_postcode: order.shipping_postcode || '',
     shipping_contact_name: order.shipping_contact_name || '',
     shipping_contact_phone: order.shipping_contact_phone || '',
     remark: order.remark || '',
@@ -62,7 +68,7 @@ export default function OrderEditModal({ order, currentUserName, onClose, onSave
       if (!(Number(it.quantity) > 0)) { toast(`รายการที่ ${i + 1}: จำนวนต้องมากกว่า 0`, 'error'); return }
       if (Number(it.unit_price) < 0) { toast(`รายการที่ ${i + 1}: ราคาต้องไม่ติดลบ`, 'error'); return }
     }
-    if (!f.shipping_address.trim()) { toast('กรุณากรอกที่อยู่จัดส่ง', 'error'); return }
+    if (!f.shipping_line1.trim()) { toast('กรุณากรอกบ้านเลขที่/ที่อยู่', 'error'); return }
 
     const msg = changedTotal
       ? `ยอดรวมจะเปลี่ยนจาก ${fmtCurrency(order.value)} เป็น ${fmtCurrency(totals.grandTotal)} บาท\n\nถ้าออกใบแจ้งหนี้/ใบกำกับภาษีไปแล้ว ต้องแก้เอกสารฝั่งบัญชีให้ตรงกันด้วย ยืนยันแก้ไข?`
@@ -72,7 +78,15 @@ export default function OrderEditModal({ order, currentUserName, onClose, onSave
     setSaving(true)
     try {
       await updateOrderWithItems(order.id, {
-        shipping_address: f.shipping_address,
+        shipping_address: composeShippingAddress({
+          line1: f.shipping_line1, subdistrict: f.shipping_subdistrict, district: f.shipping_district,
+          province: f.shipping_province, postcode: f.shipping_postcode,
+        }),
+        shipping_line1: f.shipping_line1.trim() || null,
+        shipping_subdistrict: f.shipping_subdistrict.trim() || null,
+        shipping_district: f.shipping_district.trim() || null,
+        shipping_province: f.shipping_province.trim() || null,
+        shipping_postcode: f.shipping_postcode.trim() || null,
         shipping_contact_name: f.shipping_contact_name || null,
         shipping_contact_phone: f.shipping_contact_phone || null,
         remark: f.remark || null,
@@ -188,8 +202,33 @@ export default function OrderEditModal({ order, currentUserName, onClose, onSave
           </div>
 
           <div className="form-group">
-            <label className="form-label required">{t('ที่อยู่จัดส่ง')}</label>
-            <textarea className="form-control" rows={2} value={f.shipping_address} onChange={set('shipping_address')} />
+            <label className="form-label required">{t('บ้านเลขที่ / หมู่ / ถนน')}</label>
+            <input className="form-control" value={f.shipping_line1} onChange={set('shipping_line1')} />
+            {legacyAddress && (
+              <div style={{ fontSize: 11, color: '#c05621', marginTop: 4 }}>
+                {t('ออเดอร์นี้เปิดก่อนมีช่องแยก — ที่อยู่เดิมถูกใส่ไว้บรรทัดเดียว แยกลงช่องด้านล่างได้เลย')}
+              </div>
+            )}
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">{t('ตำบล / แขวง')}</label>
+              <input className="form-control" value={f.shipping_subdistrict} onChange={set('shipping_subdistrict')} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">{t('อำเภอ / เขต')}</label>
+              <input className="form-control" value={f.shipping_district} onChange={set('shipping_district')} />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">{t('จังหวัด')}</label>
+              <input className="form-control" value={f.shipping_province} onChange={set('shipping_province')} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">{t('รหัสไปรษณีย์')}</label>
+              <input className="form-control" inputMode="numeric" maxLength={5} value={f.shipping_postcode} onChange={set('shipping_postcode')} />
+            </div>
           </div>
           <div className="form-row">
             <div className="form-group">
@@ -197,9 +236,16 @@ export default function OrderEditModal({ order, currentUserName, onClose, onSave
               <input className="form-control" value={f.shipping_contact_name} onChange={set('shipping_contact_name')} />
             </div>
             <div className="form-group">
-              <label className="form-label">{t('เบอร์โทรผู้รับ (ถ้ามี)')}</label>
+              <label className="form-label">{t('เบอร์โทรติดต่อ')}</label>
               <input className="form-control" value={f.shipping_contact_phone} onChange={set('shipping_contact_phone')} />
             </div>
+          </div>
+          <div style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--gray-bg)', fontSize: 12, marginBottom: 10 }}>
+            <span style={{ color: 'var(--text-light)' }}>{t('ที่อยู่ที่จะพิมพ์')}: </span>
+            {composeShippingAddress({
+              line1: f.shipping_line1, subdistrict: f.shipping_subdistrict, district: f.shipping_district,
+              province: f.shipping_province, postcode: f.shipping_postcode,
+            }) || '-'}
           </div>
           <div className="form-group">
             <label className="form-label">{t('หมายเหตุ')}</label>

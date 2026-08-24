@@ -300,6 +300,15 @@ alter table orders add column if not exists company_phone text;
 alter table orders add column if not exists company_email text;
 alter table orders add column if not exists remark text;
 
+-- ที่อยู่จัดส่งแบบแยกช่อง — เดิมเป็นข้อความก้อนเดียวที่เซลล์พิมพ์อิสระ ระบบขนส่ง/ERP เอาไปใช้ต่อไม่ได้
+-- คงคอลัมน์ shipping_address ไว้และเขียนที่อยู่ที่ประกอบจากช่องเหล่านี้ลงไปด้วยทุกครั้ง
+-- เพราะใบพิมพ์/หน้ารายละเอียด/คำขอเอกสารบัญชี อ่านจาก shipping_address อยู่ และออเดอร์เก่ามีแต่ก้อนข้อความ
+alter table orders add column if not exists shipping_line1 text;        -- บ้านเลขที่ / หมู่ / ถนน
+alter table orders add column if not exists shipping_subdistrict text;  -- ตำบล / แขวง
+alter table orders add column if not exists shipping_district text;     -- อำเภอ / เขต
+alter table orders add column if not exists shipping_province text;     -- จังหวัด
+alter table orders add column if not exists shipping_postcode text;     -- รหัสไปรษณีย์
+
 -- order_type = ประเภทออเดอร์ที่เซลล์เลือกก่อนรันเลข ('ปกติ' รันเป็น WT, 'Grade B' รันเป็น GB) — ดู gen_order_no() ด้านล่าง
 alter table orders add column if not exists order_type text not null default 'ปกติ' check (order_type in ('ปกติ', 'Grade B'));
 
@@ -382,6 +391,11 @@ begin
     new.company_id is distinct from old.company_id or
     new.sales_id is distinct from old.sales_id or
     new.shipping_address is distinct from old.shipping_address or
+    new.shipping_line1 is distinct from old.shipping_line1 or
+    new.shipping_subdistrict is distinct from old.shipping_subdistrict or
+    new.shipping_district is distinct from old.shipping_district or
+    new.shipping_province is distinct from old.shipping_province or
+    new.shipping_postcode is distinct from old.shipping_postcode or
     new.value is distinct from old.value or
     new.company_tax_id is distinct from old.company_tax_id or
     new.company_address is distinct from old.company_address or
@@ -2045,6 +2059,11 @@ begin
     new.company_id is distinct from old.company_id or
     new.sales_id is distinct from old.sales_id or
     new.shipping_address is distinct from old.shipping_address or
+    new.shipping_line1 is distinct from old.shipping_line1 or
+    new.shipping_subdistrict is distinct from old.shipping_subdistrict or
+    new.shipping_district is distinct from old.shipping_district or
+    new.shipping_province is distinct from old.shipping_province or
+    new.shipping_postcode is distinct from old.shipping_postcode or
     new.value is distinct from old.value or
     new.company_tax_id is distinct from old.company_tax_id or
     new.company_address is distinct from old.company_address or
