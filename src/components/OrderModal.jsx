@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listQuotationItems, computeDealTotals, fetchActiveOrderQuotationIds, listProducts, genOrderNo, peekOrderNo } from '../lib/api'
 import { fmtCurrency, composeShippingAddress } from '../lib/format'
+import { parseThaiAddress } from '../lib/thaiAddress'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import SearchableSelect from './SearchableSelect'
@@ -34,7 +35,26 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
   const [items, setItems] = useState([{ ...EMPTY_ITEM }])
   // ที่อยู่จัดส่งแยกช่อง — เก็บลงคอลัมน์ของตัวเอง แล้วประกอบเป็นข้อความลง shipping_address ให้ใบพิมพ์ใช้ต่อ
   const [ship, setShip] = useState({ line1: '', subdistrict: '', district: '', province: '', postcode: '' })
-  const setShipField = (k) => (e) => setShip(s => ({ ...s, [k]: e.target.value }))
+  // ช่องที่ระบบเดาให้ตอนแยกที่อยู่ — เน้นสีไว้จนกว่าคนเปิดออเดอร์จะแก้หรือยืนยัน
+  const [guessed, setGuessed] = useState({})
+  const [pasteAddr, setPasteAddr] = useState('')
+  const setShipField = (k) => (e) => {
+    setShip(s => ({ ...s, [k]: e.target.value }))
+    if (guessed[k]) setGuessed(g => ({ ...g, [k]: false }))
+  }
+
+  // วางที่อยู่เต็มที่ลูกค้าส่งมาแล้วให้ระบบกระจายลงช่อง — ลดการพิมพ์ซ้ำ แต่ยังต้องตรวจก่อนบันทึก
+  const splitAddress = () => {
+    const r = parseThaiAddress(pasteAddr)
+    if (!r.line1 && !r.province && !r.postcode) { toast('แยกที่อยู่ไม่ได้ ลองวางที่อยู่ให้ครบกว่านี้', 'error'); return }
+    setShip({
+      line1: r.line1, subdistrict: r.subdistrict, district: r.district,
+      province: r.province, postcode: r.postcode,
+    })
+    setGuessed(r.guessed || {})
+    const missing = [!r.province && 'จังหวัด', !r.postcode && 'รหัสไปรษณีย์'].filter(Boolean)
+    toast(missing.length ? `แยกที่อยู่แล้ว — ยังขาด ${missing.join(' และ ')} กรุณาตรวจสอบ` : 'แยกที่อยู่แล้ว กรุณาตรวจสอบก่อนบันทึก', missing.length ? 'error' : 'success')
+  }
   const [shippingContactName, setShippingContactName] = useState('')
   const [shippingContactPhone, setShippingContactPhone] = useState('')
   const [remark, setRemark] = useState('')
@@ -215,17 +235,33 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
 
           <label className="form-label" style={{ marginTop: 4 }}>{t('ที่อยู่จัดส่ง')}</label>
           <div className="form-group">
+            <label className="form-label">{t('วางที่อยู่เต็มแล้วให้ระบบแยกช่องให้')}</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <textarea className="form-control" rows={2} value={pasteAddr} onChange={e => setPasteAddr(e.target.value)}
+                placeholder={t('วางที่อยู่ที่ลูกค้าส่งมาทั้งก้อนตรงนี้ เช่น 79 ม.5 ต.เกาะลันตาใหญ่ อ.เกาะลันตา จ.กระบี่ 81150')} />
+              <button className="btn btn-secondary" style={{ whiteSpace: 'nowrap' }} disabled={!pasteAddr.trim()} onClick={splitAddress}>
+                {t('แยกช่องให้')}
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
+              {t('ไม่บังคับ — จะพิมพ์ลงช่องด้านล่างเองก็ได้ ที่ระบบแยกให้เป็นตัวตั้งต้น ต้องตรวจก่อนบันทึกเสมอ')}
+            </div>
+          </div>
+
+          <div className="form-group">
             <label className="form-label required">{t('บ้านเลขที่ / หมู่ / ถนน')}</label>
             <input className="form-control" value={ship.line1} onChange={setShipField('line1')} placeholder={t('เช่น 79 ม.5 ถ.ศรีนครินทร์')} />
           </div>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">{t('ตำบล / แขวง')}</label>
-              <input className="form-control" value={ship.subdistrict} onChange={setShipField('subdistrict')} />
+              <input className="form-control" value={ship.subdistrict} onChange={setShipField('subdistrict')}
+                style={guessed.subdistrict ? { borderColor: 'var(--warning)', background: '#fffaf0' } : undefined} />
             </div>
             <div className="form-group">
               <label className="form-label">{t('อำเภอ / เขต')}</label>
-              <input className="form-control" value={ship.district} onChange={setShipField('district')} />
+              <input className="form-control" value={ship.district} onChange={setShipField('district')}
+                style={guessed.district ? { borderColor: 'var(--warning)', background: '#fffaf0' } : undefined} />
             </div>
           </div>
           <div className="form-row">
@@ -248,6 +284,12 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
               <input className="form-control" value={shippingContactPhone} onChange={e => setShippingContactPhone(e.target.value)} />
             </div>
           </div>
+          {(guessed.subdistrict || guessed.district) && (
+            <div style={{ fontSize: 11.5, color: '#c05621', marginBottom: 10 }}>
+              {t('ที่อยู่ที่วางมาไม่มีคำนำหน้า ต./อ. — ช่องที่ไฮไลต์ระบบเดาจากลำดับคำ ตรวจให้แน่ใจก่อนบันทึก')}
+            </div>
+          )}
+
           {/* โชว์ที่อยู่ที่ประกอบแล้ว เพราะข้อความนี้คือสิ่งที่จะไปขึ้นบนใบพิมพ์จริง */}
           {composeShippingAddress(ship) && (
             <div style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--gray-bg)', fontSize: 12, marginBottom: 10 }}>
