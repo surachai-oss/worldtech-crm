@@ -38,7 +38,9 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
   const [items, setItems] = useState([{ ...EMPTY_ITEM }])
   // ที่อยู่จัดส่งแยกช่อง — เก็บลงคอลัมน์ของตัวเอง แล้วประกอบเป็นข้อความลง shipping_address ให้ใบพิมพ์ใช้ต่อ
   const [ship, setShip] = useState({ line1: '', subdistrict: '', district: '', province: '', postcode: '' })
-  const [pasteAddr, setPasteAddr] = useState('')
+  // ข้อความก่อนระบบแยกช่อง เก็บไว้ให้กด "เลิกทำ" คืนค่าได้ ถ้าระบบแยกผิด
+  const [undoAddr, setUndoAddr] = useState(null)
+  const [autoNote, setAutoNote] = useState('')
   // รายชื่อจังหวัด/อำเภอ/ตำบลจากกรมการปกครอง โหลดครั้งเดียวตอนเปิดฟอร์ม (ไฟล์แยก ไม่ถ่วง bundle หลัก)
   const [addrIdx, setAddrIdx] = useState(null)
   useEffect(() => {
@@ -58,20 +60,55 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
     ...s, subdistrict: v, postcode: findPostcode(addrIdx, s.province, s.district, v) || s.postcode,
   }))
 
-  // วางที่อยู่เต็มที่ลูกค้าส่งมาแล้วให้ระบบกระจายลงช่อง — เทียบกับรายชื่อจริง ไม่ได้เดาจากลำดับคำ
-  const splitAddress = () => {
-    const r = parseThaiAddress(pasteAddr, addrIdx)
-    if (!r.line1 && !r.province) { toast('แยกที่อยู่ไม่ได้ ลองวางที่อยู่ให้ครบกว่านี้', 'error'); return }
+  // วางที่อยู่เต็มก้อนลงช่องแรกได้เลย ระบบจะกระจายลงช่องอื่นให้เอง — เทียบกับรายชื่อจริงของกรมการปกครอง
+  // (ทั้งชื่อไทยและอังกฤษ) ไม่ได้เดาจากลำดับคำ เบอร์โทร/ชื่อผู้รับที่ปนมาก็ดึงออกให้ ถ้าช่องนั้นยังว่าง
+  // ผลที่ได้เป็นแค่ตัวตั้งต้น คนเปิดออเดอร์ต้องตรวจและแก้ก่อนบันทึกเสมอ
+  const applyAutoSplit = (text, { quiet } = {}) => {
+    const r = parseThaiAddress(text, addrIdx)
+    if (!r.province && !r.postcode && !r.phone && !r.subdistrict) {
+      setShip(s => ({ ...s, line1: text }))
+      if (!quiet) toast('แยกที่อยู่ไม่ได้ ลองใส่ให้ครบกว่านี้ หรือเลือกจังหวัด/อำเภอเอง', 'error')
+      return
+    }
+    setUndoAddr({ text, ship, name: shippingContactName, phone: shippingContactPhone })
     setShip({
       line1: r.line1, subdistrict: r.subdistrict, district: r.district,
       province: r.province, postcode: r.postcode,
     })
-    toast(
+    const extra = []
+    if (r.phone && !shippingContactPhone.trim()) { setShippingContactPhone(r.phone); extra.push('เบอร์โทร') }
+    if (r.name && !shippingContactName.trim()) { setShippingContactName(r.name); extra.push('ชื่อผู้รับ') }
+    setAutoNote(
       r.unmatched.length
-        ? `แยกที่อยู่แล้ว — ยังหา ${r.unmatched.join(' / ')} ไม่เจอ กรุณาเลือกเอง`
-        : 'แยกที่อยู่แล้ว กรุณาตรวจสอบก่อนบันทึก',
-      r.unmatched.length ? 'error' : 'success'
+        ? `ระบบแยกช่องให้แล้ว แต่ยังหา ${r.unmatched.join(' / ')} ไม่เจอ — กรุณาเลือกเอง`
+        : `ระบบแยกช่องให้แล้ว${extra.length ? ` (รวม ${extra.join(' และ ')})` : ''} — กรุณาตรวจสอบก่อนบันทึก`
     )
+  }
+
+  // แปะทับทั้งก้อน: ไม่ปล่อยให้ข้อความลงช่องดิบๆ แต่ส่งเข้าตัวแยกทันที
+  const onPasteAddress = (e) => {
+    const pasted = e.clipboardData?.getData('text') || ''
+    if (!pasted.trim() || !addrIdx) return
+    e.preventDefault()
+    const el = e.target
+    const next = ship.line1.slice(0, el.selectionStart ?? ship.line1.length) + pasted + ship.line1.slice(el.selectionEnd ?? ship.line1.length)
+    applyAutoSplit(next)
+  }
+
+  // พิมพ์เองแล้วออกจากช่อง ก็แยกให้เหมือนกัน — แต่เฉพาะตอนที่ยังไม่มีใครกรอกช่องล่างไว้ จะได้ไม่ทับของที่แก้มือ
+  const onBlurAddress = () => {
+    if (!addrIdx || !ship.line1.trim()) return
+    if (ship.province || ship.district || ship.subdistrict) return
+    applyAutoSplit(ship.line1, { quiet: true })
+  }
+
+  const undoSplit = () => {
+    if (!undoAddr) return
+    setShip({ ...undoAddr.ship, line1: undoAddr.text })
+    setShippingContactName(undoAddr.name)
+    setShippingContactPhone(undoAddr.phone)
+    setUndoAddr(null)
+    setAutoNote('')
   }
 
   const bkk = isBangkok(ship.province)
@@ -259,23 +296,31 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
           </div>
 
           <label className="form-label" style={{ marginTop: 4 }}>{t('ที่อยู่จัดส่ง')}</label>
+          {/* ช่องนี้รับที่อยู่ทั้งก้อนได้ วางแล้วระบบแยกลงช่องล่างให้เอง เหลือไว้ในช่องนี้แค่บ้านเลขที่/หมู่/ถนน */}
           <div className="form-group">
-            <label className="form-label">{t('วางที่อยู่เต็มแล้วให้ระบบแยกช่องให้')}</label>
+            <label className="form-label required">{t('บ้านเลขที่ / หมู่ / ถนน')}</label>
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-              <textarea className="form-control" rows={2} value={pasteAddr} onChange={e => setPasteAddr(e.target.value)}
-                placeholder={t('วางที่อยู่ที่ลูกค้าส่งมาทั้งก้อนตรงนี้ เช่น 79 ม.5 ต.เกาะลันตาใหญ่ อ.เกาะลันตา จ.กระบี่ 81150')} />
-              <button className="btn btn-secondary" style={{ whiteSpace: 'nowrap' }} disabled={!pasteAddr.trim()} onClick={splitAddress}>
+              <textarea className="form-control" rows={2} value={ship.line1}
+                onChange={e => { setAutoNote(''); setShip(s => ({ ...s, line1: e.target.value })) }}
+                onPaste={onPasteAddress} onBlur={onBlurAddress}
+                placeholder={t('วางที่อยู่ทั้งก้อนได้เลย เช่น 79 ม.5 ต.เกาะลันตาใหญ่ อ.เกาะลันตา จ.กระบี่ 81150 โทร 081-234-5678')} />
+              <button className="btn btn-secondary" style={{ whiteSpace: 'nowrap' }}
+                disabled={!ship.line1.trim() || !addrIdx} onClick={() => applyAutoSplit(ship.line1)}>
                 {t('แยกช่องให้')}
               </button>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
-              {t('ไม่บังคับ — จะพิมพ์ลงช่องด้านล่างเองก็ได้ ที่ระบบแยกให้เป็นตัวตั้งต้น ต้องตรวจก่อนบันทึกเสมอ')}
+              {t('วางที่อยู่ที่ลูกค้าส่งมาทั้งก้อนตรงนี้ ระบบจะกรอก ตำบล/อำเภอ/จังหวัด/รหัสไปรษณีย์/เบอร์โทร ให้อัตโนมัติ (รับทั้งไทยและอังกฤษ) แล้วค่อยตรวจแก้ก่อนบันทึก')}
             </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label required">{t('บ้านเลขที่ / หมู่ / ถนน')}</label>
-            <input className="form-control" value={ship.line1} onChange={setShipField('line1')} placeholder={t('เช่น 79 ม.5 ถ.ศรีนครินทร์')} />
+            {autoNote && (
+              <div style={{ marginTop: 6, padding: '6px 10px', borderRadius: 6, fontSize: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
+                background: undoAddr ? '#fff8e1' : 'var(--gray-bg)', border: '1px solid #ffe082' }}>
+                <span>{t(autoNote)}</span>
+                {undoAddr && (
+                  <button className="btn btn-secondary btn-sm" style={{ padding: '2px 10px' }} onClick={undoSplit}>{t('เลิกทำ')}</button>
+                )}
+              </div>
+            )}
           </div>
           {/* เลือกจากรายชื่อจริงของกรมการปกครอง แทนการพิมพ์เอง — คู่จังหวัด/อำเภอ/ตำบลจึงถูกต้องเสมอ
               และรหัสไปรษณีย์เติมให้อัตโนมัติตอนเลือกตำบล */}

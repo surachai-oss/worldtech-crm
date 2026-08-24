@@ -78,19 +78,52 @@ const PROVINCE_ALIASES = {
 const namesFor = (province) => PROVINCE_ALIASES[province] || [province]
 
 const squash = (s) => String(s ?? '').replace(/\s+/g, ' ').trim()
-const MARKERS = /(?:ตำบล|ต\.|แขวง|อำเภอ|อ\.|เขต|จังหวัด|จ\.)/g
+const MARKERS = /(?:ตำบล|ต\.|แขวง|อำเภอ|อ\.|เขต|จังหวัด|จ\.|จ\s|sub[- ]?district|district|province|khwaeng|khet|tambon|amphoe|amphur|changwat)/gi
 
-function spansOf(text, name) {
+// เทียบชื่อแบบไม่สนตัวพิมพ์ใหญ่เล็ก เพราะที่อยู่ที่ลูกค้าส่งมาเขียนอังกฤษบ้างไทยบ้าง ปนกันก็มี
+// toLowerCase ของไทย/อังกฤษยาวเท่าเดิม ตำแหน่งจึงตรงกับข้อความจริง (เช็คความยาวกันไว้อีกชั้น)
+function lowerHay(text) {
+  const h = text.toLowerCase()
+  return h.length === text.length ? h : text
+}
+
+// เตรียมข้อความสองชุด: ชุดปกติ กับชุดที่ตัดช่องว่าง/ขีดทิ้ง พร้อมตารางแปลงตำแหน่งกลับ
+// ชุดหลังไว้รับที่อยู่อังกฤษที่คนเขียนติดกัน (Chonburi) ทั้งที่ชื่อทางการเว้นวรรค (Chon Buri)
+function makeHay(text) {
+  const lower = lowerHay(text)
+  let sq = ''
+  const map = []
+  for (let i = 0; i < lower.length; i++) {
+    const c = lower[i]
+    if (c === ' ' || c === '-') continue
+    sq += c; map.push(i)
+  }
+  return { lower, sq, map }
+}
+
+function spansOf(H, name) {
   const out = []
-  let i = text.indexOf(name)
-  while (i >= 0) { out.push([i, i + name.length]); i = text.indexOf(name, i + 1) }
+  const n = String(name ?? '').toLowerCase()
+  if (!n) return out
+  let i = H.lower.indexOf(n)
+  while (i >= 0) { out.push([i, i + n.length]); i = H.lower.indexOf(n, i + 1) }
+  if (out.length) return out
+  const c = n.replace(/[\s-]/g, '')
+  if (c.length < 4 || c === n) return out
+  let j = H.sq.indexOf(c)
+  while (j >= 0) { out.push([H.map[j], H.map[j + c.length - 1] + 1]); j = H.sq.indexOf(c, j + 1) }
   return out
 }
 
+// รูปแบบ regex ที่ยอมให้ชื่อภาษาอังกฤษเว้นวรรคหรือไม่เว้นก็ได้ ใช้ตอนเก็บกวาดเศษที่ค้างใน line1
+const looseRe = (name) => new RegExp(
+  String(name).trim().split(/\s+/).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s*'), 'gi'
+)
+
 // จองช่วงข้อความให้แต่ละส่วน (จังหวัด/อำเภอ/ตำบล) โดยห้ามทับกัน ชื่อยาวได้จองก่อน
 // จำเป็นเพราะชื่ออำเภอมักซ้อนอยู่ในชื่อตำบล เช่น "เกาะลันตา" อยู่ใน "เกาะลันตาใหญ่"
-// และตำบลกับอำเภออาจชื่อเดียวกัน เช่น แขวงคลองเตย/เขตคลองเตย ซึ่งต้องกินคนละช่วง
-function placeParts(text, roles) {
+// และตำบลกับอำเภออาจชื่อเดียวกัน เช่น แขวงคลองเตย/เขตคลองเตย หรือ Thung Khru ทั้งเขตและแขวง ซึ่งต้องกินคนละช่วง
+function placeParts(H, roles) {
   const order = [...roles.keys()].sort(
     (a, b) => Math.max(...roles[b][1].map(n => n.length)) - Math.max(...roles[a][1].map(n => n.length))
   )
@@ -99,8 +132,8 @@ function placeParts(text, roles) {
   for (const i of order) {
     const [role, names] = roles[i]
     let hit = null
-    for (const n of [...names].sort((a, b) => b.length - a.length)) {
-      for (const [a, b] of spansOf(text, n)) {
+    for (const n of [...names].filter(Boolean).sort((a, b) => b.length - a.length)) {
+      for (const [a, b] of spansOf(H, n)) {
         if (used.every(([u, v]) => b <= u || a >= v)) { hit = [a, b]; break }
       }
       if (hit) break
@@ -110,14 +143,59 @@ function placeParts(text, roles) {
   return { got, used }
 }
 
+// เบอร์โทรที่ปนมาในที่อยู่ — มือถือ 10 หลักขึ้นต้น 0 / เบอร์บ้าน 9 หลัก / +66
+// ยอมให้มี - . หรือเว้นวรรคคั่นระหว่างตัวเลขได้ แต่ต้องไม่ติดกับตัวเลขอื่น (กันไปกินบ้านเลขที่กับรหัสไปรษณีย์)
+const PHONE_RE = /(?:\+66[-.\s]?|0)(?:[-.\s]?\d){8,9}/g
+const PHONE_HINT = /(?:โทร|เบอร์|มือถือ|tel|phone|mobile)[\s:.]*$/i
+
+function grabPhone(text) {
+  let pick = null
+  for (const m of text.matchAll(PHONE_RE)) {
+    const a = m.index, b = a + m[0].length
+    if (/\d/.test(text[a - 1] || '') || /\d/.test(text[b] || '')) continue
+    let digits = m[0].replace(/\D/g, '')
+    if (m[0].trim().startsWith('+66')) digits = '0' + digits.slice(2)
+    if (!/^0\d{8,9}$/.test(digits)) continue
+    const hinted = PHONE_HINT.test(text.slice(Math.max(0, a - 12), a))
+    // มีคำนำหน้าว่า "โทร" ชนะทันที ไม่มีก็เอาชุดท้ายสุด เพราะเบอร์มักอยู่ท้ายที่อยู่
+    if (!pick || hinted || !pick.hinted) pick = { a, b, digits, hinted }
+    if (hinted) break
+  }
+  if (!pick) return { phone: '', rest: text }
+  let rest = text.slice(0, pick.a) + ' ' + text.slice(pick.b)
+  rest = rest.replace(/(?:โทร|เบอร์โทร|เบอร์|มือถือ|tel|phone|mobile)[\s:.]*(?=\s|$)/gi, ' ')
+  return { phone: pick.digits, rest: squash(rest) }
+}
+
+// ชื่อผู้รับ — เอาเฉพาะที่มั่นใจ: มีคำนำหน้า (คุณ/นาย/ผู้รับ/Attn) หรือเป็นข้อความล้วนหน้าสุดก่อนถึงตัวเลขแรก
+// กรณีหลังจะทำต่อเมื่อแยกที่อยู่ได้จริงแล้วเท่านั้น และต้องไม่มีคำที่บอกว่าเป็นส่วนของที่อยู่
+const NAME_MARK = /(?:^|[\s,(])(?:ชื่อผู้รับ|ผู้รับ|คุณ|นางสาว|น\.ส\.|นาง|นาย|khun|attn)[\s:.]*([^\d,()\n]{2,40})/i
+const ADDRESS_WORD = /(?:ถนน|ถ\.|ซอย|ซ\.|หมู่บ้าน|หมู่|ม\.|เลขที่|อาคาร|ตึก|ชั้น|ห้อง|แขวง|เขต|ตำบล|อำเภอ|จังหวัด|soi|road|floor|room|building)/i
+
+function grabName(text, allowLeading) {
+  const m = text.match(NAME_MARK)
+  if (m) {
+    const name = squash(m[1])
+    if (name.length >= 2) return { name, rest: squash(text.replace(m[0], ' ')) }
+  }
+  if (!allowLeading) return { name: '', rest: text }
+  const lead = text.match(/^([^\d,()\n]{3,40}?)\s+(?=\d)/)
+  if (lead && !ADDRESS_WORD.test(lead[1])) {
+    return { name: squash(lead[1]), rest: squash(text.slice(lead[0].length)) }
+  }
+  return { name: '', rest: text }
+}
+
 /**
  * แยกที่อยู่ก้อนเดียวออกเป็นช่อง โดยเทียบกับรายชื่อจริงของกรมการปกครอง
+ * รองรับทั้งชื่อไทยและชื่ออังกฤษทางการ (เช่น "Bang Mot Thung Khru Bangkok 10140")
  * จังหวัด/อำเภอ/ตำบล ที่คืนกลับมาผ่านการยืนยันกับข้อมูลจริงแล้วทั้งหมด
  * line1 คือเศษที่เหลือหลังตัดทุกอย่างออก (บ้านเลขที่ หมู่ ถนน อาคาร)
+ * phone/name ดึงเพิ่มให้ถ้ามีปนมาในก้อนเดียวกัน — ว่างได้ถ้าไม่มั่นใจ
  * unmatched บอกว่าอะไรหาไม่เจอ เพื่อให้หน้าจอชี้ให้คนกรอกเลือกเอง
  */
 export function parseThaiAddress(raw, idx) {
-  const blank = { line1: '', subdistrict: '', district: '', province: '', postcode: '', unmatched: [] }
+  const blank = { line1: '', subdistrict: '', district: '', province: '', postcode: '', phone: '', name: '', unmatched: [] }
   let text = squash(String(raw ?? '').replace(/\n/g, ' '))
   if (!text) return blank
   if (!idx) return { ...blank, line1: text, unmatched: ['จังหวัด', 'อำเภอ/เขต', 'ตำบล/แขวง'] }
@@ -131,12 +209,21 @@ export function parseThaiAddress(raw, idx) {
     text = squash(text.slice(0, pcMatch.index) + ' ' + text.slice(pcMatch.index + postcode.length))
   }
 
-  // 2) ชุดผู้สมัคร — มีรหัสไปรษณีย์ก็เหลือไม่กี่ตัว ไม่มีก็ไล่จากจังหวัดที่ชื่อโผล่ในข้อความ
+  // 2) เบอร์โทร — ตัดออกก่อนหาชื่อสถานที่ ไม่งั้นตัวเลขจะไปค้างใน line1
+  const ph = grabPhone(text)
+  text = ph.rest
+
+  const enOf = (...k) => idx.english.get(k.join('|')) || ''
+
+  // 3) ชุดผู้สมัคร — มีรหัสไปรษณีย์ก็เหลือไม่กี่ตัว ไม่มีก็ไล่จากจังหวัดที่ชื่อ (ไทยหรืออังกฤษ) โผล่ในข้อความ
+  const H = makeHay(text)
   let triples
   if (postcode) {
     triples = idx.byPostcode.get(postcode)
   } else {
-    const provs = idx.provinces.filter(p => namesFor(p).some(n => text.includes(n)))
+    const provs = idx.provinces.filter(p =>
+      [...namesFor(p), enOf(p)].some(n => spansOf(H, n).length > 0)
+    )
     triples = []
     for (const p of provs) {
       for (const [d, , subs] of idx.byProvince.get(p)) {
@@ -145,10 +232,14 @@ export function parseThaiAddress(raw, idx) {
     }
   }
 
-  // 3) เลือกชุดที่แมตช์ได้มากที่สุด (จำนวนส่วนที่เจอก่อน แล้วค่อยดูความยาวรวม)
+  // 4) เลือกชุดที่แมตช์ได้มากที่สุด (จำนวนส่วนที่เจอก่อน แล้วค่อยดูความยาวรวม)
   let best = null
   for (const [p, d, s] of triples) {
-    const { got, used } = placeParts(text, [['p', namesFor(p)], ['d', [d]], ['s', [s]]])
+    const { got, used } = placeParts(H, [
+      ['p', [...namesFor(p), enOf(p)]],
+      ['d', [d, enOf(p, d)]],
+      ['s', [s, enOf(p, d, s)]],
+    ])
     const hits = Object.keys(got).length
     const chars = used.reduce((n, [a, b]) => n + (b - a), 0)
     if (!best || hits > best.hits || (hits === best.hits && chars > best.chars)) {
@@ -157,7 +248,9 @@ export function parseThaiAddress(raw, idx) {
   }
 
   if (!best) {
-    return { ...blank, postcode, line1: squash(text.replace(MARKERS, ' ')).replace(/^[,\s]+|[,\s]+$/g, ''), unmatched: ['จังหวัด', 'อำเภอ/เขต', 'ตำบล/แขวง'] }
+    const noPlace = squash(text.replace(MARKERS, ' ')).replace(/^[,\s]+|[,\s]+$/g, '')
+    const nm = grabName(noPlace, false)
+    return { ...blank, postcode, phone: ph.phone, name: nm.name, line1: nm.rest, unmatched: ['จังหวัด', 'อำเภอ/เขต', 'ตำบล/แขวง'] }
   }
 
   // ตัดเฉพาะช่วงที่แมตช์จริงออก แล้วเก็บกวาดคำนำหน้าที่ค้าง
@@ -171,10 +264,15 @@ export function parseThaiAddress(raw, idx) {
   let line1 = squash(rest.replace(MARKERS, ' '))
   // ชื่อย่อจังหวัดอาจค้างอยู่ (เช่น "กทม." ตอนที่จังหวัดมาจากรหัสไปรษณีย์ ไม่ได้มาจากการแมตช์ชื่อ)
   if (province) {
-    for (const n of namesFor(province).sort((a, b) => b.length - a.length)) line1 = line1.split(n).join(' ')
+    for (const n of [...namesFor(province), enOf(province)].filter(Boolean).sort((a, b) => b.length - a.length)) {
+      line1 = line1.replace(looseRe(n), ' ')
+    }
     line1 = squash(line1)
   }
-  line1 = line1.replace(/^[,.\s]+|[,.\s]+$/g, '')
+  line1 = squash(line1.replace(/[,]{2,}/g, ',')).replace(/^[,.\s-]+|[,.\s-]+$/g, '')
+
+  // ชื่อผู้รับ: ยอมเดาจากข้อความหน้าสุดได้ ก็ต่อเมื่อจับจังหวัดได้แล้วจริงๆ (แปลว่าเป็นที่อยู่เต็มก้อน)
+  const nm = grabName(line1, Boolean(province))
 
   const unmatched = []
   if (!province) unmatched.push('จังหวัด')
@@ -182,8 +280,11 @@ export function parseThaiAddress(raw, idx) {
   if (!subdistrict) unmatched.push('ตำบล/แขวง')
 
   return {
-    line1, subdistrict, district, province,
+    line1: nm.rest.replace(/^[,.\s-]+|[,.\s-]+$/g, ''),
+    subdistrict, district, province,
     postcode: postcode || findPostcode(idx, province, district, subdistrict),
+    phone: ph.phone,
+    name: nm.name,
     unmatched,
   }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listOrderItems, updateOrderWithItems, computeDealTotals, listProducts } from '../lib/api'
 import { fmtCurrency, composeShippingAddress } from '../lib/format'
+import { loadThaiAddress, parseThaiAddress } from '../lib/thaiAddress'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import SearchableSelect from './SearchableSelect'
@@ -32,6 +33,50 @@ export default function OrderEditModal({ order, currentUserName, onClose, onSave
     discount_value: order.discount_value ?? '',
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
+
+  // รายชื่อจังหวัด/อำเภอ/ตำบลจริง โหลดแบบ lazy เหมือนฟอร์มสร้างออเดอร์ — ใช้แยกที่อยู่ก้อนเดียวของออเดอร์เก่า
+  const [addrIdx, setAddrIdx] = useState(null)
+  const [splitNote, setSplitNote] = useState('')
+  useEffect(() => {
+    let alive = true
+    loadThaiAddress().then(idx => { if (alive) setAddrIdx(idx) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  // วางที่อยู่ทั้งก้อนลงช่องแรกแล้วให้ระบบกระจายลงช่องอื่น เหมือนตอนสร้างออเดอร์
+  // ที่อยู่เดิมของออเดอร์เก่าอยู่บรรทัดเดียวอยู่แล้ว กดปุ่มเดียวก็แยกได้ ไม่ต้องพิมพ์ใหม่
+  const splitAddress = (text) => {
+    const r = parseThaiAddress(text, addrIdx)
+    if (!r.province && !r.postcode && !r.phone && !r.subdistrict) {
+      setF(s => ({ ...s, shipping_line1: text }))
+      toast('แยกที่อยู่ไม่ได้ กรอกแยกช่องเองได้ตามปกติ', 'error')
+      return
+    }
+    setF(s => ({
+      ...s,
+      shipping_line1: r.line1,
+      shipping_subdistrict: r.subdistrict,
+      shipping_district: r.district,
+      shipping_province: r.province,
+      shipping_postcode: r.postcode,
+      shipping_contact_phone: s.shipping_contact_phone.trim() || r.phone,
+      shipping_contact_name: s.shipping_contact_name.trim() || r.name,
+    }))
+    setSplitNote(
+      r.unmatched.length
+        ? `แยกช่องให้แล้ว แต่ยังหา ${r.unmatched.join(' / ')} ไม่เจอ — กรอกเอง`
+        : 'แยกช่องให้แล้ว — ตรวจสอบก่อนบันทึก'
+    )
+  }
+
+  const onPasteAddress = (e) => {
+    const pasted = e.clipboardData?.getData('text') || ''
+    if (!pasted.trim() || !addrIdx) return
+    e.preventDefault()
+    const el = e.target
+    const cur = f.shipping_line1
+    splitAddress(cur.slice(0, el.selectionStart ?? cur.length) + pasted + cur.slice(el.selectionEnd ?? cur.length))
+  }
 
   useEffect(() => {
     Promise.all([listOrderItems(order.id), listProducts()])
@@ -203,10 +248,24 @@ export default function OrderEditModal({ order, currentUserName, onClose, onSave
 
           <div className="form-group">
             <label className="form-label required">{t('บ้านเลขที่ / หมู่ / ถนน')}</label>
-            <input className="form-control" value={f.shipping_line1} onChange={set('shipping_line1')} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <textarea className="form-control" rows={2} value={f.shipping_line1}
+                onChange={e => { setSplitNote(''); setF(s => ({ ...s, shipping_line1: e.target.value })) }}
+                onPaste={onPasteAddress}
+                placeholder={t('วางที่อยู่ทั้งก้อนได้เลย ระบบจะแยกช่องให้')} />
+              <button className="btn btn-secondary" style={{ whiteSpace: 'nowrap' }}
+                disabled={!f.shipping_line1.trim() || !addrIdx} onClick={() => splitAddress(f.shipping_line1)}>
+                {t('แยกช่องให้')}
+              </button>
+            </div>
             {legacyAddress && (
               <div style={{ fontSize: 11, color: '#c05621', marginTop: 4 }}>
-                {t('ออเดอร์นี้เปิดก่อนมีช่องแยก — ที่อยู่เดิมถูกใส่ไว้บรรทัดเดียว แยกลงช่องด้านล่างได้เลย')}
+                {t('ออเดอร์นี้เปิดก่อนมีช่องแยก — ที่อยู่เดิมอยู่บรรทัดเดียว กด "แยกช่องให้" เพื่อกระจายลงช่องด้านล่าง')}
+              </div>
+            )}
+            {splitNote && (
+              <div style={{ marginTop: 6, padding: '6px 10px', borderRadius: 6, fontSize: 12, background: '#fff8e1', border: '1px solid #ffe082' }}>
+                {t(splitNote)}
               </div>
             )}
           </div>
