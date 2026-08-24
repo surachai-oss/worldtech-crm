@@ -101,17 +101,30 @@ function makeHay(text) {
   return { lower, sq, map }
 }
 
+// ชื่ออังกฤษต้องเป็นคำเต็ม ไม่งั้นตำบล "Mo" (เหมาะ) จะไปแมตช์กลางคำว่า "Moo 3"
+// ภาษาไทยไม่มีตัวคั่นคำ จึงเช็คแบบนี้ไม่ได้และไม่ต้องเช็ค
+const LATIN_NAME = /^[a-z][a-z\s.'-]*$/
+const wordEdge = (hay, a, b) => !/[a-z]/.test(hay[a - 1] || '') && !/[a-z]/.test(hay[b] || '')
+
 function spansOf(H, name) {
   const out = []
   const n = String(name ?? '').toLowerCase()
   if (!n) return out
+  const latin = LATIN_NAME.test(n)
   let i = H.lower.indexOf(n)
-  while (i >= 0) { out.push([i, i + n.length]); i = H.lower.indexOf(n, i + 1) }
+  while (i >= 0) {
+    if (!latin || wordEdge(H.lower, i, i + n.length)) out.push([i, i + n.length])
+    i = H.lower.indexOf(n, i + 1)
+  }
   if (out.length) return out
   const c = n.replace(/[\s-]/g, '')
   if (c.length < 4 || c === n) return out
   let j = H.sq.indexOf(c)
-  while (j >= 0) { out.push([H.map[j], H.map[j + c.length - 1] + 1]); j = H.sq.indexOf(c, j + 1) }
+  while (j >= 0) {
+    const a = H.map[j], b = H.map[j + c.length - 1] + 1
+    if (!latin || wordEdge(H.lower, a, b)) out.push([a, b])
+    j = H.sq.indexOf(c, j + 1)
+  }
   return out
 }
 
@@ -120,27 +133,81 @@ const looseRe = (name) => new RegExp(
   String(name).trim().split(/\s+/).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s*'), 'gi'
 )
 
+// คำนำหน้าที่บอกว่าข้อความถัดไปเป็นระดับไหน — ใช้ตัดสินตอนชื่อชนกัน
+const ROLE_MARKS = {
+  p: ['จังหวัด', 'จ.', 'province', 'changwat'],
+  d: ['อำเภอ', 'อ.', 'เขต', 'amphoe', 'amphur', 'khet', 'district'],
+  s: ['ตำบล', 'ต.', 'แขวง', 'tambon', 'khwaeng', 'subdistrict', 'sub district', 'sub-district'],
+}
+
+// +1 ถ้าคำนำหน้าตรงกับระดับที่กำลังจับ, -1 ถ้าเป็นคำนำหน้าของระดับอื่น, 0 ถ้าไม่มีคำนำหน้า
+// จำเป็นเพราะ "อ.เมือง" ในจังหวัดเลยตรงกับทั้งอำเภอเมืองเลยและตำบลชื่อ "เมือง" คำนำหน้าเป็นตัวชี้ขาด
+function markScore(hay, role, span) {
+  const before = hay.slice(Math.max(0, span[0] - 14), span[0]).replace(/\s+$/, '')
+  let owner = null, longest = 0
+  for (const r of Object.keys(ROLE_MARKS)) {
+    for (const m of ROLE_MARKS[r]) {
+      if (m.length > longest && before.endsWith(m)) { owner = r; longest = m.length }
+    }
+  }
+  if (!owner) return 0
+  return owner === role ? 1 : -1
+}
+
+const THAI_CH = /[ก-๙]/
+const LATIN_CH = /[a-z]/
+
+// ชื่อสำรองอย่าง "เมือง"/"Mueang" สั้นและไปโผล่ในชื่อตำบลได้ง่าย (ในเมือง / Nai Mueang / Mueang Mi)
+// จึงรับเฉพาะตอนที่มีคำนำหน้าระดับตัวเองกำกับ หรือยืนเดี่ยวจริงๆ ไม่มีคำอื่นติดกัน
+function aliasOk(hay, role, sp) {
+  if (markScore(hay, role, sp) > 0) return true
+  const before = hay.slice(0, sp[0]), after = hay.slice(sp[1])
+  if (THAI_CH.test(before.slice(-1)) || THAI_CH.test(after.slice(0, 1))) return false
+  return !LATIN_CH.test(before.replace(/ $/, '').slice(-1)) && !LATIN_CH.test(after.replace(/^ /, '').slice(0, 1))
+}
+
 // จองช่วงข้อความให้แต่ละส่วน (จังหวัด/อำเภอ/ตำบล) โดยห้ามทับกัน ชื่อยาวได้จองก่อน
 // จำเป็นเพราะชื่ออำเภอมักซ้อนอยู่ในชื่อตำบล เช่น "เกาะลันตา" อยู่ใน "เกาะลันตาใหญ่"
 // และตำบลกับอำเภออาจชื่อเดียวกัน เช่น แขวงคลองเตย/เขตคลองเตย หรือ Thung Khru ทั้งเขตและแขวง ซึ่งต้องกินคนละช่วง
+// ชื่อเดียวกันที่โผล่หลายที่ ให้เลือกช่วงที่คำนำหน้าตรงระดับก่อน
+const DEPTH = { s: 0, d: 1, p: 2 }
+
+// เทียบคะแนนแบบเรียงลำดับความสำคัญ ตัวแรกต่างกันก็ตัดสินเลย
+const cmpRank = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0 }
+
 function placeParts(H, roles) {
-  const order = [...roles.keys()].sort(
-    (a, b) => Math.max(...roles[b][1].map(n => n.length)) - Math.max(...roles[a][1].map(n => n.length))
-  )
+  // ชื่อยาวได้จองก่อน ถ้ายาวเท่ากันให้ระดับเล็กจองก่อน เพราะที่อยู่ไทยเขียนเล็กไปใหญ่
+  // (จังหวัดชัยนาทกับตำบลชัยนาทชื่อเท่ากัน ตัวซ้ายคือตำบลเสมอ)
+  const order = [...roles.keys()].sort((a, b) => {
+    const la = Math.max(...roles[a][1].map(n => n.length))
+    const lb = Math.max(...roles[b][1].map(n => n.length))
+    return lb !== la ? lb - la : DEPTH[roles[a][0]] - DEPTH[roles[b][0]]
+  })
   const used = []
   const got = {}
+  let marks = 0
   for (const i of order) {
-    const [role, names] = roles[i]
+    const [role, names, aliases] = roles[i]
+    // จังหวัดชื่อซ้ำได้ในชื่ออำเภอ (Bangkok ใน "Bangkok Noi") ตัวจริงจึงเป็นตัวขวาสุด
+    const preferLast = role === 'p'
     let hit = null
     for (const n of [...names].filter(Boolean).sort((a, b) => b.length - a.length)) {
-      for (const [a, b] of spansOf(H, n)) {
-        if (used.every(([u, v]) => b <= u || a >= v)) { hit = [a, b]; break }
+      const isAlias = aliases ? aliases.includes(n) : false
+      let cand = null
+      for (const sp of spansOf(H, n)) {
+        if (!used.every(([u, v]) => sp[1] <= u || sp[0] >= v)) continue
+        if (isAlias && !aliasOk(H.lower, role, sp)) continue
+        const sc = markScore(H.lower, role, sp)
+        if (!cand || sc > cand.sc || (sc === cand.sc && preferLast && sp[0] > cand.sp[0])) cand = { sp, sc }
       }
-      if (hit) break
+      // ชื่อเรียงจากยาวไปสั้นแล้ว ชื่อสั้นกว่าจะแทนที่ได้ก็ต่อเมื่อคำนำหน้าตรงระดับกว่าเท่านั้น
+      // ไม่งั้นชื่อย่อ "อยุธยา" จะไปแย่งช่วงของ "พระนครศรีอยุธยา" แล้วเหลือ "พระนครศรี" ค้างไว้
+      if (cand && (!hit || cand.sc > hit.sc)) hit = cand
+      if (hit && hit.sc > 0) break
     }
-    if (hit) { used.push(hit); got[role] = hit }
+    if (hit) { used.push(hit.sp); got[role] = hit.sp; marks += hit.sc }
   }
-  return { got, used }
+  return { got, used, marks }
 }
 
 // เบอร์โทรที่ปนมาในที่อยู่ — มือถือ 10 หลักขึ้นต้น 0 / เบอร์บ้าน 9 หลัก / +66
@@ -169,12 +236,17 @@ function grabPhone(text) {
 
 // ชื่อผู้รับ — เอาเฉพาะที่มั่นใจ: มีคำนำหน้า (คุณ/นาย/ผู้รับ/Attn) หรือเป็นข้อความล้วนหน้าสุดก่อนถึงตัวเลขแรก
 // กรณีหลังจะทำต่อเมื่อแยกที่อยู่ได้จริงแล้วเท่านั้น และต้องไม่มีคำที่บอกว่าเป็นส่วนของที่อยู่
-const NAME_MARK = /(?:^|[\s,(])(?:ชื่อผู้รับ|ผู้รับ|คุณ|นางสาว|น\.ส\.|นาง|นาย|khun|attn)[\s:.]*([^\d,()\n]{2,40})/i
-const ADDRESS_WORD = /(?:ถนน|ถ\.|ซอย|ซ\.|หมู่บ้าน|หมู่|ม\.|เลขที่|อาคาร|ตึก|ชั้น|ห้อง|แขวง|เขต|ตำบล|อำเภอ|จังหวัด|soi|road|floor|room|building)/i
+// 1) มีคำนำหน้าชื่อ (คุณ/นาย/K.) — กินคำว่า "ติดต่อ/ผู้รับ" ที่นำหน้าอยู่ไปด้วย จะได้ไม่ค้างใน line1
+const NAME_TITLE = /(?:^|[\s,(])(?:(?:ชื่อผู้รับ|ผู้รับ|ผู้ติดต่อ|ติดต่อ)[\s:.]*)?(?:คุณ|นางสาว|น\.ส\.|นาง|นาย|khun|k\.)[\s:.]*([^\d,()\n]{2,40})/i
+// 2) ไม่มีคำนำหน้า แต่มีป้ายบอกว่าเป็นชื่อผู้รับ
+const NAME_LABEL = /(?:^|[\s,(])(?:ชื่อผู้รับ|ผู้รับ|ผู้ติดต่อ|attn)[\s:.]*([^\d,()\n]{2,40})/i
+// คำที่บอกว่าข้อความท่อนนั้นเป็นส่วนของที่อยู่หรือข้อมูลบริษัท ไม่ใช่ชื่อคน — กันเดาผิดตอนไม่มีคำนำหน้า
+const ADDRESS_WORD = /(?:ถนน|ถ\.|ซอย|ซ\.|หมู่บ้าน|หมู่|ม\.|เลขที่|เลขประจำตัว|ภาษี|ที่อยู่|จัดส่ง|ส่งของ|อาคาร|ตึก|ชั้น|ห้อง|แขวง|เขต|ตำบล|อำเภอ|จังหวัด|soi|road|floor|room|building|address|tax)/i
 
 function grabName(text, allowLeading) {
-  const m = text.match(NAME_MARK)
-  if (m) {
+  for (const re of [NAME_TITLE, NAME_LABEL]) {
+    const m = text.match(re)
+    if (!m) continue
     const name = squash(m[1])
     if (name.length >= 2) return { name, rest: squash(text.replace(m[0], ' ')) }
   }
@@ -214,6 +286,15 @@ export function parseThaiAddress(raw, idx) {
   text = ph.rest
 
   const enOf = (...k) => idx.english.get(k.join('|')) || ''
+  // คนเขียน "อ.เมือง" กันทั้งประเทศ ทั้งที่ชื่อจริงมีชื่อจังหวัดต่อท้าย (เมืองขอนแก่น)
+  // ใส่ไว้เป็นชื่อสำรองท้ายสุด ชื่อเต็มจึงยังได้จองก่อนเสมอ และคำนำหน้า "อ./อำเภอ" เป็นตัวยืนยัน
+  const districtAliases = (p, d) => {
+    const en = enOf(p, d)
+    const out = []
+    if (/^เมือง./.test(d)) out.push('เมือง')
+    if (/^mueang\s/i.test(en)) out.push('Mueang')
+    return out
+  }
 
   // 3) ชุดผู้สมัคร — มีรหัสไปรษณีย์ก็เหลือไม่กี่ตัว ไม่มีก็ไล่จากจังหวัดที่ชื่อ (ไทยหรืออังกฤษ) โผล่ในข้อความ
   const H = makeHay(text)
@@ -235,16 +316,18 @@ export function parseThaiAddress(raw, idx) {
   // 4) เลือกชุดที่แมตช์ได้มากที่สุด (จำนวนส่วนที่เจอก่อน แล้วค่อยดูความยาวรวม)
   let best = null
   for (const [p, d, s] of triples) {
-    const { got, used } = placeParts(H, [
+    const { got, used, marks } = placeParts(H, [
       ['p', [...namesFor(p), enOf(p)]],
-      ['d', [d, enOf(p, d)]],
+      ['d', [d, enOf(p, d), ...districtAliases(p, d)], districtAliases(p, d)],
       ['s', [s, enOf(p, d, s)]],
     ])
     const hits = Object.keys(got).length
     const chars = used.reduce((n, [a, b]) => n + (b - a), 0)
-    if (!best || hits > best.hits || (hits === best.hits && chars > best.chars)) {
-      best = { hits, chars, p, d, s, got, used }
-    }
+    // เจอตำบลมีค่ากว่าเจอจังหวัด เพราะจังหวัด/อำเภอเดาจากรหัสไปรษณีย์ได้อยู่แล้ว แต่ตำบลเดาไม่ได้
+    const depth = (got.s ? 4 : 0) + (got.d ? 2 : 0) + (got.p ? 1 : 0)
+    // เรียงตาม จำนวนส่วนที่เจอ -> คำนำหน้าตรงระดับ -> ระดับที่เจอ -> ความยาวรวมที่แมตช์
+    const rank = [hits, marks, depth, chars]
+    if (!best || cmpRank(rank, best.rank) > 0) best = { rank, p, d, s, got, used }
   }
 
   if (!best) {
@@ -262,6 +345,12 @@ export function parseThaiAddress(raw, idx) {
   const subdistrict = best.got.s ? best.s : ''
 
   let line1 = squash(rest.replace(MARKERS, ' '))
+  // "อ.เมือง" เป็นวิธีเขียนปกติของอำเภอเมือง ชื่อจริงมีชื่อจังหวัดต่อท้าย (เมืองขอนแก่น) จับไม่ติด
+  // จังหวัด/รหัสไปรษณีย์บอกอำเภอได้อยู่แล้ว จึงเก็บกวาดคำว่า "เมือง" ที่ค้างทิ้ง — เฉพาะที่ยืนเดี่ยว
+  // ไม่แตะคำที่มีตัวอักษรไทยติดกัน อย่าง "หมู่บ้านกลางเมือง" ที่เป็นส่วนหนึ่งของที่อยู่จริง
+  if (/^เมือง./.test(district)) line1 = line1.replace(/(^|[^ก-๙])เมือง(?![ก-๙])/g, '$1 ')
+  if (/^mueang\s/i.test(enOf(province, district))) line1 = line1.replace(/\bmueang\b/gi, ' ')
+  line1 = squash(line1).replace(/^(?:ที่อยู่จัดส่ง|ที่อยู่|จัดส่งที่|address|ship\s*to)[\s:.]*/i, '')
   // ชื่อย่อจังหวัดอาจค้างอยู่ (เช่น "กทม." ตอนที่จังหวัดมาจากรหัสไปรษณีย์ ไม่ได้มาจากการแมตช์ชื่อ)
   if (province) {
     for (const n of [...namesFor(province), enOf(province)].filter(Boolean).sort((a, b) => b.length - a.length)) {
@@ -269,7 +358,8 @@ export function parseThaiAddress(raw, idx) {
     }
     line1 = squash(line1)
   }
-  line1 = squash(line1.replace(/[,]{2,}/g, ',')).replace(/^[,.\s-]+|[,.\s-]+$/g, '')
+  // คอมมาที่ค้างติดกันเพราะเพิ่งตัดชื่อตำบล/อำเภอออกไป — ยุบให้เหลือตัวเดียว
+  line1 = squash(line1.replace(/,(?:\s*,)+/g, ',')).replace(/^[,.\s-]+|[,.\s-]+$/g, '')
 
   // ชื่อผู้รับ: ยอมเดาจากข้อความหน้าสุดได้ ก็ต่อเมื่อจับจังหวัดได้แล้วจริงๆ (แปลว่าเป็นที่อยู่เต็มก้อน)
   const nm = grabName(line1, Boolean(province))
