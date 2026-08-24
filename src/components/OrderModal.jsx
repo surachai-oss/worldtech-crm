@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { listQuotationItems, computeDealTotals, fetchActiveOrderQuotationIds, listProducts, genOrderNo, peekOrderNo } from '../lib/api'
 import { fmtCurrency, composeShippingAddress } from '../lib/format'
-import { parseThaiAddress } from '../lib/thaiAddress'
+import {
+  loadThaiAddress, parseThaiAddress, listProvinces, listDistricts, listSubdistricts,
+  findPostcode, isBangkok,
+} from '../lib/thaiAddress'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import SearchableSelect from './SearchableSelect'
@@ -35,26 +38,43 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
   const [items, setItems] = useState([{ ...EMPTY_ITEM }])
   // ที่อยู่จัดส่งแยกช่อง — เก็บลงคอลัมน์ของตัวเอง แล้วประกอบเป็นข้อความลง shipping_address ให้ใบพิมพ์ใช้ต่อ
   const [ship, setShip] = useState({ line1: '', subdistrict: '', district: '', province: '', postcode: '' })
-  // ช่องที่ระบบเดาให้ตอนแยกที่อยู่ — เน้นสีไว้จนกว่าคนเปิดออเดอร์จะแก้หรือยืนยัน
-  const [guessed, setGuessed] = useState({})
   const [pasteAddr, setPasteAddr] = useState('')
-  const setShipField = (k) => (e) => {
-    setShip(s => ({ ...s, [k]: e.target.value }))
-    if (guessed[k]) setGuessed(g => ({ ...g, [k]: false }))
-  }
+  // รายชื่อจังหวัด/อำเภอ/ตำบลจากกรมการปกครอง โหลดครั้งเดียวตอนเปิดฟอร์ม (ไฟล์แยก ไม่ถ่วง bundle หลัก)
+  const [addrIdx, setAddrIdx] = useState(null)
+  useEffect(() => {
+    let alive = true
+    loadThaiAddress()
+      .then(idx => { if (alive) setAddrIdx(idx) })
+      .catch(() => { if (alive) toast('โหลดรายชื่อจังหวัด/อำเภอไม่สำเร็จ กรอกที่อยู่เองได้ตามปกติ', 'error') })
+    return () => { alive = false }
+  }, [toast])
 
-  // วางที่อยู่เต็มที่ลูกค้าส่งมาแล้วให้ระบบกระจายลงช่อง — ลดการพิมพ์ซ้ำ แต่ยังต้องตรวจก่อนบันทึก
+  const setShipField = (k) => (e) => setShip(s => ({ ...s, [k]: e.target.value }))
+
+  // เลือกจังหวัด/อำเภอใหม่ = ล้างระดับที่ลึกกว่าทิ้ง ไม่งั้นจะเหลือคู่ที่ไม่มีอยู่จริง
+  const pickProvince = (v) => setShip(s => ({ ...s, province: v, district: '', subdistrict: '', postcode: '' }))
+  const pickDistrict = (v) => setShip(s => ({ ...s, district: v, subdistrict: '', postcode: '' }))
+  const pickSubdistrict = (v) => setShip(s => ({
+    ...s, subdistrict: v, postcode: findPostcode(addrIdx, s.province, s.district, v) || s.postcode,
+  }))
+
+  // วางที่อยู่เต็มที่ลูกค้าส่งมาแล้วให้ระบบกระจายลงช่อง — เทียบกับรายชื่อจริง ไม่ได้เดาจากลำดับคำ
   const splitAddress = () => {
-    const r = parseThaiAddress(pasteAddr)
-    if (!r.line1 && !r.province && !r.postcode) { toast('แยกที่อยู่ไม่ได้ ลองวางที่อยู่ให้ครบกว่านี้', 'error'); return }
+    const r = parseThaiAddress(pasteAddr, addrIdx)
+    if (!r.line1 && !r.province) { toast('แยกที่อยู่ไม่ได้ ลองวางที่อยู่ให้ครบกว่านี้', 'error'); return }
     setShip({
       line1: r.line1, subdistrict: r.subdistrict, district: r.district,
       province: r.province, postcode: r.postcode,
     })
-    setGuessed(r.guessed || {})
-    const missing = [!r.province && 'จังหวัด', !r.postcode && 'รหัสไปรษณีย์'].filter(Boolean)
-    toast(missing.length ? `แยกที่อยู่แล้ว — ยังขาด ${missing.join(' และ ')} กรุณาตรวจสอบ` : 'แยกที่อยู่แล้ว กรุณาตรวจสอบก่อนบันทึก', missing.length ? 'error' : 'success')
+    toast(
+      r.unmatched.length
+        ? `แยกที่อยู่แล้ว — ยังหา ${r.unmatched.join(' / ')} ไม่เจอ กรุณาเลือกเอง`
+        : 'แยกที่อยู่แล้ว กรุณาตรวจสอบก่อนบันทึก',
+      r.unmatched.length ? 'error' : 'success'
+    )
   }
+
+  const bkk = isBangkok(ship.province)
   const [shippingContactName, setShippingContactName] = useState('')
   const [shippingContactPhone, setShippingContactPhone] = useState('')
   const [remark, setRemark] = useState('')
@@ -115,7 +135,7 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
     if (!quotationId) { toast('กรุณาเลือกใบเสนอราคา', 'error'); return }
     if (!cleanItems.length) { toast('กรุณาใส่รายการสินค้าอย่างน้อย 1 รายการ', 'error'); return }
     if (!ship.line1.trim()) { toast('กรุณากรอกบ้านเลขที่/ที่อยู่', 'error'); return }
-    if (!ship.province.trim()) { toast('กรุณากรอกจังหวัด', 'error'); return }
+    if (!ship.province.trim()) { toast('กรุณาเลือกจังหวัด', 'error'); return }
     if (!shippingContactPhone.trim()) { toast('กรุณากรอกเบอร์โทรติดต่อ', 'error'); return }
     const confirmMsg = lang === 'en'
       ? `Confirm saving order ${orderNo}?\n\nOnce saved, this order cannot be edited — you can only cancel it and open a new one if there's a mistake.`
@@ -252,26 +272,39 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
             <label className="form-label required">{t('บ้านเลขที่ / หมู่ / ถนน')}</label>
             <input className="form-control" value={ship.line1} onChange={setShipField('line1')} placeholder={t('เช่น 79 ม.5 ถ.ศรีนครินทร์')} />
           </div>
+          {/* เลือกจากรายชื่อจริงของกรมการปกครอง แทนการพิมพ์เอง — คู่จังหวัด/อำเภอ/ตำบลจึงถูกต้องเสมอ
+              และรหัสไปรษณีย์เติมให้อัตโนมัติตอนเลือกตำบล */}
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">{t('ตำบล / แขวง')}</label>
-              <input className="form-control" value={ship.subdistrict} onChange={setShipField('subdistrict')}
-                style={guessed.subdistrict ? { borderColor: 'var(--warning)', background: '#fffaf0' } : undefined} />
+              <label className="form-label required">{t('จังหวัด')}</label>
+              <SearchableSelect
+                options={listProvinces(addrIdx)} value={ship.province} onChange={pickProvince}
+                getOptionValue={(o) => o} getOptionLabel={(o) => o}
+                placeholder={addrIdx ? t('-- เลือกจังหวัด --') : t('กำลังโหลด...')} disabled={!addrIdx}
+              />
             </div>
             <div className="form-group">
-              <label className="form-label">{t('อำเภอ / เขต')}</label>
-              <input className="form-control" value={ship.district} onChange={setShipField('district')}
-                style={guessed.district ? { borderColor: 'var(--warning)', background: '#fffaf0' } : undefined} />
+              <label className="form-label">{bkk ? t('เขต') : t('อำเภอ')}</label>
+              <SearchableSelect
+                options={listDistricts(addrIdx, ship.province)} value={ship.district} onChange={pickDistrict}
+                getOptionValue={(o) => o} getOptionLabel={(o) => o}
+                placeholder={ship.province ? t('-- เลือก --') : t('เลือกจังหวัดก่อน')} disabled={!ship.province}
+              />
             </div>
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label required">{t('จังหวัด')}</label>
-              <input className="form-control" value={ship.province} onChange={setShipField('province')} />
+              <label className="form-label">{bkk ? t('แขวง') : t('ตำบล')}</label>
+              <SearchableSelect
+                options={listSubdistricts(addrIdx, ship.province, ship.district)} value={ship.subdistrict} onChange={pickSubdistrict}
+                getOptionValue={(o) => o} getOptionLabel={(o) => o}
+                placeholder={ship.district ? t('-- เลือก --') : t('เลือกอำเภอก่อน')} disabled={!ship.district}
+              />
             </div>
             <div className="form-group">
               <label className="form-label">{t('รหัสไปรษณีย์')}</label>
-              <input className="form-control" inputMode="numeric" maxLength={5} value={ship.postcode} onChange={setShipField('postcode')} />
+              <input className="form-control" inputMode="numeric" maxLength={5} value={ship.postcode} onChange={setShipField('postcode')}
+                placeholder={t('เติมให้เองเมื่อเลือกตำบล')} />
             </div>
           </div>
           <div className="form-row">
@@ -284,12 +317,6 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
               <input className="form-control" value={shippingContactPhone} onChange={e => setShippingContactPhone(e.target.value)} />
             </div>
           </div>
-          {(guessed.subdistrict || guessed.district) && (
-            <div style={{ fontSize: 11.5, color: '#c05621', marginBottom: 10 }}>
-              {t('ที่อยู่ที่วางมาไม่มีคำนำหน้า ต./อ. — ช่องที่ไฮไลต์ระบบเดาจากลำดับคำ ตรวจให้แน่ใจก่อนบันทึก')}
-            </div>
-          )}
-
           {/* โชว์ที่อยู่ที่ประกอบแล้ว เพราะข้อความนี้คือสิ่งที่จะไปขึ้นบนใบพิมพ์จริง */}
           {composeShippingAddress(ship) && (
             <div style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--gray-bg)', fontSize: 12, marginBottom: 10 }}>
