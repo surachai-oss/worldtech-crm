@@ -9,7 +9,6 @@ import { pdfToImageFiles } from '../lib/pdfToImages'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import CatalogGalleryView from './CatalogGalleryView'
-import CatalogLinkModal from './CatalogLinkModal'
 import CatalogBackCoverModal from './CatalogBackCoverModal'
 import { StatusBadge, CATALOG_STATUS_LABEL } from './Catalogs'
 
@@ -60,7 +59,6 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const [dirty, setDirty] = useState(false)
   const [uploading, setUploading] = useState(null) // { done, total }
   const [dragOver, setDragOver] = useState(false)
-  const [showLink, setShowLink] = useState(false)
   const [showFull, setShowFull] = useState(false)
   const fileRef = useRef(null)
 
@@ -246,7 +244,6 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-outline" onClick={() => setShowFull(true)}>{t('ดูเต็มหน้าจอ')}</button>
-          <button className="btn btn-outline" onClick={() => setShowLink(true)}>{t('คัดลอกลิงก์')}</button>
           {canManage && <button className="btn btn-outline" onClick={() => setShowBack(true)}>{t('ปกหลัง')}</button>}
           {canManage && (
             <button className="btn btn-primary" disabled={saving || !dirty} onClick={save}>
@@ -255,8 +252,6 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
           )}
         </div>
       </div>
-
-      {showLink && <CatalogLinkModal catalog={cat} onClose={() => setShowLink(false)} />}
       {showBack && <CatalogBackCoverModal catalog={cat} onClose={() => setShowBack(false)} onSaved={load} />}
       {showFull && (
         <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) setShowFull(false) }}>
@@ -277,10 +272,29 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
       <div className="cb-grid">
         {/* ===== ซ้าย: ตั้งค่าแคตตาล็อก ===== */}
         <Panel title={t('ตั้งค่าแคตตาล็อก')}>
+          {/* โลโก้อยู่บนสุด เพราะเป็นสิ่งแรกที่เห็นบนหัวแคตตาล็อกของลูกค้าเหมือนกัน */}
+          <div className="form-group">
+            <label className="form-label">{t('โลโก้บนหัวแคตตาล็อก')}</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+              <img src={cat.logo_url || '/worldtech-logo.png'} alt=""
+                style={{ height: 30, width: 'auto', maxWidth: 90, objectFit: 'contain' }}
+                onError={e => { e.currentTarget.style.visibility = 'hidden' }} />
+              {cat.logo_url && canManage && (
+                <button className="btn btn-outline btn-xs" onClick={() => { setCat(c => ({ ...c, logo_url: '' })); setDirty(true) }}>
+                  {t('ใช้โลโก้บริษัท')}
+                </button>
+              )}
+            </div>
+            <input className="form-control" type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml"
+              disabled={!canManage || logoBusy} onChange={e => { pickLogo(e.target.files?.[0]); e.target.value = '' }} />
+            {logoBusy && <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('กำลังอัปโหลด...')}</div>}
+          </div>
+
           <div className="form-group">
             <label className="form-label required">{t('ชื่อแคตตาล็อก')}</label>
             <input className="form-control" value={cat.catalog_name || ''} onChange={set('catalog_name')} disabled={!canManage} />
           </div>
+
           <div className="form-group">
             <label className="form-label required">{t('ลิงก์ (slug)')}</label>
             <input className="form-control" value={cat.catalog_slug || ''} disabled={!canManage}
@@ -296,27 +310,10 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
               </div>
             )}
           </div>
+
           <div className="form-group">
             <label className="form-label">{t('คำอธิบายสั้นๆ')}</label>
             <textarea className="form-control" rows={3} value={cat.description || ''} onChange={set('description')} disabled={!canManage} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">{t('โลโก้บนหัวแคตตาล็อก')}</label>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-              <img src={cat.logo_url || '/worldtech-logo.png'} alt=""
-                style={{ height: 30, width: 'auto', maxWidth: 90, objectFit: 'contain' }}
-                onError={e => { e.currentTarget.style.visibility = 'hidden' }} />
-              {cat.logo_url && canManage && (
-                <button className="btn btn-outline btn-xs" onClick={() => { setCat(c => ({ ...c, logo_url: '' })); setDirty(true) }}>
-                  {t('ใช้โลโก้บริษัท')}
-                </button>
-              )}
-            </div>
-            <input className="form-control" type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml"
-              disabled={!canManage || logoBusy} onChange={e => { pickLogo(e.target.files?.[0]); e.target.value = '' }} />
-            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
-              {logoBusy ? t('กำลังอัปโหลด...') : t('ไม่อัปโหลดจะใช้โลโก้บริษัทที่มากับระบบ — เปลี่ยนได้เองวันที่รีแบรนด์')}
-            </div>
           </div>
 
           <div className="form-group">
@@ -324,9 +321,6 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
             <select className="form-control" value={cat.status} onChange={set('status')} disabled={!canManage}>
               {CATALOG_STATUS.map(s => <option key={s} value={s}>{t(CATALOG_STATUS_LABEL[s])}</option>)}
             </select>
-            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
-              {t('ลูกค้าเปิดลิงก์เห็นรูปได้เฉพาะสถานะ "เผยแพร่แล้ว" เท่านั้น')}
-            </div>
           </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: .4, margin: '14px 0 8px' }}>

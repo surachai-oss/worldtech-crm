@@ -24,7 +24,11 @@ const CSS = `
   display:flex;align-items:center;gap:12px}
 .wtc-logo{height:26px;width:auto;flex:none}
 .wtc-logo-text{font-size:14px;font-weight:700;letter-spacing:.5px;color:var(--wtc-blue);flex:none}
-.wtc-head-txt{min-width:0}
+.wtc-head-txt{flex:1;min-width:0}
+.wtc-close{flex:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--wtc-line);
+  background:#fff;color:var(--wtc-muted);font-size:20px;line-height:1;cursor:pointer;
+  display:grid;place-items:center;font-family:inherit}
+.wtc-close:hover{color:var(--wtc-ink);background:#f5f7fa}
 .wtc-title{font-size:16px;line-height:1.35;font-weight:600;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wtc-desc{font-size:12px;line-height:1.5;color:var(--wtc-muted);margin-top:1px;
   display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
@@ -105,8 +109,6 @@ const CSS = `
 @media (min-width:721px){ .wtc-title{font-size:19px} .wtc-page{padding:20px 24px 8px} }
 `
 
-// ปกหลัง: ฟอร์มสั้นสามช่อง + ทางเลือกรองเป็นลิงก์ LINE/เบอร์
-// onSubmit ถูกส่งมาจากข้างนอก — หน้าจริงส่งเข้าท่อลีด ส่วนพรีวิวหลังบ้านส่งฟังก์ชันที่ไม่ทำอะไร
 // สีที่ตั้งไว้ แปลงเป็น CSS variable ให้สไตล์ทั้งหน้าใช้ร่วมกัน
 function colorVars(c) {
   return {
@@ -266,6 +268,16 @@ export default function CatalogGalleryView({
     el.scrollTo({ left: clamped * el.clientWidth, behavior: 'smooth' })
   }, [total])
 
+  // ปิดหน้า — เบราว์เซอร์ยอมให้สคริปต์ปิดแท็บที่ตัวเองเปิดเท่านั้น
+  // ใน in-app browser ของ LINE/Facebook จะปิดได้จริง ส่วนแท็บที่ผู้ใช้เปิดเองจะปิดไม่ได้
+  // จึงถอยไปย้อนกลับหน้าก่อนหน้าแทน ซึ่งพาออกจากแคตตาล็อกได้เหมือนกัน
+  const closePage = useCallback(() => {
+    window.close()
+    setTimeout(() => {
+      if (!window.closed && window.history.length > 1) window.history.back()
+    }, 120)
+  }, [])
+
   // ปุ่มลูกศรบนคีย์บอร์ด — ลูกค้าที่เปิดบนคอมคาดหวังแบบนี้เป็นปกติ
   // ผูกเฉพาะหน้าจริง ไม่ผูกในพรีวิวหลังบ้าน ไม่งั้นจะไปแย่งลูกศรของช่องกรอกข้อมูล
   useEffect(() => {
@@ -290,6 +302,7 @@ export default function CatalogGalleryView({
         <h1 className="wtc-title">{catalog.name}</h1>
         {catalog.description && <div className="wtc-desc">{catalog.description}</div>}
       </div>
+      {!mobile && <button className="wtc-close" onClick={closePage} aria-label="ปิด" title="ปิด">×</button>}
     </header>
   )
 
@@ -315,7 +328,8 @@ export default function CatalogGalleryView({
   const onBack = hasBack && page >= images.length
   const nextIsBack = hasBack && page === images.length - 1
   const caption = onBack ? '' : (images[Math.min(page, images.length - 1)]?.caption || '')
-  const counter = onBack ? 'ปกหลัง' : `${Math.min(page + 1, images.length)} / ${images.length}`
+  // อยู่หน้าติดต่อแล้วไม่ต้องมีคำกำกับ — เลขหน้าของรูปสินค้าไม่เกี่ยวกับหน้านี้ และคำกำกับทำให้รก
+  const counter = onBack ? '' : `${Math.min(page + 1, images.length)} / ${images.length}`
   // ข้อความเชิญ ดึงจากปุ่มส่งข้อมูลที่ตั้งไว้ จะได้สอดคล้องกับสิ่งที่รออยู่หน้าถัดไป
   const moreLabel = (backCover?.blocks || []).find(b => b.type === 'submit' && b.visible !== false)?.label
     || 'ติดต่อทีมขาย'
@@ -348,7 +362,7 @@ export default function CatalogGalleryView({
             {nextIsBack
               ? <button className="wtc-more" onClick={() => goTo(page + 1)}>{moreLabel} ›</button>
               : caption && <div className="wtc-cap">{caption}</div>}
-            <div className="wtc-count">{counter}</div>
+            {counter && <div className="wtc-count">{counter}</div>}
           </div>
           <button className={`wtc-nav${nextIsBack ? ' hot' : ''}`} onClick={() => goTo(page + 1)}
             disabled={page >= total - 1} aria-label="หน้าถัดไป">›</button>
