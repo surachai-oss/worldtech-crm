@@ -1583,6 +1583,51 @@ export async function updateCatalog(id, patch, actor) {
 
 export const deleteCatalog = (id) => supabase.from('catalogs').delete().eq('id', id).then(handle)
 
+// สร้าง slug ที่ยังไม่มีใครใช้ โดยต่อท้ายด้วย -copy, -copy-2 ไปเรื่อยๆ
+// เช็คกับรายการจริงในฐานข้อมูล ไม่ใช่แค่ที่โหลดมาแสดงบนหน้าจอ กันชนกับเล่มที่ถูกกรองออกไป
+async function freeSlug(base) {
+  const rows = await supabase.from('catalogs').select('catalog_slug').like('catalog_slug', `${base}%`).then(handle)
+  const taken = new Set(rows.map(r => r.catalog_slug))
+  if (!taken.has(`${base}-copy`)) return `${base}-copy`
+  for (let n = 2; n < 200; n++) if (!taken.has(`${base}-copy-${n}`)) return `${base}-copy-${n}`
+  return `${base}-copy-${Date.now().toString(36)}`
+}
+
+// คัดลอกทั้งเล่ม: การตั้งค่า ปกหลัง และรูปทุกใบพร้อมลำดับเดิม
+// เล่มใหม่เป็นฉบับร่างเสมอ และยอดเปิดดูไม่ติดมาด้วย เพราะเป็นสถิติของลิงก์เดิม ไม่ใช่ของเล่มใหม่
+// รูปใช้ URL เดิมร่วมกัน ไม่ได้ก๊อปไฟล์ใน storage — ประหยัดพื้นที่และเร็วกว่ามาก
+// ผลคือถ้าลบรูปต้นฉบับออกจาก bucket เล่มที่คัดลอกจะรูปหายด้วย ซึ่งระบบไม่มีทางลบไฟล์เองอยู่แล้ว
+export async function duplicateCatalog(catalog, createdByName) {
+  const slug = await freeSlug(catalog.catalog_slug.replace(/-copy(-\d+)?$/, ''))
+  const rows = await supabase.from('catalogs').insert({
+    catalog_name: `${catalog.catalog_name} (สำเนา)`.slice(0, 200),
+    catalog_slug: slug,
+    description: catalog.description,
+    logo_url: catalog.logo_url,
+    back_cover: catalog.back_cover,
+    status: 'draft',
+    created_by_name: createdByName || null,
+    updated_by_name: createdByName || null,
+  }).select().then(handle)
+  const copy = rows[0]
+
+  const imgs = await listCatalogImages(catalog.id)
+  if (imgs.length) {
+    await supabase.from('catalog_images').insert(imgs.map((i, n) => ({
+      catalog_id: copy.id,
+      image_name: i.image_name, image_url: i.image_url, storage_path: i.storage_path,
+      caption: i.caption, display_order: n, is_visible: i.is_visible, is_cover: false,
+    }))).then(handle)
+    const cover = imgs.find(i => i.is_cover) || imgs[0]
+    if (cover) {
+      const made = await supabase.from('catalog_images').select('id')
+        .eq('catalog_id', copy.id).eq('image_url', cover.image_url).limit(1).then(handle)
+      if (made[0]) await setCatalogCover(made[0].id)
+    }
+  }
+  return copy
+}
+
 export const listCatalogImages = (catalogId) =>
   supabase.from('catalog_images').select('*')
     .eq('catalog_id', catalogId).eq('is_deleted', false)
@@ -1664,15 +1709,12 @@ export {
   LOGO_MIN, LOGO_MAX, BACKCOVER_DEFAULTS, newBlock, lineHref, isDark,
 } from './catalogBackCover'
 
+// ค่าตั้งต้นสำหรับเล่มที่ยังไม่เคยตั้งปกหลังเอง — อ่านอย่างเดียว ไม่มีหน้าจอไหนเขียนแล้ว
+// (เดิมเป็น "การตั้งค่าส่วนกลาง" ตอนนี้ผู้สร้างแต่ละเล่มดูแลปกหลังของตัวเอง)
 export async function fetchCatalogBackCover() {
   const rows = await supabase.from('settings').select('value').eq('key', BACKCOVER_SETTING_KEY).then(handle)
   return mergeBackCover(parseBackCover(rows[0]?.value) || {})
 }
-
-export const saveCatalogBackCover = (cfg) =>
-  supabase.from('settings')
-    .upsert([{ key: BACKCOVER_SETTING_KEY, value: JSON.stringify(mergeBackCover(cfg)) }], { onConflict: 'key' })
-    .then(handle)
 
 // ปกหลังของเล่มนี้ + บอกด้วยว่ากำลังใช้ค่ากลางอยู่หรือของตัวเอง
 export async function resolveCatalogBackCover(catalog) {
@@ -1687,7 +1729,7 @@ export const saveCatalogOwnBackCover = (catalogId, cfg) =>
     .update({ back_cover: cfg ? mergeBackCover(cfg) : null })
     .eq('id', catalogId).select().then(handle).then(r => r[0])
 
-// โลโก้ที่อัปโหลดเองสำหรับปกหลัง เก็บใน bucket เดียวกับรูปแคตตาล็อก แยกโฟลเดอร์ไว้
+// โลโก้ที่อัปโหลดเอง (หัวแคตตาล็อกและปกหลัง) เก็บใน bucket เดียวกับรูปแคตตาล็อก แยกโฟลเดอร์ไว้
 export async function uploadBackCoverLogo(file) {
   if (file.size > MAX_CATALOG_IMAGE_SIZE) throw new Error('ไฟล์ใหญ่เกิน 10MB')
   const safeName = file.name.replace(/[^\w.-]/g, '_').slice(-80)

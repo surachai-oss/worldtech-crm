@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  fetchCatalogBackCover, saveCatalogBackCover, saveCatalogOwnBackCover, resolveCatalogBackCover,
+  saveCatalogOwnBackCover, resolveCatalogBackCover,
   uploadBackCoverLogo, lineHref,
   PRESETS, COLOR_FIELDS, ALIGN_LABELS, BLOCK_LABELS, TEXT_STYLES, LOGO_MIN, LOGO_MAX, newBlock,
 } from '../lib/api'
@@ -8,9 +8,8 @@ import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import CatalogGalleryView from './CatalogGalleryView'
 
-// หน้าตั้งค่าปกหลัง ใช้ได้สองแบบ
-//   catalog = null  -> การตั้งค่าส่วนกลาง มีผลกับทุกเล่มที่ไม่ได้กำหนดเอง
-//   catalog = {...} -> การตั้งค่าเฉพาะเล่มนั้น
+// หน้าตั้งค่าปกหลังของแคตตาล็อกแต่ละเล่ม — ผู้สร้างเล่มนั้นดูแลเอง ไม่มีการตั้งค่าส่วนกลางแล้ว
+// เปิดครั้งแรกจะได้ค่าเริ่มต้นมาให้ แก้แล้วบันทึกจะผูกกับเล่มนี้เท่านั้น
 //
 // ปกหลังคือลำดับของบล็อก ผู้ออกแบบสลับลำดับ ซ่อน หรือเพิ่มบล็อกได้เอง
 // ช่องชื่อและช่องหมายเลขโทรศัพท์ลบไม่ได้ เพราะข้อมูลต้องบันทึกเข้าหน้าผู้ติดต่อต่อได้
@@ -169,27 +168,22 @@ function BlockEditor({ block, first, last, locked, onPatch, onMove, onRemove }) 
   )
 }
 
-export default function CatalogBackCoverModal({ catalog = null, onClose, onSaved }) {
-  const { toast, confirm } = useUi()
+export default function CatalogBackCoverModal({ catalog, onClose, onSaved }) {
+  const { toast } = useUi()
   const { t } = useLanguage()
-  const perCatalog = Boolean(catalog)
 
   const [cfg, setCfg] = useState(null)
-  const [usingShared, setUsingShared] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     let alive = true
-    const load = perCatalog
-      ? resolveCatalogBackCover(catalog)
-      : fetchCatalogBackCover().then(c => ({ cfg: c, usingShared: true }))
-    load
-      .then(r => { if (alive) { setCfg(r.cfg); setUsingShared(perCatalog ? r.usingShared : true) } })
+    resolveCatalogBackCover(catalog)
+      .then(r => { if (alive) setCfg(r.cfg) })
       .catch(e => { if (alive) toast('โหลดการตั้งค่าไม่สำเร็จ: ' + e.message, 'error') })
     return () => { alive = false }
-  }, [catalog, perCatalog, toast])
+  }, [catalog, toast])
 
-  const editable = !perCatalog || !usingShared
+  const editable = true
   const setColor = (k) => (v) => setCfg(c => ({ ...c, colors: { ...c.colors, [k]: v } }))
 
   const patchBlock = (id, p) =>
@@ -209,26 +203,14 @@ export default function CatalogBackCoverModal({ catalog = null, onClose, onSaved
   const save = async () => {
     setSaving(true)
     try {
-      if (perCatalog) await saveCatalogOwnBackCover(catalog.id, cfg)
-      else await saveCatalogBackCover(cfg)
-      toast(perCatalog ? 'บันทึกปกหลังของเล่มนี้เรียบร้อยแล้ว' : 'บันทึกเรียบร้อยแล้ว มีผลกับทุกเล่มที่ใช้การตั้งค่าส่วนกลาง', 'success')
+      await saveCatalogOwnBackCover(catalog.id, cfg)
+      toast('บันทึกปกหลังเรียบร้อยแล้ว', 'success')
       onSaved?.()
       onClose()
     } catch (e) {
       const msg = /row-level security|permission/i.test(e.message) ? 'ไม่มีสิทธิ์แก้ไขการตั้งค่านี้' : e.message
       toast('บันทึกไม่สำเร็จ: ' + msg, 'error')
     } finally { setSaving(false) }
-  }
-
-  const backToShared = async () => {
-    if (!(await confirm('กลับไปใช้การตั้งค่าส่วนกลางหรือไม่ ปกหลังที่กำหนดไว้เฉพาะเล่มนี้จะถูกลบ'))) return
-    try {
-      await saveCatalogOwnBackCover(catalog.id, null)
-      const r = await resolveCatalogBackCover({ ...catalog, back_cover: null })
-      setCfg(r.cfg); setUsingShared(true)
-      toast('กลับไปใช้การตั้งค่าส่วนกลางแล้ว', 'success')
-      onSaved?.()
-    } catch (e) { toast('เปลี่ยนไม่สำเร็จ: ' + e.message, 'error') }
   }
 
   const lockedIds = cfg
@@ -241,7 +223,7 @@ export default function CatalogBackCoverModal({ catalog = null, onClose, onSaved
         <style>{CSS}</style>
         <div className="modal-header">
           <div className="modal-title">
-            {perCatalog ? `ปกหลัง — ${catalog.catalog_name}` : 'ปกหลัง (การตั้งค่าส่วนกลาง)'}
+            ปกหลัง — {catalog.catalog_name}
           </div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
@@ -251,32 +233,6 @@ export default function CatalogBackCoverModal({ catalog = null, onClose, onSaved
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
 
               <div style={{ flex: '1 1 380px', minWidth: 0 }}>
-                {perCatalog && (
-                  <div style={{
-                    padding: '11px 13px', borderRadius: 9, marginBottom: 14, fontSize: 12, lineHeight: 1.75,
-                    background: usingShared ? '#fff' : '#fff8e1',
-                    border: `1px solid ${usingShared ? 'var(--border)' : '#ffe082'}`,
-                  }}>
-                    {usingShared ? (
-                      <>
-                        แคตตาล็อกเล่มนี้ใช้การตั้งค่าส่วนกลางอยู่ หากต้องการกำหนดรูปแบบเฉพาะเล่มนี้ กรุณากดปุ่มด้านล่างก่อน
-                        <div style={{ marginTop: 8 }}>
-                          <button className="btn btn-outline btn-xs" onClick={() => setUsingShared(false)}>
-                            กำหนดเฉพาะเล่มนี้
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        แคตตาล็อกเล่มนี้ใช้ปกหลังของตนเอง แยกจากการตั้งค่าส่วนกลางแล้ว
-                        <div style={{ marginTop: 8 }}>
-                          <button className="btn btn-outline btn-xs" onClick={backToShared}>กลับไปใช้การตั้งค่าส่วนกลาง</button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-
                 <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0, opacity: editable ? 1 : .55 }}>
 
                   <Section title="การแสดงผล" desc="เปิดหรือปิดปกหลังทั้งหน้า และกำหนดชุดสีกับการจัดวาง">

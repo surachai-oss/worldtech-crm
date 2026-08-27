@@ -22,7 +22,7 @@ export default async (req) => {
 
   const { data: cat, error } = await admin
     .from('catalogs')
-    .select('id, catalog_name, catalog_slug, description, cover_image_url, status, updated_at')
+    .select('id, catalog_name, catalog_slug, description, cover_image_url, status, updated_at, logo_url')
     .eq('catalog_slug', slug)
     .maybeSingle()
 
@@ -61,6 +61,7 @@ export default async (req) => {
       slug: cat.catalog_slug,
       description: cat.description || '',
       cover_image_url: cat.cover_image_url || '',
+      logo_url: cat.logo_url || '',
       updated_at: cat.updated_at,
     },
     images: (imgs || []).map(i => ({ url: i.image_url, caption: i.caption || '' })),

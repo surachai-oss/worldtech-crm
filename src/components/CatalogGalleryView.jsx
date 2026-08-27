@@ -44,6 +44,14 @@ const CSS = `
 .wtc-nav{flex:none;width:40px;height:40px;border-radius:50%;border:1px solid var(--wtc-line);background:#fff;
   color:var(--wtc-blue);font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center}
 .wtc-nav:disabled{color:#c7ced9;background:#fafbfc}
+/* หน้าสุดท้ายของรูปสินค้าจะขึ้น "4 / 4" ซึ่งอ่านได้ว่าจบแล้ว ทั้งที่ยังมีปกหลังต่อ
+   จึงเน้นปุ่มถัดไปให้ทึบ และเพิ่มคำเชิญที่กดได้ ให้รู้ว่ายังไปต่อได้ */
+.wtc-nav.hot{background:var(--wtc-blue);color:#fff;border-color:var(--wtc-blue);
+  animation:wtc-pulse 2.4s ease-in-out infinite}
+@keyframes wtc-pulse{0%,100%{box-shadow:0 0 0 0 rgba(27,118,255,.45)}50%{box-shadow:0 0 0 7px rgba(27,118,255,0)}}
+@media (prefers-reduced-motion:reduce){.wtc-nav.hot{animation:none}}
+.wtc-more{display:block;width:100%;border:0;background:none;padding:0;cursor:pointer;
+  font-family:inherit;font-size:12.5px;font-weight:600;color:var(--wtc-blue);line-height:1.4}
 .wtc-bar-mid{flex:1;min-width:0;text-align:center}
 .wtc-cap{font-size:12px;line-height:1.5;color:var(--wtc-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wtc-count{font-size:12px;color:var(--wtc-muted);font-variant-numeric:tabular-nums}
@@ -301,8 +309,12 @@ export default function CatalogGalleryView({
   }
 
   const onBack = hasBack && page >= images.length
+  const nextIsBack = hasBack && page === images.length - 1
   const caption = onBack ? '' : (images[Math.min(page, images.length - 1)]?.caption || '')
   const counter = onBack ? 'ปกหลัง' : `${Math.min(page + 1, images.length)} / ${images.length}`
+  // ข้อความเชิญ ดึงจากปุ่มส่งข้อมูลที่ตั้งไว้ จะได้สอดคล้องกับสิ่งที่รออยู่หน้าถัดไป
+  const moreLabel = (backCover?.blocks || []).find(b => b.type === 'submit' && b.visible !== false)?.label
+    || 'ติดต่อทีมขาย'
 
   return (
     <div className={`wtc-root${mobile ? '' : ' wtc-fixed'}`}>
@@ -329,10 +341,13 @@ export default function CatalogGalleryView({
         <div className="wtc-bar">
           <button className="wtc-nav" onClick={() => goTo(page - 1)} disabled={page <= 0} aria-label="หน้าก่อน">‹</button>
           <div className="wtc-bar-mid">
-            {caption && <div className="wtc-cap">{caption}</div>}
+            {nextIsBack
+              ? <button className="wtc-more" onClick={() => goTo(page + 1)}>{moreLabel} ›</button>
+              : caption && <div className="wtc-cap">{caption}</div>}
             <div className="wtc-count">{counter}</div>
           </div>
-          <button className="wtc-nav" onClick={() => goTo(page + 1)} disabled={page >= total - 1} aria-label="หน้าถัดไป">›</button>
+          <button className={`wtc-nav${nextIsBack ? ' hot' : ''}`} onClick={() => goTo(page + 1)}
+            disabled={page >= total - 1} aria-label="หน้าถัดไป">›</button>
         </div>
         <div className="wtc-foot"><b>WORLDTECH</b> · Official product catalog by Worldtech</div>
       </div>

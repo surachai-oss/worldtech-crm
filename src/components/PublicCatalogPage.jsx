@@ -65,6 +65,7 @@ export default function PublicCatalogPage() {
     <CatalogGalleryView
       catalog={data.catalog} images={data.images}
       backCover={data.backCover} onSubmitLead={sendLead}
+      logoSrc={data.catalog.logo_url || '/worldtech-logo.png'}
     />
   )
 }

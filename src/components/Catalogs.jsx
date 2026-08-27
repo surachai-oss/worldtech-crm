@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import {
-  listCatalogs, createCatalog, updateCatalog, deleteCatalog,
+  listCatalogs, createCatalog, updateCatalog, deleteCatalog, duplicateCatalog,
   fetchCatalogImageCounts, fetchCatalogViewCounts, slugify, isValidSlug,
 } from '../lib/api'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import CatalogLinkModal from './CatalogLinkModal'
 import CatalogViewReport from './CatalogViewReport'
-import CatalogBackCoverModal from './CatalogBackCoverModal'
 
 // รายการแคตตาล็อกทั้งหมด — ทุกคนใน CRM เห็นทุกอัน เพราะเป็นสื่อการตลาดร่วม ยิ่งใช้ซ้ำยิ่งดี
 // ฝ่ายบัญชีเห็นแต่แก้ไม่ได้ (บังคับที่ RLS ฝั่งนี้แค่ซ่อนปุ่ม)
@@ -106,7 +105,6 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
   const [showNew, setShowNew] = useState(false)
   const [linkFor, setLinkFor] = useState(null)
   const [showReport, setShowReport] = useState(false)
-  const [showBack, setShowBack] = useState(false)
   const canManage = !perm?.isFinance
 
   const load = async () => {
@@ -139,6 +137,14 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
     } catch (e) { toast('เปลี่ยนสถานะไม่สำเร็จ: ' + e.message, 'error') }
   }
 
+  const onCopy = async (c) => {
+    try {
+      const copy = await duplicateCatalog(c, currentUser?.name)
+      toast('คัดลอกแล้ว เปิดเป็นฉบับร่างให้แก้ต่อได้เลย', 'success')
+      onOpen(copy.id)
+    } catch (e) { toast('คัดลอกไม่สำเร็จ: ' + e.message, 'error') }
+  }
+
   const onDelete = async (c) => {
     if (!(await confirm(`ลบแคตตาล็อก "${c.catalog_name}"? รูปทั้งหมดจะถูกลบไปด้วย และลิงก์ที่เคยส่งลูกค้าจะใช้ไม่ได้อีก`))) return
     try { await deleteCatalog(c.id); toast('ลบแล้ว', 'success'); load() }
@@ -158,7 +164,6 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-outline" onClick={() => setShowReport(true)}>{t('รายงานยอดเปิดดู')}</button>
-          {perm?.isAdmin && <button className="btn btn-outline" onClick={() => setShowBack(true)}>{t('ปกหลัง (ส่วนกลาง)')}</button>}
           {canManage && <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ {t('สร้างแคตตาล็อก')}</button>}
         </div>
       </div>
@@ -166,7 +171,6 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
       {showNew && <NewCatalogModal existingSlugs={rows.map(r => r.catalog_slug)} onClose={() => setShowNew(false)} onSave={onCreate} />}
       {linkFor && <CatalogLinkModal catalog={linkFor} onClose={() => setLinkFor(null)} />}
       {showReport && <CatalogViewReport onClose={() => setShowReport(false)} />}
-      {showBack && <CatalogBackCoverModal onClose={() => setShowBack(false)} />}
 
       <div className="card list-card">
         <div className="table-wrap">
@@ -206,7 +210,8 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
                       {c.updated_by_name && <div style={{ fontSize: 11 }}>{c.updated_by_name}</div>}
                     </td>
                     <td className="td-actions">
-                      <button className="btn btn-outline btn-xs" onClick={() => onOpen(c.id)}>{t(canManage ? 'จัดการรูป' : 'ดู')}</button>
+                      <button className="btn btn-outline btn-xs" onClick={() => onOpen(c.id)}>{t(canManage ? 'แก้ไข' : 'ดู')}</button>
+                      {canManage && <button className="btn btn-outline btn-xs" onClick={() => onCopy(c)}>{t('คัดลอก')}</button>}
                       <button className="btn btn-outline btn-xs" onClick={() => setLinkFor(c)}>{t('คัดลอกลิงก์')}</button>
                       {canManage && (
                         <button className={`btn btn-xs ${c.status === 'published' ? 'btn-secondary' : 'btn-success'}`} onClick={() => togglePublish(c)}>

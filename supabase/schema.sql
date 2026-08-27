@@ -2683,3 +2683,7 @@ delete from settings where key in (
   'catalog_backcover_line', 'catalog_backcover_phone',
   'catalog_backcover_logo', 'catalog_backcover_button', 'catalog_backcover_interest'
 );
+
+-- โลโก้ประจำแคตตาล็อก — ว่างไว้จะใช้โลโก้บริษัทที่มากับระบบ
+-- มีไว้เพื่อวันที่รีแบรนด์ จะได้เปลี่ยนโลโก้จากหน้าจอ ไม่ต้องแก้โค้ดและ deploy ใหม่
+alter table catalogs add column if not exists logo_url text;

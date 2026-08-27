@@ -3,6 +3,7 @@ import {
   fetchCatalog, updateCatalog, listCatalogImages, uploadCatalogImage, updateCatalogImage,
   softDeleteCatalogImage, setCatalogCover, reorderCatalogImages, fetchCatalogMonthlyViews, resolveCatalogBackCover,
   isValidSlug, catalogPublicUrl, CATALOG_STATUS, CATALOG_ACCEPT, MAX_CATALOG_IMAGE_SIZE, MAX_CATALOG_PDF_SIZE, isPdf,
+  uploadBackCoverLogo,
 } from '../lib/api'
 import { pdfToImageFiles } from '../lib/pdfToImages'
 import { useUi } from './UiContext'
@@ -53,6 +54,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const [months, setMonths] = useState([])
   const [backCover, setBackCover] = useState(null)
   const [showBack, setShowBack] = useState(false)
+  const [logoBusy, setLogoBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -88,6 +90,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
         catalog_name: cat.catalog_name.trim(),
         catalog_slug: cat.catalog_slug.trim().toLowerCase(),
         description: cat.description?.trim() || null,
+        logo_url: cat.logo_url || null,
         status: cat.status,
       }, actor)
       setDirty(false)
@@ -187,6 +190,18 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
     catch (e) { toast('ลบไม่สำเร็จ: ' + e.message, 'error') }
   }
 
+  // โลโก้ประจำเล่ม — มีไว้ให้เปลี่ยนเองวันที่รีแบรนด์ ไม่ต้องแก้โค้ด
+  const pickLogo = async (file) => {
+    if (!file) return
+    setLogoBusy(true)
+    try {
+      const url = await uploadBackCoverLogo(file)
+      setCat(c => ({ ...c, logo_url: url })); setDirty(true)
+      toast('อัปโหลดโลโก้แล้ว อย่าลืมกดบันทึก', 'success')
+    } catch (e) { toast('อัปโหลดไม่สำเร็จ: ' + e.message, 'error') }
+    finally { setLogoBusy(false) }
+  }
+
   const move = async (index, delta) => {
     const to = index + delta
     if (to < 0 || to >= images.length) return
@@ -248,7 +263,8 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
             </div>
             <div className="modal-body" style={{ padding: 0, maxHeight: '78vh', overflowY: 'auto' }}>
               <CatalogGalleryView catalog={previewCatalog} images={previewImages}
-                backCover={backCover} onSubmitLead={previewSubmit} />
+                backCover={backCover} onSubmitLead={previewSubmit}
+                logoSrc={cat.logo_url || '/worldtech-logo.png'} />
             </div>
           </div>
         </div>
@@ -272,6 +288,24 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
           <div className="form-group">
             <label className="form-label">{t('คำอธิบายสั้นๆ')}</label>
             <textarea className="form-control" rows={3} value={cat.description || ''} onChange={set('description')} disabled={!canManage} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">{t('โลโก้บนหัวแคตตาล็อก')}</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+              <img src={cat.logo_url || '/worldtech-logo.png'} alt=""
+                style={{ height: 30, width: 'auto', maxWidth: 90, objectFit: 'contain' }}
+                onError={e => { e.currentTarget.style.visibility = 'hidden' }} />
+              {cat.logo_url && canManage && (
+                <button className="btn btn-outline btn-xs" onClick={() => { setCat(c => ({ ...c, logo_url: '' })); setDirty(true) }}>
+                  {t('ใช้โลโก้บริษัท')}
+                </button>
+              )}
+            </div>
+            <input className="form-control" type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml"
+              disabled={!canManage || logoBusy} onChange={e => { pickLogo(e.target.files?.[0]); e.target.value = '' }} />
+            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
+              {logoBusy ? t('กำลังอัปโหลด...') : t('ไม่อัปโหลดจะใช้โลโก้บริษัทที่มากับระบบ — เปลี่ยนได้เองวันที่รีแบรนด์')}
+            </div>
           </div>
 
           <div className="form-group">
@@ -377,7 +411,8 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
           </div>
           <div className="cb-preview-frame">
             <CatalogGalleryView catalog={previewCatalog} images={previewImages}
-              backCover={backCover} onSubmitLead={previewSubmit} mobile />
+              backCover={backCover} onSubmitLead={previewSubmit}
+              logoSrc={cat.logo_url || '/worldtech-logo.png'} mobile />
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
             <button className="btn btn-outline btn-sm" style={{ flex: 1 }} onClick={() => setShowFull(true)}>{t('ดูเต็มหน้าจอ')}</button>
