@@ -1583,22 +1583,19 @@ export async function updateCatalog(id, patch, actor) {
 
 export const deleteCatalog = (id) => supabase.from('catalogs').delete().eq('id', id).then(handle)
 
-// สร้าง slug ที่ยังไม่มีใครใช้ โดยต่อท้ายด้วย -copy, -copy-2 ไปเรื่อยๆ
-// เช็คกับรายการจริงในฐานข้อมูล ไม่ใช่แค่ที่โหลดมาแสดงบนหน้าจอ กันชนกับเล่มที่ถูกกรองออกไป
-async function freeSlug(base) {
-  const rows = await supabase.from('catalogs').select('catalog_slug').like('catalog_slug', `${base}%`).then(handle)
-  const taken = new Set(rows.map(r => r.catalog_slug))
-  if (!taken.has(`${base}-copy`)) return `${base}-copy`
-  for (let n = 2; n < 200; n++) if (!taken.has(`${base}-copy-${n}`)) return `${base}-copy-${n}`
-  return `${base}-copy-${Date.now().toString(36)}`
-}
+// ลิงก์ชั่วคราวของเล่มที่เพิ่งคัดลอกมา — ตั้งใจให้ดูออกว่ายังไม่ได้ตั้งชื่อ
+// ไม่สืบ slug จากเล่มต้นฉบับ เพราะลิงก์เป็นของเฉพาะแคตตาล็อกนั้น ไม่ควรลอกกันมา
+// ระบบไม่ยอมให้เผยแพร่จนกว่าจะเปลี่ยนเป็นลิงก์จริง (ดู isTempSlug)
+export const TEMP_SLUG_PREFIX = 'untitled-'
+export const isTempSlug = (slug) => String(slug || '').startsWith(TEMP_SLUG_PREFIX)
+const tempSlug = () => `${TEMP_SLUG_PREFIX}${Date.now().toString(36)}${Math.floor(Math.random() * 46656).toString(36)}`
 
-// คัดลอกทั้งเล่ม: การตั้งค่า ปกหลัง และรูปทุกใบพร้อมลำดับเดิม
+// คัดลอกทั้งเล่ม: การตั้งค่า ปกหลัง และรูปทุกใบพร้อมลำดับเดิม — ยกเว้นลิงก์ (slug)
 // เล่มใหม่เป็นฉบับร่างเสมอ และยอดเปิดดูไม่ติดมาด้วย เพราะเป็นสถิติของลิงก์เดิม ไม่ใช่ของเล่มใหม่
 // รูปใช้ URL เดิมร่วมกัน ไม่ได้ก๊อปไฟล์ใน storage — ประหยัดพื้นที่และเร็วกว่ามาก
 // ผลคือถ้าลบรูปต้นฉบับออกจาก bucket เล่มที่คัดลอกจะรูปหายด้วย ซึ่งระบบไม่มีทางลบไฟล์เองอยู่แล้ว
 export async function duplicateCatalog(catalog, createdByName) {
-  const slug = await freeSlug(catalog.catalog_slug.replace(/-copy(-\d+)?$/, ''))
+  const slug = tempSlug()
   const rows = await supabase.from('catalogs').insert({
     catalog_name: `${catalog.catalog_name} (สำเนา)`.slice(0, 200),
     catalog_slug: slug,

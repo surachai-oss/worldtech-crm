@@ -37,6 +37,8 @@ export const EN_DICT = {
   'ปกหลัง': 'Back cover',
   'แก้ไข': 'Edit',
   'คัดลอก': 'Duplicate',
+  'ลิงก์ชั่วคราว — ยังไม่ได้ตั้ง': 'Temporary link — not set yet',
+  'นี่คือลิงก์ชั่วคราวที่ระบบตั้งให้ตอนคัดลอก กรุณาตั้งลิงก์ใหม่ให้ตรงกับแคตตาล็อกเล่มนี้ก่อนเผยแพร่': 'This is a temporary link created when the catalog was duplicated. Set a link of its own before publishing.',
   'โลโก้บนหัวแคตตาล็อก': 'Header logo',
   'ใช้โลโก้บริษัท': 'Use the company logo',
   'ไม่อัปโหลดจะใช้โลโก้บริษัทที่มากับระบบ — เปลี่ยนได้เองวันที่รีแบรนด์': 'Leave empty to use the built-in company logo — change it here if the brand changes',

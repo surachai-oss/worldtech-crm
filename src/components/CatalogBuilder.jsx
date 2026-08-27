@@ -3,7 +3,7 @@ import {
   fetchCatalog, updateCatalog, listCatalogImages, uploadCatalogImage, updateCatalogImage,
   softDeleteCatalogImage, setCatalogCover, reorderCatalogImages, fetchCatalogMonthlyViews, resolveCatalogBackCover,
   isValidSlug, catalogPublicUrl, CATALOG_STATUS, CATALOG_ACCEPT, MAX_CATALOG_IMAGE_SIZE, MAX_CATALOG_PDF_SIZE, isPdf,
-  uploadBackCoverLogo,
+  uploadBackCoverLogo, isTempSlug,
 } from '../lib/api'
 import { pdfToImageFiles } from '../lib/pdfToImages'
 import { useUi } from './UiContext'
@@ -84,6 +84,10 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const save = async () => {
     if (!cat.catalog_name?.trim()) { toast('กรุณากรอกชื่อแคตตาล็อก', 'error'); return }
     if (!isValidSlug(cat.catalog_slug || '')) { toast('ลิงก์ (slug) ใช้ได้เฉพาะ a-z, 0-9 และขีดกลาง', 'error'); return }
+    // เล่มที่เพิ่งคัดลอกมายังใช้ลิงก์ชั่วคราว ต้องตั้งลิงก์จริงก่อนถึงจะเผยแพร่ได้
+    if (cat.status === 'published' && isTempSlug(cat.catalog_slug)) {
+      toast('ยังเป็นลิงก์ชั่วคราว กรุณาตั้งลิงก์ (slug) ใหม่ก่อนเผยแพร่', 'error'); return
+    }
     setSaving(true)
     try {
       await updateCatalog(cat.id, {
@@ -280,10 +284,17 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
           <div className="form-group">
             <label className="form-label required">{t('ลิงก์ (slug)')}</label>
             <input className="form-control" value={cat.catalog_slug || ''} disabled={!canManage}
+              style={isTempSlug(cat.catalog_slug) ? { borderColor: '#dd6b20', background: '#fffaf0' } : undefined}
               onChange={e => { setDirty(true); setCat(c => ({ ...c, catalog_slug: e.target.value.toLowerCase() })) }} />
-            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
-              {t('เปลี่ยน slug แล้วลิงก์เดิมที่เคยส่งลูกค้าจะใช้ไม่ได้ทันที')}
-            </div>
+            {isTempSlug(cat.catalog_slug) ? (
+              <div style={{ fontSize: 11, color: '#c05621', marginTop: 4, lineHeight: 1.6 }}>
+                {t('นี่คือลิงก์ชั่วคราวที่ระบบตั้งให้ตอนคัดลอก กรุณาตั้งลิงก์ใหม่ให้ตรงกับแคตตาล็อกเล่มนี้ก่อนเผยแพร่')}
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
+                {t('เปลี่ยน slug แล้วลิงก์เดิมที่เคยส่งลูกค้าจะใช้ไม่ได้ทันที')}
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label className="form-label">{t('คำอธิบายสั้นๆ')}</label>

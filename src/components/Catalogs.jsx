@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   listCatalogs, createCatalog, updateCatalog, deleteCatalog, duplicateCatalog,
-  fetchCatalogImageCounts, fetchCatalogViewCounts, slugify, isValidSlug,
+  fetchCatalogImageCounts, fetchCatalogViewCounts, slugify, isValidSlug, isTempSlug,
 } from '../lib/api'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
@@ -130,6 +130,9 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
     if (next === 'published' && !(counts.get(c.id) > 0)) {
       toast('ยังไม่มีรูปที่แสดงในแคตตาล็อกนี้ อัปโหลดรูปก่อนเผยแพร่', 'error'); return
     }
+    if (next === 'published' && isTempSlug(c.catalog_slug)) {
+      toast('ยังเป็นลิงก์ชั่วคราว กด "แก้ไข" เพื่อตั้งลิงก์ (slug) ใหม่ก่อนเผยแพร่', 'error'); return
+    }
     try {
       await updateCatalog(c.id, { status: next }, { name: currentUser?.name, id: currentUser?.id })
       toast(next === 'published' ? 'เผยแพร่แล้ว ส่งลิงก์ให้ลูกค้าได้เลย' : 'ซ่อนแล้ว ลูกค้าเปิดลิงก์จะไม่เห็นรูป', 'success')
@@ -140,7 +143,7 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
   const onCopy = async (c) => {
     try {
       const copy = await duplicateCatalog(c, currentUser?.name)
-      toast('คัดลอกแล้ว เปิดเป็นฉบับร่างให้แก้ต่อได้เลย', 'success')
+      toast('คัดลอกแล้ว — กรุณาตั้งลิงก์ (slug) ใหม่ก่อนเผยแพร่', 'success')
       onOpen(copy.id)
     } catch (e) { toast('คัดลอกไม่สำเร็จ: ' + e.message, 'error') }
   }
@@ -201,7 +204,10 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
                       {c.catalog_name}
                       {c.description && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>{c.description}</div>}
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-light)' }}>/catalog/{c.catalog_slug}</td>
+                    <td style={{ fontSize: 12, color: isTempSlug(c.catalog_slug) ? '#c05621' : 'var(--text-light)' }}>
+                      /catalog/{c.catalog_slug}
+                      {isTempSlug(c.catalog_slug) && <div style={{ fontSize: 11 }}>{t('ลิงก์ชั่วคราว — ยังไม่ได้ตั้ง')}</div>}
+                    </td>
                     <td><StatusBadge status={c.status} t={t} /></td>
                     <td style={{ textAlign: 'right' }}>{counts.get(c.id) || 0}</td>
                     <td style={{ textAlign: 'right' }}>{views.get(c.id) || 0}</td>
