@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient'
 import { normalizeLeadSource, LEAD_SOURCE_UNKNOWN, LEAD_SOURCE_INVALID } from './leadOptions'
 import { toLocalDateStr } from './format'
+import { BACKCOVER_SETTING_KEY, mergeBackCover, parseBackCover } from './catalogBackCover'
 
 // ===== CONSTANTS (ค่าคงที่ระบบที่ไม่ให้ผู้ใช้แก้เอง) =====
 // รายการ dropdown อื่นๆ (สถานะ, stage, ประเภท ฯลฯ) ย้ายไปเป็น picklists ที่แก้ไขได้ในแอปแล้ว — ดู PicklistsContext
@@ -1656,64 +1657,32 @@ export function logCatalogView(slug, source) {
 }
 
 // ===== ปกหลังแคตตาล็อก =====
-// ข้อความกับช่องทางติดต่อเก็บใน settings เป็นค่ากลาง ใช้กับทุกเล่ม แก้ที่เดียว
-export const CATALOG_BACKCOVER_KEYS = [
-  'catalog_backcover_enabled', 'catalog_backcover_heading',
-  'catalog_backcover_note', 'catalog_backcover_line', 'catalog_backcover_phone',
-  'catalog_backcover_logo', 'catalog_backcover_button', 'catalog_backcover_interest',
-]
-
-const BACKCOVER_DEFAULTS = {
-  enabled: true,
-  heading: 'สนใจรุ่นไหน ให้ทีมขายติดต่อกลับได้เลย',
-  note: 'กรอกชื่อกับเบอร์ไว้ ทีมขายติดต่อกลับในเวลาทำการ',
-  line: '',
-  phone: '',
-  logo: 'md',
-  button: 'ให้ทีมขายติดต่อกลับ',
-  showInterest: true,
-}
+// ค่ากลางอยู่ใน settings ก้อนเดียว ส่วนเล่มที่อยากคุมเอง เก็บใน catalogs.back_cover
+// null = ใช้ค่ากลาง (ไม่ผสมกัน — ผสมแล้วเดาไม่ออกว่าเล่มไหนโชว์อะไร)
+export { THEMES, LOGO_SIZES, LOGO_LABELS, ALIGN_LABELS, ORDER_LABELS, BACKCOVER_DEFAULTS, lineHref } from './catalogBackCover'
 
 export async function fetchCatalogBackCover() {
-  const rows = await supabase.from('settings').select('key, value')
-    .in('key', CATALOG_BACKCOVER_KEYS).then(handle)
-  const m = new Map(rows.map(r => [r.key, r.value]))
-  const pick = (k, d) => (m.has(`catalog_backcover_${k}`) ? (m.get(`catalog_backcover_${k}`) ?? '') : d)
-  return {
-    enabled: pick('enabled', '1') === '1',
-    heading: pick('heading', BACKCOVER_DEFAULTS.heading) || BACKCOVER_DEFAULTS.heading,
-    note: pick('note', BACKCOVER_DEFAULTS.note),
-    line: pick('line', ''),
-    phone: pick('phone', ''),
-    logo: pick('logo', BACKCOVER_DEFAULTS.logo) || BACKCOVER_DEFAULTS.logo,
-    button: pick('button', BACKCOVER_DEFAULTS.button) || BACKCOVER_DEFAULTS.button,
-    showInterest: pick('interest', '1') !== '0',
-  }
+  const rows = await supabase.from('settings').select('value').eq('key', BACKCOVER_SETTING_KEY).then(handle)
+  return mergeBackCover(parseBackCover(rows[0]?.value) || {})
 }
 
-// upsert ทีละคีย์ — ตาราง settings เป็น key/value ล้วน ไม่มีแถวเดียวรวมทุกค่า
-export async function saveCatalogBackCover(cfg) {
-  const rows = [
-    { key: 'catalog_backcover_enabled', value: cfg.enabled ? '1' : '0' },
-    { key: 'catalog_backcover_heading', value: (cfg.heading || '').trim() },
-    { key: 'catalog_backcover_note', value: (cfg.note || '').trim() },
-    { key: 'catalog_backcover_line', value: (cfg.line || '').trim() },
-    { key: 'catalog_backcover_phone', value: (cfg.phone || '').trim() },
-    { key: 'catalog_backcover_logo', value: cfg.logo || 'md' },
-    { key: 'catalog_backcover_button', value: (cfg.button || '').trim() || BACKCOVER_DEFAULTS.button },
-    { key: 'catalog_backcover_interest', value: cfg.showInterest ? '1' : '0' },
-  ]
-  return supabase.from('settings').upsert(rows, { onConflict: 'key' }).then(handle)
+export const saveCatalogBackCover = (cfg) =>
+  supabase.from('settings')
+    .upsert([{ key: BACKCOVER_SETTING_KEY, value: JSON.stringify(mergeBackCover(cfg)) }], { onConflict: 'key' })
+    .then(handle)
+
+// ปกหลังของเล่มนี้ + บอกด้วยว่ากำลังใช้ค่ากลางอยู่หรือของตัวเอง
+export async function resolveCatalogBackCover(catalog) {
+  const own = catalog?.back_cover
+  if (own) return { cfg: mergeBackCover(own), usingShared: false }
+  return { cfg: await fetchCatalogBackCover(), usingShared: true }
 }
 
-// ลิงก์ LINE: รับได้ทั้งลิงก์เต็มที่ก๊อปจากแอป และไอดีเปล่าที่คนพิมพ์เอง
-export function lineHref(value) {
-  const v = String(value || '').trim()
-  if (!v) return ''
-  if (/^https?:\/\//i.test(v)) return v
-  if (v.startsWith('@')) return `https://line.me/R/ti/p/${encodeURIComponent(v)}`
-  return `https://line.me/ti/p/~${encodeURIComponent(v)}`
-}
+// ส่ง null = เลิกใช้ชุดของตัวเอง กลับไปใช้ค่ากลาง
+export const saveCatalogOwnBackCover = (catalogId, cfg) =>
+  supabase.from('catalogs')
+    .update({ back_cover: cfg ? mergeBackCover(cfg) : null })
+    .eq('id', catalogId).select().then(handle).then(r => r[0])
 
 // ส่งฟอร์มปกหลังเข้าท่อลีดเดิม (submit-lead ใช้ service role key เขียนตาราง leads)
 // ไม่ได้ทำฟังก์ชันใหม่ เพราะการตรวจข้อมูล ตัดความยาว และยุบชื่อช่องทาง อยู่ในนั้นครบแล้ว

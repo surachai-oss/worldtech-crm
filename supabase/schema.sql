@@ -2655,3 +2655,31 @@ insert into settings (key, value) values
   ('catalog_backcover_button',   'ให้ทีมขายติดต่อกลับ'),
   ('catalog_backcover_interest', '1')
 on conflict (key) do nothing;
+
+-- ===== ปกหลัง: เก็บทั้งชุดเป็น JSON ก้อนเดียว =====
+-- เดิมแตกเป็น setting ทีละคีย์ พอต้องรองรับ "ตั้งเฉพาะเล่มนี้" ด้วยเลยเก็บเป็นก้อน
+-- ก้อนเดียวทำให้ทับทั้งชุดได้ตรงไปตรงมา ไม่ต้องไล่ว่าคีย์ไหนทับคีย์ไหน
+-- catalogs.back_cover เป็น null = ใช้ค่ากลาง / ไม่ null = เล่มนั้นใช้ชุดของตัวเอง
+alter table catalogs add column if not exists back_cover jsonb;
+
+-- ย้ายค่าที่เคยกรอกไว้ในคีย์แยกมาเป็นก้อนเดียว ทำครั้งเดียวตอนยังไม่มีคีย์ใหม่
+-- (ถ้าไม่ย้าย ลิงก์ LINE กับข้อความที่ทีมกรอกไปแล้วจะหายไปเฉยๆ)
+insert into settings (key, value)
+select 'catalog_backcover', json_build_object(
+  'enabled',      coalesce((select value from settings where key = 'catalog_backcover_enabled'), '1') = '1',
+  'heading',      coalesce(nullif((select value from settings where key = 'catalog_backcover_heading'), ''), 'สนใจรุ่นไหน ให้ทีมขายติดต่อกลับได้เลย'),
+  'note',         coalesce((select value from settings where key = 'catalog_backcover_note'), 'กรอกชื่อกับเบอร์ไว้ ทีมขายติดต่อกลับในเวลาทำการ'),
+  'button',       coalesce(nullif((select value from settings where key = 'catalog_backcover_button'), ''), 'ให้ทีมขายติดต่อกลับ'),
+  'line',         coalesce((select value from settings where key = 'catalog_backcover_line'), ''),
+  'phone',        coalesce((select value from settings where key = 'catalog_backcover_phone'), ''),
+  'logo',         coalesce(nullif((select value from settings where key = 'catalog_backcover_logo'), ''), 'md'),
+  'showInterest', coalesce((select value from settings where key = 'catalog_backcover_interest'), '1') <> '0'
+)::text
+where not exists (select 1 from settings where key = 'catalog_backcover');
+
+-- คีย์แบบแยกไม่ได้ใช้แล้ว ลบทิ้งได้เพราะย้ายค่าขึ้นไปข้างบนเรียบร้อยแล้ว
+delete from settings where key in (
+  'catalog_backcover_enabled', 'catalog_backcover_heading', 'catalog_backcover_note',
+  'catalog_backcover_line', 'catalog_backcover_phone',
+  'catalog_backcover_logo', 'catalog_backcover_button', 'catalog_backcover_interest'
+);

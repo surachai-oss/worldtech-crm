@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { BACKCOVER_SETTING_KEY, mergeBackCover, parseBackCover } from '../../src/lib/catalogBackCover.js'
 
 // อ่านแคตตาล็อกให้หน้าสาธารณะ /catalog/:slug — ลูกค้าไม่ต้อง login
 // ใช้ Service Role Key แทนการเปิด RLS ให้ anon เหมือนฟอร์มลีดสาธารณะ (ดู submit-lead.js)
@@ -21,7 +22,7 @@ export default async (req) => {
 
   const { data: cat, error } = await admin
     .from('catalogs')
-    .select('id, catalog_name, catalog_slug, description, cover_image_url, status, updated_at')
+    .select('id, catalog_name, catalog_slug, description, cover_image_url, status, updated_at, back_cover')
     .eq('catalog_slug', slug)
     .maybeSingle()
 
@@ -38,23 +39,12 @@ export default async (req) => {
     .eq('is_deleted', false)
     .order('display_order', { ascending: true })
 
-  // ปกหลังใช้ข้อความ/ช่องทางกลางจากตาราง settings — ส่งออกเฉพาะคีย์ของปกหลัง
-  // ไม่ดึง settings ทั้งตาราง เพราะในนั้นมีค่าตั้งค่าอื่นของระบบที่ไม่ควรหลุดออกไปข้างนอก
-  const { data: cfgRows } = await admin.from('settings').select('key, value').in('key', [
-    'catalog_backcover_enabled', 'catalog_backcover_heading',
-    'catalog_backcover_note', 'catalog_backcover_line', 'catalog_backcover_phone',
-    'catalog_backcover_logo', 'catalog_backcover_button', 'catalog_backcover_interest',
-  ])
-  const cfg = new Map((cfgRows || []).map(r => [r.key, r.value]))
-  const backCover = {
-    enabled: (cfg.get('catalog_backcover_enabled') ?? '1') === '1',
-    heading: cfg.get('catalog_backcover_heading') || 'สนใจรุ่นไหน ให้ทีมขายติดต่อกลับได้เลย',
-    note: cfg.get('catalog_backcover_note') || '',
-    line: cfg.get('catalog_backcover_line') || '',
-    phone: cfg.get('catalog_backcover_phone') || '',
-    logo: cfg.get('catalog_backcover_logo') || 'md',
-    button: cfg.get('catalog_backcover_button') || 'ให้ทีมขายติดต่อกลับ',
-    showInterest: (cfg.get('catalog_backcover_interest') ?? '1') !== '0',
+  // ปกหลัง: ใช้ชุดของเล่มนี้ถ้ามี ไม่มีก็ตกไปใช้ค่ากลาง — ตรรกะเดียวกับ resolveCatalogBackCover ฝั่งหลังบ้าน
+  // ไม่ผสมสองชุดเข้าด้วยกัน ผสมแล้วจะเดาไม่ออกว่าเล่มไหนโชว์อะไร
+  let backCover = mergeBackCover(cat.back_cover || {})
+  if (!cat.back_cover) {
+    const { data: row } = await admin.from('settings').select('value').eq('key', BACKCOVER_SETTING_KEY).maybeSingle()
+    backCover = mergeBackCover(parseBackCover(row?.value) || {})
   }
 
   return json({

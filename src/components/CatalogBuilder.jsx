@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   fetchCatalog, updateCatalog, listCatalogImages, uploadCatalogImage, updateCatalogImage,
-  softDeleteCatalogImage, setCatalogCover, reorderCatalogImages, fetchCatalogMonthlyViews, fetchCatalogBackCover,
+  softDeleteCatalogImage, setCatalogCover, reorderCatalogImages, fetchCatalogMonthlyViews, resolveCatalogBackCover,
   isValidSlug, catalogPublicUrl, CATALOG_STATUS, CATALOG_ACCEPT, MAX_CATALOG_IMAGE_SIZE, MAX_CATALOG_PDF_SIZE, isPdf,
 } from '../lib/api'
 import { pdfToImageFiles } from '../lib/pdfToImages'
@@ -9,6 +9,7 @@ import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import CatalogGalleryView from './CatalogGalleryView'
 import CatalogLinkModal from './CatalogLinkModal'
+import CatalogBackCoverModal from './CatalogBackCoverModal'
 import { StatusBadge, CATALOG_STATUS_LABEL } from './Catalogs'
 
 // หน้าจัดการแคตตาล็อก — ซ้าย: ตั้งค่า / กลาง: จัดการรูป / ขวา: พรีวิวมือถือ
@@ -51,6 +52,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const [images, setImages] = useState([])
   const [months, setMonths] = useState([])
   const [backCover, setBackCover] = useState(null)
+  const [showBack, setShowBack] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -63,11 +65,12 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const load = async () => {
     setLoading(true)
     try {
-      const [c, imgs, mv, bc] = await Promise.all([
+      const [c, imgs, mv] = await Promise.all([
         fetchCatalog(catalogId), listCatalogImages(catalogId), fetchCatalogMonthlyViews(catalogId, 12),
-        fetchCatalogBackCover(),
       ])
-      setCat(c); setImages(imgs); setMonths(mv); setBackCover(bc); setDirty(false)
+      // ต้องรอ c ก่อน เพราะปกหลังของเล่มนี้อยู่ในตัว c เอง (c.back_cover)
+      const bc = await resolveCatalogBackCover(c)
+      setCat(c); setImages(imgs); setMonths(mv); setBackCover(bc.cfg); setDirty(false)
     } catch (e) { toast('โหลดแคตตาล็อกไม่สำเร็จ: ' + e.message, 'error') }
     finally { setLoading(false) }
   }
@@ -225,6 +228,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-outline" onClick={() => setShowFull(true)}>{t('ดูเต็มหน้าจอ')}</button>
           <button className="btn btn-outline" onClick={() => setShowLink(true)}>{t('คัดลอกลิงก์')}</button>
+          {canManage && <button className="btn btn-outline" onClick={() => setShowBack(true)}>{t('ปกหลัง')}</button>}
           {canManage && (
             <button className="btn btn-primary" disabled={saving || !dirty} onClick={save}>
               {saving ? t('กำลังบันทึก...') : dirty ? t('บันทึกการตั้งค่า') : t('บันทึกแล้ว')}
@@ -234,6 +238,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
       </div>
 
       {showLink && <CatalogLinkModal catalog={cat} onClose={() => setShowLink(false)} />}
+      {showBack && <CatalogBackCoverModal catalog={cat} onClose={() => setShowBack(false)} onSaved={load} />}
       {showFull && (
         <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) setShowFull(false) }}>
           <div className="modal" style={{ maxWidth: 860, width: '95vw' }}>

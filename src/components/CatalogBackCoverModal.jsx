@@ -1,22 +1,20 @@
 import { useEffect, useState } from 'react'
-import { fetchCatalogBackCover, saveCatalogBackCover, lineHref } from '../lib/api'
+import {
+  fetchCatalogBackCover, saveCatalogBackCover, saveCatalogOwnBackCover, resolveCatalogBackCover,
+  lineHref, THEMES, LOGO_SIZES, LOGO_LABELS, ALIGN_LABELS, ORDER_LABELS,
+} from '../lib/api'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
-import CatalogGalleryView, { LOGO_SIZES } from './CatalogGalleryView'
+import CatalogGalleryView from './CatalogGalleryView'
 
-// ดึงตัวเลือกจากชุดขนาดจริงที่หน้าลูกค้าใช้ ไม่เขียนรายการซ้ำ
-// ถ้าเขียนซ้ำ วันที่เพิ่ม/ลบขนาดจะลืมแก้ที่ใดที่หนึ่งแล้วปุ่มกับผลลัพธ์ไม่ตรงกัน
-const LOGO_LABELS = { off: 'ไม่มีโลโก้', sm: 'เล็ก', md: 'กลาง', lg: 'ใหญ่' }
-const LOGO_CHOICES = Object.keys(LOGO_SIZES).map(v => ({ v, label: LOGO_LABELS[v] || v }))
-
-// ตั้งค่าปกหลัง — หน้าสุดท้ายของทุกแคตตาล็อก
-// ดีไซน์ตายตัว แก้ได้แค่ข้อความกับช่องทางติดต่อ ตั้งใจไม่ให้เลือกสี/เพิ่มปุ่มเองได้
-// เพราะรอบที่แล้วที่เปิดให้ปรับได้ทุกอย่าง ผลลัพธ์คือหน้าตาไม่เรียบร้อย
-// ค่ากลางชุดเดียวใช้ทุกเล่ม วันเปลี่ยน LINE OA หรือเบอร์ แก้ที่นี่ที่เดียวมีผลกับลิงก์ที่ส่งไปแล้วทั้งหมด
+// ตั้งค่าปกหลัง ใช้ได้สองโหมด
+//   catalog = null  -> ค่ากลาง ใช้กับทุกเล่มที่ไม่ได้ตั้งเอง
+//   catalog = {...} -> ชุดของเล่มนั้นโดยเฉพาะ เอาไว้ปรับโทนให้เข้ากับแคตตาล็อกแต่ละเล่ม
+//
+// แก้ได้ทุกคำที่ลูกค้าเห็น ส่วนหน้าตาให้เลือกจาก "ชุด" ที่จับคู่สีมาแล้ว ไม่ใช่เลือกสีทีละช่อง
+// คนละเรื่องกับการล็อกไม่ให้ปรับ — แต่กันไม่ให้ได้คู่สีที่ตัวหนังสืออ่านไม่ออกบนพื้นของมันเอง
 
 const PREVIEW_CATALOG = { name: 'ตัวอย่าง', description: '' }
-// ต้องมีรูปอย่างน้อยหนึ่งใบ ปกหลังถึงจะโผล่ (ปกหลังลอยเดี่ยวๆ ไม่มีความหมาย)
-// ใช้ภาพแทนเป็น SVG ฝังในโค้ด ไม่ต้องยิงโหลดไฟล์จริงมาแค่ทำพรีวิว
 const PREVIEW_IMAGE = [{
   url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400">' +
@@ -29,142 +27,234 @@ const PREVIEW_IMAGE = [{
   caption: 'หน้าสินค้า (ภาพแทน)',
 }]
 
-export default function CatalogBackCoverModal({ onClose, onSaved }) {
-  const { toast } = useUi()
+function Group({ title, children }) {
+  return (
+    <>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: .4, margin: '18px 0 8px' }}>
+        {title}
+      </div>
+      {children}
+    </>
+  )
+}
+
+function Choice({ options, value, onPick, t }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {options.map(([v, label]) => (
+        <button key={v} type="button"
+          className={`btn btn-xs ${value === v ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => onPick(v)}>{t(label)}</button>
+      ))}
+    </div>
+  )
+}
+
+function Field({ label, hint, children }) {
+  return (
+    <div className="form-group">
+      <label className="form-label">{label}</label>
+      {children}
+      {hint && <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4, wordBreak: 'break-all' }}>{hint}</div>}
+    </div>
+  )
+}
+
+export default function CatalogBackCoverModal({ catalog = null, onClose, onSaved }) {
+  const { toast, confirm } = useUi()
   const { t } = useLanguage()
+  const perCatalog = Boolean(catalog)
+
   const [cfg, setCfg] = useState(null)
+  const [usingShared, setUsingShared] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     let alive = true
-    fetchCatalogBackCover()
-      .then(c => { if (alive) setCfg(c) })
+    const load = perCatalog
+      ? resolveCatalogBackCover(catalog)
+      : fetchCatalogBackCover().then(c => ({ cfg: c, usingShared: true }))
+    load
+      .then(r => { if (alive) { setCfg(r.cfg); setUsingShared(perCatalog ? r.usingShared : true) } })
       .catch(e => { if (alive) toast('โหลดค่าปกหลังไม่สำเร็จ: ' + e.message, 'error') })
     return () => { alive = false }
-  }, [toast])
+  }, [catalog, perCatalog, toast])
 
   const set = (k) => (e) => setCfg(c => ({ ...c, [k]: e.target.value }))
+  const pick = (k) => (v) => setCfg(c => ({ ...c, [k]: v }))
+  // เล่มที่ยังใช้ค่ากลางอยู่ ต้องกด "ตั้งเฉพาะเล่มนี้" ก่อน ไม่งั้นแก้ไปก็ไม่มีผล
+  const editable = !perCatalog || !usingShared
 
   const save = async () => {
     setSaving(true)
     try {
-      await saveCatalogBackCover(cfg)
-      toast('บันทึกปกหลังแล้ว มีผลกับทุกแคตตาล็อกทันที', 'success')
-      onSaved?.(cfg)
+      if (perCatalog) await saveCatalogOwnBackCover(catalog.id, cfg)
+      else await saveCatalogBackCover(cfg)
+      toast(perCatalog ? 'บันทึกปกหลังของเล่มนี้แล้ว' : 'บันทึกแล้ว มีผลกับทุกเล่มที่ใช้ค่ากลาง', 'success')
+      onSaved?.()
       onClose()
     } catch (e) {
-      // ตาราง settings เขียนได้เฉพาะแอดมิน — แปลข้อความ RLS ให้เป็นภาษาคน
-      const msg = /row-level security|permission/i.test(e.message)
-        ? 'ต้องเป็นแอดมินถึงจะแก้ค่ากลางนี้ได้'
-        : e.message
+      // settings เขียนได้เฉพาะแอดมิน — แปลข้อความ RLS ดิบให้เป็นภาษาคน
+      const msg = /row-level security|permission/i.test(e.message) ? 'ไม่มีสิทธิ์แก้ค่านี้' : e.message
       toast('บันทึกไม่สำเร็จ: ' + msg, 'error')
     } finally { setSaving(false) }
   }
 
+  const backToShared = async () => {
+    if (!(await confirm('กลับไปใช้ค่ากลาง? ปกหลังที่ตั้งไว้เฉพาะเล่มนี้จะถูกลบ'))) return
+    try {
+      await saveCatalogOwnBackCover(catalog.id, null)
+      const r = await resolveCatalogBackCover({ ...catalog, back_cover: null })
+      setCfg(r.cfg); setUsingShared(true)
+      toast('กลับไปใช้ค่ากลางแล้ว', 'success')
+      onSaved?.()
+    } catch (e) { toast('เปลี่ยนไม่สำเร็จ: ' + e.message, 'error') }
+  }
+
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="modal" style={{ maxWidth: 780, width: '95vw' }}>
+      <div className="modal" style={{ maxWidth: 900, width: '96vw' }}>
         <div className="modal-header">
-          <div className="modal-title">{t('ตั้งค่าปกหลัง')}</div>
+          <div className="modal-title">
+            {perCatalog ? `${t('ปกหลังของ')} ${catalog.catalog_name}` : t('ปกหลัง (ค่ากลาง)')}
+          </div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
         <div className="modal-body" style={{ maxHeight: '76vh', overflowY: 'auto' }}>
           {!cfg ? <div className="empty-state">{t('กำลังโหลด...')}</div> : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
-              <div style={{ flex: '1 1 320px', minWidth: 0 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 14, lineHeight: 1.7 }}>
-                  {t('ปกหลังคือหน้าสุดท้ายที่ลูกค้าเจอหลังปัดดูรูปจนจบ ลูกค้าทิ้งชื่อกับเบอร์ไว้ได้ แล้วจะเด้งเข้าหน้า "ผู้ติดต่อ" ทันที พร้อมระบุว่ามาจากแคตตาล็อกเล่มไหน')}
-                </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
 
-                <div className="form-group">
+              <div style={{ flex: '1 1 340px', minWidth: 0 }}>
+                {perCatalog && (
+                  <div style={{
+                    padding: '10px 12px', borderRadius: 8, marginBottom: 14, fontSize: 12, lineHeight: 1.7,
+                    background: usingShared ? 'var(--gray-bg)' : '#fff8e1',
+                    border: `1px solid ${usingShared ? 'var(--border)' : '#ffe082'}`,
+                  }}>
+                    {usingShared ? (
+                      <>
+                        {t('เล่มนี้ใช้ค่ากลางอยู่ — กดปุ่มด้านล่างก่อน ถึงจะแก้เฉพาะเล่มนี้ได้')}
+                        <div style={{ marginTop: 8 }}>
+                          <button className="btn btn-outline btn-xs" onClick={() => setUsingShared(false)}>
+                            {t('ตั้งเฉพาะเล่มนี้')}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {t('เล่มนี้ใช้ปกหลังของตัวเอง แยกจากค่ากลางแล้ว')}
+                        <div style={{ marginTop: 8 }}>
+                          <button className="btn btn-outline btn-xs" onClick={backToShared}>{t('กลับไปใช้ค่ากลาง')}</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0, opacity: editable ? 1 : .55 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600 }}>
                     <input type="checkbox" checked={cfg.enabled}
                       onChange={e => setCfg(c => ({ ...c, enabled: e.target.checked }))} />
-                    {t('เปิดใช้ปกหลังในทุกแคตตาล็อก')}
+                    {t('แสดงปกหลัง')}
                   </label>
-                  {!cfg.enabled && (
-                    <div style={{ fontSize: 11, color: '#c05621', marginTop: 4 }}>
-                      {t('ปิดอยู่ — ลูกค้าปัดจนจบแล้วจบเลย ไม่มีทางติดต่อกลับ')}
+
+                  <Group title={t('หน้าตา')}>
+                    <Field label={t('ชุดสี')}>
+                      <Choice t={t} value={cfg.theme} onPick={pick('theme')}
+                        options={Object.entries(THEMES).map(([k, v]) => [k, v.label])} />
+                    </Field>
+                    <Field label={t('การจัดวาง')}>
+                      <Choice t={t} value={cfg.align} onPick={pick('align')} options={Object.entries(ALIGN_LABELS)} />
+                    </Field>
+                    <Field label={t('ลำดับ')}>
+                      <Choice t={t} value={cfg.order} onPick={pick('order')} options={Object.entries(ORDER_LABELS)} />
+                    </Field>
+                    <Field label={t('ขนาดโลโก้')}>
+                      <Choice t={t} value={cfg.logo} onPick={pick('logo')}
+                        options={Object.keys(LOGO_SIZES).map(k => [k, LOGO_LABELS[k] || k])} />
+                    </Field>
+                  </Group>
+
+                  <Group title={t('ข้อความที่ลูกค้าเห็น')}>
+                    <Field label={t('ข้อความหลัก')}>
+                      <input className="form-control" value={cfg.heading} onChange={set('heading')} maxLength={90} />
+                    </Field>
+                    <Field label={t('ข้อความรอง')} hint={t('เว้นบรรทัดได้')}>
+                      <textarea className="form-control" rows={2} value={cfg.note} onChange={set('note')} maxLength={200} />
+                    </Field>
+                    <Field label={t('ข้อความบนปุ่ม')}>
+                      <input className="form-control" value={cfg.button} onChange={set('button')} maxLength={40} />
+                    </Field>
+                  </Group>
+
+                  <Group title={t('ช่องกรอก')}>
+                    <div className="form-row">
+                      <Field label={t('ช่องชื่อ')}>
+                        <input className="form-control" value={cfg.phName} onChange={set('phName')} maxLength={40} />
+                      </Field>
+                      <Field label={t('ช่องเบอร์')}>
+                        <input className="form-control" value={cfg.phPhone} onChange={set('phPhone')} maxLength={40} />
+                      </Field>
                     </div>
-                  )}
-                </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 8 }}>
+                      <input type="checkbox" checked={cfg.showInterest}
+                        onChange={e => setCfg(c => ({ ...c, showInterest: e.target.checked }))} />
+                      {t('มีช่องที่สาม')}
+                    </label>
+                    {cfg.showInterest && (
+                      <Field label={t('ช่องที่สาม')}>
+                        <input className="form-control" value={cfg.phInterest} onChange={set('phInterest')} maxLength={60} />
+                      </Field>
+                    )}
+                  </Group>
 
-                <div className="form-group">
-                  <label className="form-label required">{t('ข้อความหลัก')}</label>
-                  <input className="form-control" value={cfg.heading} onChange={set('heading')} maxLength={80} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">{t('ข้อความรอง')}</label>
-                  <input className="form-control" value={cfg.note} onChange={set('note')} maxLength={120}
-                    placeholder={t('เช่น ทีมขายติดต่อกลับในเวลาทำการ จันทร์–เสาร์')} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">{t('ลิงก์ LINE')}</label>
-                  <input className="form-control" value={cfg.line} onChange={set('line')}
-                    placeholder="@worldtech หรือวางลิงก์เต็มจากแอป LINE" />
-                  {cfg.line && (
-                    <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4, wordBreak: 'break-all' }}>
-                      {t('ปุ่มจะพาไปที่')}: {lineHref(cfg.line)}
+                  <Group title={t('ลิงก์ติดต่อ')}>
+                    <Field label={t('ลิงก์ LINE')}
+                      hint={cfg.line
+                        ? `${t('กดแล้วไปที่')}: ${lineHref(cfg.line)}`
+                        : t('ใส่ @ไอดี หรือวางลิงก์เต็มจากแอป LINE — เว้นว่างไว้ ลิงก์นี้จะไม่ขึ้น')}>
+                      <input className="form-control" value={cfg.line} onChange={set('line')} placeholder="@worldtech" />
+                    </Field>
+                    <Field label={t('ข้อความลิงก์ LINE')}>
+                      <input className="form-control" value={cfg.lineText} onChange={set('lineText')} maxLength={60} />
+                    </Field>
+                    <div className="form-row">
+                      <Field label={t('เบอร์โทร')}>
+                        <input className="form-control" value={cfg.phone} onChange={set('phone')} placeholder="02-000-0000" />
+                      </Field>
+                      <Field label={t('คำนำหน้าเบอร์')}>
+                        <input className="form-control" value={cfg.phoneText} onChange={set('phoneText')} maxLength={20} />
+                      </Field>
                     </div>
-                  )}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">{t('เบอร์โทร')}</label>
-                  <input className="form-control" value={cfg.phone} onChange={set('phone')} placeholder="02-000-0000" />
-                </div>
+                  </Group>
 
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: .4, margin: '16px 0 8px' }}>
-                  {t('หน้าตา')}
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">{t('ขนาดโลโก้')}</label>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {LOGO_CHOICES.map(o => (
-                      <button key={o.v} type="button"
-                        className={`btn btn-xs ${cfg.logo === o.v ? 'btn-primary' : 'btn-outline'}`}
-                        onClick={() => setCfg(c => ({ ...c, logo: o.v }))}>{t(o.label)}</button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">{t('ข้อความบนปุ่ม')}</label>
-                  <input className="form-control" value={cfg.button} onChange={set('button')} maxLength={40}
-                    placeholder="ให้ทีมขายติดต่อกลับ" />
-                </div>
-
-                <div className="form-group">
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                    <input type="checkbox" checked={cfg.showInterest !== false}
-                      onChange={e => setCfg(c => ({ ...c, showInterest: e.target.checked }))} />
-                    {t('มีช่อง "สนใจสินค้าอะไร"')}
-                  </label>
-                  <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
-                    {t('ปิดแล้วเหลือแค่ชื่อกับเบอร์ — ช่องน้อยลง คนกรอกมากขึ้น แต่เซลล์ต้องถามเองว่าสนใจอะไร')}
-                  </div>
-                </div>
-
-                <div style={{ fontSize: 11, color: 'var(--text-light)', lineHeight: 1.7 }}>
-                  {t('ไม่ใส่ LINE หรือเบอร์ก็ได้ — ช่องไหนว่าง ปุ่มนั้นจะไม่ขึ้นบนปกหลัง เหลือแค่ฟอร์ม')}
-                </div>
+                  <Group title={t('หลังลูกค้ากดส่ง')}>
+                    <Field label={t('หัวข้อ')}>
+                      <input className="form-control" value={cfg.doneTitle} onChange={set('doneTitle')} maxLength={60} />
+                    </Field>
+                    <Field label={t('ข้อความ')}>
+                      <textarea className="form-control" rows={2} value={cfg.doneText} onChange={set('doneText')} maxLength={200} />
+                    </Field>
+                  </Group>
+                </fieldset>
               </div>
 
-              {/* พรีวิวใช้คอมโพเนนต์ตัวจริงของหน้าลูกค้า ส่ง onSubmitLead เป็นตัวหลอกไว้ ไม่ส่งข้อมูลจริง */}
-              <div style={{ flex: '1 1 280px', minWidth: 0, maxWidth: 320 }}>
+              {/* พรีวิวเป็นคอมโพเนนต์ตัวจริงของหน้าลูกค้า — onSubmitLead เป็นตัวหลอก ไม่ส่งข้อมูลจริง */}
+              <div style={{ flex: '1 1 300px', minWidth: 0, maxWidth: 330, position: 'sticky', top: 0 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: .4, marginBottom: 8 }}>
                   {t('พรีวิว')}
                 </div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', height: 430, background: '#f5f7fa' }}>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', height: 470, background: '#f5f7fa' }}>
                   <CatalogGalleryView
                     catalog={PREVIEW_CATALOG} images={PREVIEW_IMAGE}
-                    backCover={cfg} onSubmitLead={async () => { throw new Error('พรีวิว — ยังไม่ส่งข้อมูลจริง') }}
+                    backCover={{ ...cfg, enabled: true }}
+                    onSubmitLead={async () => { throw new Error('พรีวิว — ยังไม่ส่งข้อมูลจริง') }}
                     mobile
                   />
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 6 }}>
-                  {t('กดปุ่มขวา › เพื่อเลื่อนไปดูปกหลัง')}
+                  {t('กด › เพื่อเลื่อนไปดูปกหลัง — อัปเดตตามที่แก้ทันที')}
                 </div>
               </div>
             </div>
@@ -173,7 +263,7 @@ export default function CatalogBackCoverModal({ onClose, onSaved }) {
 
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>{t('ยกเลิก')}</button>
-          <button className="btn btn-primary" disabled={!cfg || saving} onClick={save}>
+          <button className="btn btn-primary" disabled={!cfg || saving || !editable} onClick={save}>
             {saving ? t('กำลังบันทึก...') : t('บันทึก')}
           </button>
         </div>

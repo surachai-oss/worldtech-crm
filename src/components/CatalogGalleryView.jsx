@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { lineHref } from '../lib/api'
+import { lineHref, LOGO_SIZES, THEMES } from '../lib/catalogBackCover'
 
 // หน้าตาแคตตาล็อกที่ลูกค้าเห็น — เป็น presentational ล้วน ไม่ยุ่งกับ Supabase หรือ auth
 // ใช้ร่วมกันสองที่: หน้าสาธารณะจริง (/catalog/:slug) กับ Preview ในหลังบ้าน
@@ -12,6 +12,9 @@ import { lineHref } from '../lib/api'
 // สี CI ของ WORLDTECH: Blue #1B76FF, Yellow #FFDD42, Orange #F9631F พื้นขาว/เทาอ่อน
 
 const CSS = `
+/* คอมโพเนนต์นี้แบกสไตล์ของตัวเองมาทั้งชุด จึงต้องตั้ง box-sizing เองด้วย
+   ไม่พึ่ง reset จาก App.css ข้างนอก — ไม่งั้นช่องกรอกที่ width:100% + padding จะล้นออกนอกกรอบ */
+.wtc-root,.wtc-root *{box-sizing:border-box}
 .wtc-root{--wtc-blue:#1B76FF;--wtc-yellow:#FFDD42;--wtc-orange:#F9631F;--wtc-ink:#15233b;--wtc-muted:#6b7688;--wtc-line:#e6eaf0;
   background:#f5f7fa;color:var(--wtc-ink);font-family:'Mitr',system-ui,sans-serif;height:100%}
 .wtc-root.wtc-fixed{position:fixed;inset:0}
@@ -47,33 +50,39 @@ const CSS = `
 .wtc-foot{flex:none;text-align:center;font-size:10px;color:var(--wtc-muted);padding:0 8px 7px;background:#fff}
 .wtc-foot b{font-weight:700;letter-spacing:.8px;color:var(--wtc-ink)}
 
-/* ปกหลัง — หน้าสุดท้ายของเล่ม ดีไซน์ตายตัว มีแค่ข้อความกับช่องทางที่ตั้งค่าได้
-   จงใจให้มีปุ่มหลักปุ่มเดียว ที่เหลือเป็นลิงก์ตัวเล็ก ไม่ให้แย่งกันเอง */
+/* ปกหลัง — หน้าสุดท้ายของเล่ม
+   ทุกสีอ่านจากตัวแปรที่ชุดหน้าตา (theme) กำหนดมาเป็นชุด ไม่ได้เลือกทีละสี
+   จึงไม่มีทางได้คู่สีที่ตัวหนังสืออ่านไม่ออกบนพื้นของมันเอง */
 .wtc-page > .wtc-back{align-self:stretch;width:100%}
-/* จัดกลางด้วย margin:auto ของลูก ไม่ใช่ justify-content:center ของพ่อ
-   เพราะพอเนื้อหาสูงเกินกรอบ (จอเตี้ย/โลโก้ใหญ่) justify-content:center จะดันส่วนบนออกนอก
-   ขอบเขต scroll แล้วเลื่อนขึ้นไปดูไม่ได้ — margin:auto ยุบเองเมื่อที่ไม่พอ */
-.wtc-back{flex:1;min-height:0;overflow-y:auto;background:#fff;display:flex;padding:18px 20px}
-.wtc-back-in{margin:auto;width:100%;display:flex;flex-direction:column;gap:11px;text-align:center}
+.wtc-back{flex:1;min-height:0;overflow-y:auto;display:flex;padding:18px 20px;
+  background:var(--bc-bg);color:var(--bc-fg)}
+.wtc-back-in{margin:auto;width:100%;max-width:380px;display:flex;flex-direction:column;gap:11px;text-align:center}
+.wtc-back[data-align="left"] .wtc-back-in{text-align:left}
+.wtc-back[data-align="left"] .wtc-back-logo{margin-left:0}
+/* ตัวหนังสือ WORLDTECH ในไฟล์โลโก้เป็นสีดำ วางบนพื้นเข้มแล้วอ่านไม่ออก
+   ชุดสีเข้มจึงรองพื้นขาวให้เป็นป้าย ดีกว่าซ่อนโลโก้หรือกลับสีจนตัว W เพี้ยน */
+.wtc-back[data-dark="1"] .wtc-back-logo{background:#fff;padding:9px 13px;border-radius:10px;
+  height:calc(var(--wtc-logo-h,48px) + 18px);max-height:none;width:auto}
 .wtc-back-logo{display:block;margin:0 auto;width:auto;max-width:72%;
   height:var(--wtc-logo-h,48px);max-height:var(--wtc-logo-h,48px);
   object-fit:contain;border-radius:0;box-shadow:none;background:none}
-.wtc-back-mark{font-size:15px;font-weight:600;letter-spacing:.1em;color:var(--wtc-ink)}
-.wtc-back-h{font-size:16px;font-weight:500;line-height:1.5;margin:0;text-wrap:balance}
-.wtc-back-p{font-size:12.5px;line-height:1.65;color:var(--wtc-muted);margin:0}
-.wtc-form{display:flex;flex-direction:column;gap:8px;max-width:340px;width:100%;margin:0 auto}
-.wtc-fld{height:40px;border:1px solid #DDE3EB;border-radius:9px;background:#FBFCFD;
-  font-family:inherit;font-size:14px;color:var(--wtc-ink);padding:0 13px;width:100%}
-.wtc-fld:focus{outline:none;border-color:var(--wtc-blue);box-shadow:0 0 0 3px rgba(27,118,255,.15)}
-.wtc-fld::placeholder{color:#9BA5B4}
-.wtc-send{height:44px;border:0;border-radius:10px;background:var(--wtc-blue);color:#fff;
+.wtc-back-mark{font-size:15px;font-weight:600;letter-spacing:.1em;color:var(--bc-fg)}
+.wtc-back-h{font-size:16px;font-weight:500;line-height:1.5;margin:0;text-wrap:balance;color:var(--bc-fg)}
+.wtc-back-p{font-size:12.5px;line-height:1.65;color:var(--bc-sub);margin:0;white-space:pre-wrap}
+.wtc-form{display:flex;flex-direction:column;gap:8px;width:100%}
+.wtc-fld{height:40px;border:1px solid var(--bc-fld-bd);border-radius:9px;background:var(--bc-fld);
+  font-family:inherit;font-size:14px;color:var(--bc-fg);padding:0 13px;width:100%}
+.wtc-fld:focus{outline:none;border-color:var(--bc-btn);box-shadow:0 0 0 3px rgba(27,118,255,.15)}
+.wtc-fld::placeholder{color:var(--bc-sub);opacity:.85}
+.wtc-send{height:44px;border:0;border-radius:10px;background:var(--bc-btn);color:var(--bc-btn-fg);
   font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;width:100%}
-.wtc-send:disabled{background:#A9C7F5;cursor:default}
-.wtc-alt{font-size:13px;color:var(--wtc-blue);text-decoration:none;font-weight:500}
-.wtc-tel{font-size:13px;color:var(--wtc-ink);font-weight:500;text-decoration:none}
+.wtc-send:disabled{opacity:.55;cursor:default}
+.wtc-alt{font-size:13px;color:var(--bc-link);text-decoration:none;font-weight:500}
+.wtc-tel{font-size:13px;color:var(--bc-fg);font-weight:500;text-decoration:none}
 .wtc-err{font-size:12.5px;color:#D0342C;margin:0}
 .wtc-done{display:flex;flex-direction:column;gap:8px;align-items:center}
-.wtc-done-i{width:52px;height:52px;border-radius:50%;background:#E8F7EE;color:#1F9254;
+.wtc-back[data-align="left"] .wtc-done{align-items:flex-start}
+.wtc-done-i{width:52px;height:52px;border-radius:50%;background:var(--bc-btn);color:var(--bc-btn-fg);
   display:grid;place-items:center;font-size:26px;line-height:1}
 
 .wtc-state{max-width:520px;margin:0 auto;padding:64px 24px;text-align:center}
@@ -87,10 +96,18 @@ const CSS = `
 
 // ปกหลัง: ฟอร์มสั้นสามช่อง + ทางเลือกรองเป็นลิงก์ LINE/เบอร์
 // onSubmit ถูกส่งมาจากข้างนอก — หน้าจริงส่งเข้าท่อลีด ส่วนพรีวิวหลังบ้านส่งฟังก์ชันที่ไม่ทำอะไร
-// ขนาดโลโก้บนปกหลัง — ให้เลือกจากชุดที่จัดไว้ ไม่ให้กรอกตัวเลขเอง
-// ทุกค่าในชุดนี้ผ่านตาแล้วว่าไม่ล้นและไม่เล็กจนอ่านไม่ออก
-export const LOGO_SIZES = { off: 0, sm: 32, md: 48, lg: 72 }
+// สีของชุดหน้าตา แปลงเป็น CSS variable ให้ CSS ข้างบนใช้ทั้งชุด
+function themeVars(name) {
+  const th = THEMES[name] || THEMES.light
+  return {
+    '--bc-bg': th.bg, '--bc-fg': th.fg, '--bc-sub': th.sub,
+    '--bc-btn': th.btn, '--bc-btn-fg': th.btnFg,
+    '--bc-fld': th.fld, '--bc-fld-bd': th.fldBd, '--bc-link': th.link,
+  }
+}
 
+// ปกหลัง — ข้อความทุกคำและหน้าตาทั้งหมดมาจาก cfg ไม่มีคำไหนฝังอยู่ในโค้ด
+// onSubmit ส่งมาจากข้างนอก: หน้าจริงส่งเข้าท่อลีด ส่วนพรีวิวหลังบ้านส่งตัวที่ไม่ทำอะไร
 function BackCover({ cfg, logoSrc, onSubmit }) {
   const [f, setF] = useState({ name: '', phone: '', interest: '' })
   const [state, setState] = useState('idle')   // idle | sending | done
@@ -112,48 +129,65 @@ function BackCover({ cfg, logoSrc, onSubmit }) {
 
   const line = lineHref(cfg.line)
   const logoH = LOGO_SIZES[cfg.logo] ?? LOGO_SIZES.md
+  const th = THEMES[cfg.theme] || THEMES.light
+  const style = { ...themeVars(cfg.theme) }
+
   const mark = (cfg.logo === 'off' || !logoSrc)
     ? <div className="wtc-back-mark">WORLDTECH</div>
     : <img className="wtc-back-logo" src={logoSrc} alt="Worldtech"
         style={{ '--wtc-logo-h': `${logoH}px` }}
         onError={e => { e.currentTarget.style.display = 'none' }} />
 
+  // ลิงก์รอง — กดแล้วเด้งไปหน้า LINE / แอปโทรศัพท์ทันที
+  const links = (
+    <>
+      {line && <a className="wtc-alt" href={line} target="_blank" rel="noreferrer">{cfg.lineText}</a>}
+      {cfg.phone && (
+        <a className="wtc-tel" href={`tel:${String(cfg.phone).replace(/[^\d+]/g, '')}`}>
+          {[cfg.phoneText, cfg.phone].filter(Boolean).join(' ')}
+        </a>
+      )}
+    </>
+  )
+
   if (state === 'done') {
     return (
-      <div className="wtc-back">
+      <div className="wtc-back" data-align={cfg.align} data-dark={th.dark ? '1' : undefined} style={style}>
         <div className="wtc-back-in">
           {mark}
           <div className="wtc-done">
             <div className="wtc-done-i">✓</div>
-            <p className="wtc-back-h">ได้รับข้อมูลแล้ว</p>
-            <p className="wtc-back-p">ทีมขาย WORLDTECH จะติดต่อกลับที่เบอร์ {f.phone} ในเวลาทำการ</p>
+            <p className="wtc-back-h">{cfg.doneTitle}</p>
+            {cfg.doneText && <p className="wtc-back-p">{cfg.doneText}</p>}
           </div>
-          {line && <a className="wtc-alt" href={line} target="_blank" rel="noreferrer">อยากคุยเลย ทักแชท LINE ได้</a>}
+          {links}
         </div>
       </div>
     )
   }
 
+  const form = (
+    <form className="wtc-form" onSubmit={send} key="form">
+      <input className="wtc-fld" value={f.name} onChange={set('name')} placeholder={cfg.phName} aria-label={cfg.phName} autoComplete="name" />
+      <input className="wtc-fld" value={f.phone} onChange={set('phone')} placeholder={cfg.phPhone} aria-label={cfg.phPhone} inputMode="tel" autoComplete="tel" />
+      {cfg.showInterest && (
+        <input className="wtc-fld" value={f.interest} onChange={set('interest')} placeholder={cfg.phInterest} aria-label={cfg.phInterest} />
+      )}
+      {err && <p className="wtc-err">{err}</p>}
+      <button className="wtc-send" type="submit" disabled={state === 'sending'}>
+        {state === 'sending' ? 'กำลังส่ง...' : cfg.button}
+      </button>
+    </form>
+  )
+
   return (
-    <div className="wtc-back">
+    <div className="wtc-back" data-align={cfg.align} data-dark={th.dark ? '1' : undefined} style={style}>
       <div className="wtc-back-in">
-      {mark}
-      <p className="wtc-back-h">{cfg.heading}</p>
-      {cfg.note && <p className="wtc-back-p">{cfg.note}</p>}
-      <form className="wtc-form" onSubmit={send}>
-        <input className="wtc-fld" value={f.name} onChange={set('name')} placeholder="ชื่อผู้ติดต่อ" aria-label="ชื่อผู้ติดต่อ" autoComplete="name" />
-        <input className="wtc-fld" value={f.phone} onChange={set('phone')} placeholder="เบอร์โทร" aria-label="เบอร์โทร" inputMode="tel" autoComplete="tel" />
-        {cfg.showInterest !== false && (
-          <input className="wtc-fld" value={f.interest} onChange={set('interest')}
-            placeholder="สนใจสินค้าอะไร (ไม่ใส่ก็ได้)" aria-label="สนใจสินค้าอะไร" />
-        )}
-        {err && <p className="wtc-err">{err}</p>}
-        <button className="wtc-send" type="submit" disabled={state === 'sending'}>
-          {state === 'sending' ? 'กำลังส่ง...' : (cfg.button || 'ให้ทีมขายติดต่อกลับ')}
-        </button>
-      </form>
-      {line && <a className="wtc-alt" href={line} target="_blank" rel="noreferrer">หรือทักแชท LINE ทันที</a>}
-      {cfg.phone && <a className="wtc-tel" href={`tel:${cfg.phone.replace(/[^\d+]/g, '')}`}>โทร {cfg.phone}</a>}
+        {mark}
+        <p className="wtc-back-h">{cfg.heading}</p>
+        {cfg.note && <p className="wtc-back-p">{cfg.note}</p>}
+        {/* สลับลำดับได้ บางเล่มอยากให้ทักแชทก่อน บางเล่มอยากได้เบอร์ก่อน */}
+        {cfg.order === 'link' ? <>{links}{form}</> : <>{form}{links}</>}
       </div>
     </div>
   )
