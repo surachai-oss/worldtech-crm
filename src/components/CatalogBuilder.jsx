@@ -221,7 +221,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   }
 
   if (loading || !cat) {
-    return <div className="list-view"><div className="empty-state">{t('กำลังโหลด...')}</div></div>
+    return <div className="scroll-view"><div className="empty-state">{t('กำลังโหลด...')}</div></div>
   }
 
   const visible = images.filter(i => i.is_visible)
@@ -229,8 +229,11 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const previewCatalog = { name: cat.catalog_name, description: cat.description || '' }
   const previewImages = visible.map(i => ({ url: i.image_url, caption: i.caption || '' }))
 
+  // ใช้ "scroll-view" ไม่ใช่ "list-view" — App.css มีกฎ .content-area:has(>.list-view){overflow:hidden}
+  // ที่ตั้งใจให้หน้าแบบตารางเลื่อนข้างในตารางเอง หน้านี้ไม่มีตาราง ถ้าใช้ list-view เนื้อหาที่เกินจอ
+  // จะถูกตัดทิ้งโดยที่เลื่อนลงไปดูไม่ได้เลย (พาเนลปุ่มติดต่อหายไปทั้งพาเนล)
   return (
-    <div className="list-view">
+    <div className="scroll-view">
       <style>{LAYOUT_CSS}</style>
 
       <div className="section-header">
