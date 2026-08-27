@@ -22,7 +22,7 @@ export default async (req) => {
 
   const { data: cat, error } = await admin
     .from('catalogs')
-    .select('id, catalog_name, catalog_slug, description, cover_image_url, status, updated_at, back_cover')
+    .select('id, catalog_name, catalog_slug, description, cover_image_url, status, updated_at')
     .eq('catalog_slug', slug)
     .maybeSingle()
 
@@ -41,8 +41,15 @@ export default async (req) => {
 
   // ปกหลัง: ใช้ชุดของเล่มนี้ถ้ามี ไม่มีก็ตกไปใช้ค่ากลาง — ตรรกะเดียวกับ resolveCatalogBackCover ฝั่งหลังบ้าน
   // ไม่ผสมสองชุดเข้าด้วยกัน ผสมแล้วจะเดาไม่ออกว่าเล่มไหนโชว์อะไร
-  let backCover = mergeBackCover(cat.back_cover || {})
-  if (!cat.back_cover) {
+  // ดึง back_cover แยกและกลืน error ทิ้ง — โค้ดขึ้น Netlify ก่อนที่ schema จะถูกรันเป็นเรื่องปกติของที่นี่
+  // ถ้ารวมไว้ใน select ก้อนเดียว ช่วงที่คอลัมน์ยังไม่มี หน้าลูกค้าจะพังทั้งหน้าแทนที่จะแค่ใช้ค่ากลาง
+  const { data: ownRow } = await admin.from('catalogs')
+    .select('back_cover').eq('id', cat.id).maybeSingle()
+    .then(r => r, () => ({ data: null }))
+  const own = ownRow?.back_cover
+
+  let backCover = mergeBackCover(own || {})
+  if (!own) {
     const { data: row } = await admin.from('settings').select('value').eq('key', BACKCOVER_SETTING_KEY).maybeSingle()
     backCover = mergeBackCover(parseBackCover(row?.value) || {})
   }
