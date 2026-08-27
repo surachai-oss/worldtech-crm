@@ -22,7 +22,7 @@ export default async (req) => {
 
   const { data: cat, error } = await admin
     .from('catalogs')
-    .select('id, catalog_name, catalog_slug, description, cover_image_url, status, updated_at, logo_url')
+    .select('id, catalog_name, catalog_slug, description, cover_image_url, status, updated_at')
     .eq('catalog_slug', slug)
     .maybeSingle()
 
@@ -44,9 +44,10 @@ export default async (req) => {
   // ดึง back_cover แยกและกลืน error ทิ้ง — โค้ดขึ้น Netlify ก่อนที่ schema จะถูกรันเป็นเรื่องปกติของที่นี่
   // ถ้ารวมไว้ใน select ก้อนเดียว ช่วงที่คอลัมน์ยังไม่มี หน้าลูกค้าจะพังทั้งหน้าแทนที่จะแค่ใช้ค่ากลาง
   const { data: ownRow } = await admin.from('catalogs')
-    .select('back_cover').eq('id', cat.id).maybeSingle()
-    .then(r => r, () => ({ data: null }))
+    .select('back_cover, logo_url').eq('id', cat.id).maybeSingle()
+    .then(r => (r.error ? { data: null } : r), () => ({ data: null }))
   const own = ownRow?.back_cover
+  const logoUrl = ownRow?.logo_url || ''
 
   let backCover = mergeBackCover(own || {})
   if (!own) {
@@ -61,7 +62,7 @@ export default async (req) => {
       slug: cat.catalog_slug,
       description: cat.description || '',
       cover_image_url: cat.cover_image_url || '',
-      logo_url: cat.logo_url || '',
+      logo_url: logoUrl,
       updated_at: cat.updated_at,
     },
     images: (imgs || []).map(i => ({ url: i.image_url, caption: i.caption || '' })),
