@@ -35,6 +35,7 @@ export const EN_DICT = {
   'ลบ': 'Delete',
   'บันทึก': 'Save',
   'ปกหลัง': 'Back cover',
+  'ปกหลัง (ส่วนกลาง)': 'Back cover (shared)',
   'ปกหลัง (ค่ากลาง)': 'Back cover (shared)',
   'ปกหลังของ': 'Back cover —',
   'เล่มนี้ใช้ค่ากลางอยู่ — กดปุ่มด้านล่างก่อน ถึงจะแก้เฉพาะเล่มนี้ได้': 'This catalog uses the shared back cover — press below before editing it on its own',

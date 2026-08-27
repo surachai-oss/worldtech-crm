@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { lineHref, LOGO_SIZES, THEMES } from '../lib/catalogBackCover'
+import { lineHref, isDark } from '../lib/catalogBackCover'
 
 // หน้าตาแคตตาล็อกที่ลูกค้าเห็น — เป็น presentational ล้วน ไม่ยุ่งกับ Supabase หรือ auth
 // ใช้ร่วมกันสองที่: หน้าสาธารณะจริง (/catalog/:slug) กับ Preview ในหลังบ้าน
@@ -56,12 +56,15 @@ const CSS = `
 .wtc-page > .wtc-back{align-self:stretch;width:100%}
 .wtc-back{flex:1;min-height:0;overflow-y:auto;display:flex;padding:18px 20px;
   background:var(--bc-bg);color:var(--bc-fg)}
-.wtc-back-in{margin:auto;width:100%;max-width:380px;display:flex;flex-direction:column;gap:11px;text-align:center}
-.wtc-back[data-align="left"] .wtc-back-in{text-align:left}
+.wtc-back-in{margin:auto;width:100%;max-width:380px;display:flex;flex-direction:column;
+  align-items:stretch;gap:11px;text-align:center}
+.wtc-back[data-align="left"] .wtc-back-in{text-align:left;align-items:flex-start}
+.wtc-back[data-align="right"] .wtc-back-in{text-align:right;align-items:flex-end}
 .wtc-back[data-align="left"] .wtc-back-logo{margin-left:0}
+.wtc-back[data-align="right"] .wtc-back-logo{margin-right:0}
 /* ตัวหนังสือ WORLDTECH ในไฟล์โลโก้เป็นสีดำ วางบนพื้นเข้มแล้วอ่านไม่ออก
    ชุดสีเข้มจึงรองพื้นขาวให้เป็นป้าย ดีกว่าซ่อนโลโก้หรือกลับสีจนตัว W เพี้ยน */
-.wtc-back[data-dark="1"] .wtc-back-logo{background:#fff;padding:9px 13px;border-radius:10px;
+.wtc-back-logo[data-plate="1"]{background:#fff;padding:9px 13px;border-radius:10px;
   height:calc(var(--wtc-logo-h,48px) + 18px);max-height:none;width:auto}
 .wtc-back-logo{display:block;margin:0 auto;width:auto;max-width:72%;
   height:var(--wtc-logo-h,48px);max-height:var(--wtc-logo-h,48px);
@@ -96,99 +99,115 @@ const CSS = `
 
 // ปกหลัง: ฟอร์มสั้นสามช่อง + ทางเลือกรองเป็นลิงก์ LINE/เบอร์
 // onSubmit ถูกส่งมาจากข้างนอก — หน้าจริงส่งเข้าท่อลีด ส่วนพรีวิวหลังบ้านส่งฟังก์ชันที่ไม่ทำอะไร
-// สีของชุดหน้าตา แปลงเป็น CSS variable ให้ CSS ข้างบนใช้ทั้งชุด
-function themeVars(name) {
-  const th = THEMES[name] || THEMES.light
+// สีที่ตั้งไว้ แปลงเป็น CSS variable ให้สไตล์ทั้งหน้าใช้ร่วมกัน
+function colorVars(c) {
   return {
-    '--bc-bg': th.bg, '--bc-fg': th.fg, '--bc-sub': th.sub,
-    '--bc-btn': th.btn, '--bc-btn-fg': th.btnFg,
-    '--bc-fld': th.fld, '--bc-fld-bd': th.fldBd, '--bc-link': th.link,
+    '--bc-bg': c.bg, '--bc-fg': c.fg, '--bc-sub': c.sub,
+    '--bc-btn': c.btn, '--bc-btn-fg': c.btnFg,
+    '--bc-fld': c.fld, '--bc-fld-bd': c.fldBd, '--bc-link': c.link,
   }
 }
 
-// ปกหลัง — ข้อความทุกคำและหน้าตาทั้งหมดมาจาก cfg ไม่มีคำไหนฝังอยู่ในโค้ด
-// onSubmit ส่งมาจากข้างนอก: หน้าจริงส่งเข้าท่อลีด ส่วนพรีวิวหลังบ้านส่งตัวที่ไม่ทำอะไร
+// ปกหลัง — เรนเดอร์ตามลำดับบล็อกที่ผู้ออกแบบจัดไว้ ไม่มีโครงตายตัวในโค้ด
+// onSubmit ส่งมาจากภายนอก หน้าจริงส่งเข้าระบบผู้ติดต่อ ส่วนตัวอย่างในระบบส่งตัวที่ไม่ทำงาน
 function BackCover({ cfg, logoSrc, onSubmit }) {
-  const [f, setF] = useState({ name: '', phone: '', interest: '' })
+  const [values, setValues] = useState({})
   const [state, setState] = useState('idle')   // idle | sending | done
   const [err, setErr] = useState('')
-  const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
+
+  const shown = cfg.blocks.filter(b => b.visible !== false)
+  const fields = shown.filter(b => b.type === 'field')
+  const nameB  = fields.find(b => b.role === 'name')
+  const phoneB = fields.find(b => b.role === 'phone')
+  const dark = isDark(cfg.colors.bg)
 
   const send = async (e) => {
     e.preventDefault()
-    if (!f.name.trim() || !f.phone.trim()) { setErr('กรุณากรอกชื่อและเบอร์โทร'); return }
+    const name = (values[nameB?.id] || '').trim()
+    const phone = (values[phoneB?.id] || '').trim()
+    if (!name || !phone) { setErr('กรุณากรอกชื่อและหมายเลขโทรศัพท์'); return }
+    // ช่องที่เพิ่มเองรวมเป็นข้อความเดียว ติดไปกับลีดให้ทีมขายเห็นครบ
+    const extra = fields
+      .filter(b => b.role === 'extra' && (values[b.id] || '').trim())
+      .map(b => `${b.label || 'เพิ่มเติม'}: ${values[b.id].trim()}`)
+      .join(' / ')
     setErr(''); setState('sending')
     try {
-      await onSubmit({ name: f.name.trim(), phone: f.phone.trim(), interest: f.interest.trim() })
+      await onSubmit({ name, phone, interest: extra })
       setState('done')
     } catch (e2) {
-      setErr(e2.message || 'ส่งข้อมูลไม่สำเร็จ ลองใหม่อีกครั้ง')
+      setErr(e2.message || 'ส่งข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
       setState('idle')
     }
   }
 
-  const line = lineHref(cfg.line)
-  const logoH = LOGO_SIZES[cfg.logo] ?? LOGO_SIZES.md
-  const th = THEMES[cfg.theme] || THEMES.light
-  const style = { ...themeVars(cfg.theme) }
-
-  const mark = (cfg.logo === 'off' || !logoSrc)
-    ? <div className="wtc-back-mark">WORLDTECH</div>
-    : <img className="wtc-back-logo" src={logoSrc} alt="Worldtech"
-        style={{ '--wtc-logo-h': `${logoH}px` }}
+  const renderBlock = (b) => {
+    if (b.type === 'logo') {
+      const src = b.src || logoSrc
+      if (!src) return null
+      return <img key={b.id} className="wtc-back-logo" src={src} alt="" data-plate={dark ? '1' : undefined}
+        style={{ '--wtc-logo-h': `${b.size}px` }}
         onError={e => { e.currentTarget.style.display = 'none' }} />
+    }
+    if (b.type === 'text') {
+      if (!String(b.text || '').trim()) return null
+      return b.style === 'heading'
+        ? <p key={b.id} className="wtc-back-h">{b.text}</p>
+        : <p key={b.id} className="wtc-back-p">{b.text}</p>
+    }
+    if (b.type === 'field') {
+      return <input key={b.id} className="wtc-fld" value={values[b.id] || ''}
+        onChange={e => setValues(v => ({ ...v, [b.id]: e.target.value }))}
+        placeholder={b.label} aria-label={b.label || 'ข้อมูล'}
+        inputMode={b.role === 'phone' ? 'tel' : undefined}
+        autoComplete={b.role === 'name' ? 'name' : b.role === 'phone' ? 'tel' : 'off'} />
+    }
+    if (b.type === 'submit') {
+      return (
+        <button key={b.id} className="wtc-send" type="submit" disabled={state === 'sending'}>
+          {state === 'sending' ? 'กำลังส่ง...' : b.label}
+        </button>
+      )
+    }
+    if (b.type === 'line') {
+      const href = lineHref(b.url)
+      if (!href) return null
+      return <a key={b.id} className="wtc-alt" href={href} target="_blank" rel="noreferrer">{b.text}</a>
+    }
+    if (!String(b.number || '').trim()) return null
+    return (
+      <a key={b.id} className="wtc-tel" href={`tel:${String(b.number).replace(/[^\d+]/g, '')}`}>
+        {[b.text, b.number].filter(Boolean).join(' ')}
+      </a>
+    )
+  }
 
-  // ลิงก์รอง — กดแล้วเด้งไปหน้า LINE / แอปโทรศัพท์ทันที
-  const links = (
-    <>
-      {line && <a className="wtc-alt" href={line} target="_blank" rel="noreferrer">{cfg.lineText}</a>}
-      {cfg.phone && (
-        <a className="wtc-tel" href={`tel:${String(cfg.phone).replace(/[^\d+]/g, '')}`}>
-          {[cfg.phoneText, cfg.phone].filter(Boolean).join(' ')}
-        </a>
-      )}
-    </>
-  )
+  const style = colorVars(cfg.colors)
 
   if (state === 'done') {
+    const logo = shown.find(b => b.type === 'logo')
     return (
-      <div className="wtc-back" data-align={cfg.align} data-dark={th.dark ? '1' : undefined} style={style}>
+      <div className="wtc-back" data-align={cfg.align} style={style}>
         <div className="wtc-back-in">
-          {mark}
+          {logo && renderBlock(logo)}
           <div className="wtc-done">
             <div className="wtc-done-i">✓</div>
-            <p className="wtc-back-h">{cfg.doneTitle}</p>
-            {cfg.doneText && <p className="wtc-back-p">{cfg.doneText}</p>}
+            <p className="wtc-back-h">{cfg.done.title}</p>
+            {cfg.done.text && <p className="wtc-back-p">{cfg.done.text}</p>}
           </div>
-          {links}
+          {shown.filter(b => b.type === 'line' || b.type === 'phone').map(renderBlock)}
         </div>
       </div>
     )
   }
 
-  const form = (
-    <form className="wtc-form" onSubmit={send} key="form">
-      <input className="wtc-fld" value={f.name} onChange={set('name')} placeholder={cfg.phName} aria-label={cfg.phName} autoComplete="name" />
-      <input className="wtc-fld" value={f.phone} onChange={set('phone')} placeholder={cfg.phPhone} aria-label={cfg.phPhone} inputMode="tel" autoComplete="tel" />
-      {cfg.showInterest && (
-        <input className="wtc-fld" value={f.interest} onChange={set('interest')} placeholder={cfg.phInterest} aria-label={cfg.phInterest} />
-      )}
-      {err && <p className="wtc-err">{err}</p>}
-      <button className="wtc-send" type="submit" disabled={state === 'sending'}>
-        {state === 'sending' ? 'กำลังส่ง...' : cfg.button}
-      </button>
-    </form>
-  )
-
+  // ทั้งหน้าอยู่ในฟอร์มเดียว ปุ่มส่งจึงวางตรงไหนของลำดับก็ยังทำงาน
   return (
-    <div className="wtc-back" data-align={cfg.align} data-dark={th.dark ? '1' : undefined} style={style}>
-      <div className="wtc-back-in">
-        {mark}
-        <p className="wtc-back-h">{cfg.heading}</p>
-        {cfg.note && <p className="wtc-back-p">{cfg.note}</p>}
-        {/* สลับลำดับได้ บางเล่มอยากให้ทักแชทก่อน บางเล่มอยากได้เบอร์ก่อน */}
-        {cfg.order === 'link' ? <>{links}{form}</> : <>{form}{links}</>}
-      </div>
+    <div className="wtc-back" data-align={cfg.align} style={style}>
+      <form className="wtc-back-in" onSubmit={send}>
+        {shown.map(renderBlock)}
+        {err && <p className="wtc-err">{err}</p>}
+      </form>
     </div>
   )
 }

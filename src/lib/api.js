@@ -1659,7 +1659,10 @@ export function logCatalogView(slug, source) {
 // ===== ปกหลังแคตตาล็อก =====
 // ค่ากลางอยู่ใน settings ก้อนเดียว ส่วนเล่มที่อยากคุมเอง เก็บใน catalogs.back_cover
 // null = ใช้ค่ากลาง (ไม่ผสมกัน — ผสมแล้วเดาไม่ออกว่าเล่มไหนโชว์อะไร)
-export { THEMES, LOGO_SIZES, LOGO_LABELS, ALIGN_LABELS, ORDER_LABELS, BACKCOVER_DEFAULTS, lineHref } from './catalogBackCover'
+export {
+  PRESETS, COLOR_FIELDS, ALIGN_LABELS, BLOCK_LABELS, TEXT_STYLES,
+  LOGO_MIN, LOGO_MAX, BACKCOVER_DEFAULTS, newBlock, lineHref, isDark,
+} from './catalogBackCover'
 
 export async function fetchCatalogBackCover() {
   const rows = await supabase.from('settings').select('value').eq('key', BACKCOVER_SETTING_KEY).then(handle)
@@ -1683,6 +1686,16 @@ export const saveCatalogOwnBackCover = (catalogId, cfg) =>
   supabase.from('catalogs')
     .update({ back_cover: cfg ? mergeBackCover(cfg) : null })
     .eq('id', catalogId).select().then(handle).then(r => r[0])
+
+// โลโก้ที่อัปโหลดเองสำหรับปกหลัง เก็บใน bucket เดียวกับรูปแคตตาล็อก แยกโฟลเดอร์ไว้
+export async function uploadBackCoverLogo(file) {
+  if (file.size > MAX_CATALOG_IMAGE_SIZE) throw new Error('ไฟล์ใหญ่เกิน 10MB')
+  const safeName = file.name.replace(/[^\w.-]/g, '_').slice(-80)
+  const path = `backcover/${Date.now()}-${safeName}`
+  const { error } = await supabase.storage.from(CATALOG_IMAGES_BUCKET).upload(path, file, { contentType: file.type })
+  if (error) throw error
+  return supabase.storage.from(CATALOG_IMAGES_BUCKET).getPublicUrl(path).data.publicUrl
+}
 
 // ส่งฟอร์มปกหลังเข้าท่อลีดเดิม (submit-lead ใช้ service role key เขียนตาราง leads)
 // ไม่ได้ทำฟังก์ชันใหม่ เพราะการตรวจข้อมูล ตัดความยาว และยุบชื่อช่องทาง อยู่ในนั้นครบแล้ว

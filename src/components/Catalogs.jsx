@@ -158,7 +158,7 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-outline" onClick={() => setShowReport(true)}>{t('รายงานยอดเปิดดู')}</button>
-          {perm?.isAdmin && <button className="btn btn-outline" onClick={() => setShowBack(true)}>{t('ปกหลัง (ค่ากลาง)')}</button>}
+          {perm?.isAdmin && <button className="btn btn-outline" onClick={() => setShowBack(true)}>{t('ปกหลัง (ส่วนกลาง)')}</button>}
           {canManage && <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ {t('สร้างแคตตาล็อก')}</button>}
         </div>
       </div>
