@@ -2628,3 +2628,22 @@ end;
 $$ language plpgsql security definer set search_path = public;
 
 grant execute on function catalog_reorder_buttons(uuid[]) to authenticated;
+
+-- ===== ปกหลังแคตตาล็อก (หน้าสุดท้ายที่ลูกค้าทิ้งเบอร์ไว้ได้) =====
+-- ฟอร์มบนปกหลังส่งผ่าน Netlify Function ตัวเดียวกับฟอร์มลีดสาธารณะ (submit-lead)
+-- ลีดจึงไปโผล่ที่หน้า "ผู้ติดต่อ" เหมือนลีดจากช่องทางอื่นทุกประการ
+-- ที่มาใช้ค่ามาตรฐาน "แคตตาล็อกออนไลน์" ส่วนชื่อเล่มไปอยู่ในช่องข้อความ
+-- ถ้าเอาชื่อเล่มไปใส่ช่องที่มาตรงๆ หน้าผู้ติดต่อจะขึ้นแดงว่าช่องทางไม่ถูกต้อง
+insert into lead_sources (name) values ('แคตตาล็อกออนไลน์') on conflict (name) do nothing;
+insert into picklists (list_key, value, sort_order) values ('lead_sources', 'แคตตาล็อกออนไลน์', 9)
+on conflict (list_key, value) do nothing;
+
+-- ข้อความและช่องทางติดต่อบนปกหลัง เก็บเป็น setting กลาง ใช้กับทุกแคตตาล็อก
+-- ตั้งครั้งเดียวแก้ที่เดียว วันเปลี่ยน LINE OA หรือเปลี่ยนเบอร์ไม่ต้องแก้โค้ดและไม่ต้องไล่แก้ทีละเล่ม
+insert into settings (key, value) values
+  ('catalog_backcover_enabled', '1'),
+  ('catalog_backcover_heading', 'สนใจรุ่นไหน ให้ทีมขายติดต่อกลับได้เลย'),
+  ('catalog_backcover_note',    'กรอกชื่อกับเบอร์ไว้ ทีมขายติดต่อกลับในเวลาทำการ'),
+  ('catalog_backcover_line',    ''),
+  ('catalog_backcover_phone',   '')
+on conflict (key) do nothing;

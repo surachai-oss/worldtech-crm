@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { lineHref } from '../lib/api'
 
 // หน้าตาแคตตาล็อกที่ลูกค้าเห็น — เป็น presentational ล้วน ไม่ยุ่งกับ Supabase หรือ auth
 // ใช้ร่วมกันสองที่: หน้าสาธารณะจริง (/catalog/:slug) กับ Preview ในหลังบ้าน
@@ -44,6 +45,30 @@ const CSS = `
 .wtc-foot{flex:none;text-align:center;font-size:10px;color:var(--wtc-muted);padding:0 8px 7px;background:#fff}
 .wtc-foot b{font-weight:700;letter-spacing:.8px;color:var(--wtc-ink)}
 
+/* ปกหลัง — หน้าสุดท้ายของเล่ม ดีไซน์ตายตัว มีแค่ข้อความกับช่องทางที่ตั้งค่าได้
+   จงใจให้มีปุ่มหลักปุ่มเดียว ที่เหลือเป็นลิงก์ตัวเล็ก ไม่ให้แย่งกันเอง */
+.wtc-page > .wtc-back{align-self:stretch;width:100%}
+.wtc-back{flex:1;min-height:0;overflow-y:auto;background:#fff;
+  display:flex;flex-direction:column;justify-content:center;gap:14px;padding:26px 22px;text-align:center}
+.wtc-back-logo{height:34px;width:auto;margin:0 auto 2px;display:block}
+.wtc-back-mark{font-size:15px;font-weight:600;letter-spacing:.1em;color:var(--wtc-ink)}
+.wtc-back-h{font-size:17px;font-weight:500;line-height:1.5;margin:0;text-wrap:balance}
+.wtc-back-p{font-size:12.5px;line-height:1.65;color:var(--wtc-muted);margin:0}
+.wtc-form{display:flex;flex-direction:column;gap:9px;max-width:340px;width:100%;margin:0 auto}
+.wtc-fld{height:42px;border:1px solid #DDE3EB;border-radius:9px;background:#FBFCFD;
+  font-family:inherit;font-size:14px;color:var(--wtc-ink);padding:0 13px;width:100%}
+.wtc-fld:focus{outline:none;border-color:var(--wtc-blue);box-shadow:0 0 0 3px rgba(27,118,255,.15)}
+.wtc-fld::placeholder{color:#9BA5B4}
+.wtc-send{height:46px;border:0;border-radius:10px;background:var(--wtc-blue);color:#fff;
+  font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;width:100%}
+.wtc-send:disabled{background:#A9C7F5;cursor:default}
+.wtc-alt{font-size:13px;color:var(--wtc-blue);text-decoration:none;font-weight:500}
+.wtc-tel{font-size:13px;color:var(--wtc-ink);font-weight:500;text-decoration:none}
+.wtc-err{font-size:12.5px;color:#D0342C;margin:0}
+.wtc-done{display:flex;flex-direction:column;gap:8px;align-items:center}
+.wtc-done-i{width:52px;height:52px;border-radius:50%;background:#E8F7EE;color:#1F9254;
+  display:grid;place-items:center;font-size:26px;line-height:1}
+
 .wtc-state{max-width:520px;margin:0 auto;padding:64px 24px;text-align:center}
 .wtc-state-t{font-size:17px;font-weight:600;margin-bottom:6px}
 .wtc-state-s{font-size:14px;color:var(--wtc-muted);line-height:1.7}
@@ -52,6 +77,66 @@ const CSS = `
 .wtc-footer-s{font-size:11px;color:var(--wtc-muted);margin-top:4px}
 @media (min-width:721px){ .wtc-title{font-size:19px} .wtc-page{padding:20px 24px 8px} }
 `
+
+// ปกหลัง: ฟอร์มสั้นสามช่อง + ทางเลือกรองเป็นลิงก์ LINE/เบอร์
+// onSubmit ถูกส่งมาจากข้างนอก — หน้าจริงส่งเข้าท่อลีด ส่วนพรีวิวหลังบ้านส่งฟังก์ชันที่ไม่ทำอะไร
+function BackCover({ cfg, logoSrc, onSubmit }) {
+  const [f, setF] = useState({ name: '', phone: '', interest: '' })
+  const [state, setState] = useState('idle')   // idle | sending | done
+  const [err, setErr] = useState('')
+  const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
+
+  const send = async (e) => {
+    e.preventDefault()
+    if (!f.name.trim() || !f.phone.trim()) { setErr('กรุณากรอกชื่อและเบอร์โทร'); return }
+    setErr(''); setState('sending')
+    try {
+      await onSubmit({ name: f.name.trim(), phone: f.phone.trim(), interest: f.interest.trim() })
+      setState('done')
+    } catch (e2) {
+      setErr(e2.message || 'ส่งข้อมูลไม่สำเร็จ ลองใหม่อีกครั้ง')
+      setState('idle')
+    }
+  }
+
+  const line = lineHref(cfg.line)
+  const mark = logoSrc
+    ? <img className="wtc-back-logo" src={logoSrc} alt="Worldtech" onError={e => { e.currentTarget.style.display = 'none' }} />
+    : <div className="wtc-back-mark">WORLDTECH</div>
+
+  if (state === 'done') {
+    return (
+      <div className="wtc-back">
+        {mark}
+        <div className="wtc-done">
+          <div className="wtc-done-i">✓</div>
+          <p className="wtc-back-h">ได้รับข้อมูลแล้ว</p>
+          <p className="wtc-back-p">ทีมขาย WORLDTECH จะติดต่อกลับที่เบอร์ {f.phone} ในเวลาทำการ</p>
+        </div>
+        {line && <a className="wtc-alt" href={line} target="_blank" rel="noreferrer">อยากคุยเลย ทักแชท LINE ได้</a>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="wtc-back">
+      {mark}
+      <p className="wtc-back-h">{cfg.heading}</p>
+      {cfg.note && <p className="wtc-back-p">{cfg.note}</p>}
+      <form className="wtc-form" onSubmit={send}>
+        <input className="wtc-fld" value={f.name} onChange={set('name')} placeholder="ชื่อผู้ติดต่อ" aria-label="ชื่อผู้ติดต่อ" autoComplete="name" />
+        <input className="wtc-fld" value={f.phone} onChange={set('phone')} placeholder="เบอร์โทร" aria-label="เบอร์โทร" inputMode="tel" autoComplete="tel" />
+        <input className="wtc-fld" value={f.interest} onChange={set('interest')} placeholder="สนใจสินค้าอะไร (ไม่ใส่ก็ได้)" aria-label="สนใจสินค้าอะไร" />
+        {err && <p className="wtc-err">{err}</p>}
+        <button className="wtc-send" type="submit" disabled={state === 'sending'}>
+          {state === 'sending' ? 'กำลังส่ง...' : 'ให้ทีมขายติดต่อกลับ'}
+        </button>
+      </form>
+      {line && <a className="wtc-alt" href={line} target="_blank" rel="noreferrer">หรือทักแชท LINE ทันที</a>}
+      {cfg.phone && <a className="wtc-tel" href={`tel:${cfg.phone.replace(/[^\d+]/g, '')}`}>โทร {cfg.phone}</a>}
+    </div>
+  )
+}
 
 export function CatalogStateMessage({ title, detail }) {
   return (
@@ -70,10 +155,14 @@ export function CatalogStateMessage({ title, detail }) {
   )
 }
 
-export default function CatalogGalleryView({ catalog, images, logoSrc = '/worldtech-logo.png', mobile = false }) {
+export default function CatalogGalleryView({
+  catalog, images, backCover = null, onSubmitLead, logoSrc = '/worldtech-logo.png', mobile = false,
+}) {
   const viewerRef = useRef(null)
   const [page, setPage] = useState(0)
-  const total = images.length
+  // ปกหลังนับเป็นอีกหนึ่งหน้าในเครื่องอ่าน แต่ไม่นับรวมใน "หน้าที่ x จาก y" ของรูปสินค้า
+  const hasBack = Boolean(backCover?.enabled && images.length && onSubmitLead)
+  const total = images.length + (hasBack ? 1 : 0)
 
   // อ่านหน้าปัจจุบันจากตำแหน่ง scroll จริง ไม่ได้เก็บ state คู่ขนาน
   // เพราะผู้ใช้เลื่อนเองด้วยนิ้วได้ตลอด ถ้าเก็บแยกจะเพี้ยนจากของจริงทันที
@@ -96,6 +185,9 @@ export default function CatalogGalleryView({ catalog, images, logoSrc = '/worldt
   useEffect(() => {
     if (mobile) return
     const onKey = (e) => {
+      // ปกหลังมีช่องกรอก — ลูกศรซ้าย/ขวาในช่องต้องเลื่อนเคอร์เซอร์ ไม่ใช่พลิกหน้าหนีไป
+      const el = e.target
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return
       if (e.key === 'ArrowRight') goTo(page + 1)
       else if (e.key === 'ArrowLeft') goTo(page - 1)
     }
@@ -134,7 +226,9 @@ export default function CatalogGalleryView({ catalog, images, logoSrc = '/worldt
     )
   }
 
-  const caption = images[Math.min(page, total - 1)]?.caption || ''
+  const onBack = hasBack && page >= images.length
+  const caption = onBack ? '' : (images[Math.min(page, images.length - 1)]?.caption || '')
+  const counter = onBack ? 'ปกหลัง' : `${Math.min(page + 1, images.length)} / ${images.length}`
 
   return (
     <div className={`wtc-root${mobile ? '' : ' wtc-fixed'}`}>
@@ -151,13 +245,18 @@ export default function CatalogGalleryView({ catalog, images, logoSrc = '/worldt
                 loading={Math.abs(i - page) <= 1 ? 'eager' : 'lazy'} decoding="async" draggable={false} />
             </div>
           ))}
+          {hasBack && (
+            <div className="wtc-page" style={{ padding: 0 }} key="__back">
+              <BackCover cfg={backCover} logoSrc={logoSrc} onSubmit={onSubmitLead} />
+            </div>
+          )}
         </div>
 
         <div className="wtc-bar">
           <button className="wtc-nav" onClick={() => goTo(page - 1)} disabled={page <= 0} aria-label="หน้าก่อน">‹</button>
           <div className="wtc-bar-mid">
             {caption && <div className="wtc-cap">{caption}</div>}
-            <div className="wtc-count">{Math.min(page + 1, total)} / {total}</div>
+            <div className="wtc-count">{counter}</div>
           </div>
           <button className="wtc-nav" onClick={() => goTo(page + 1)} disabled={page >= total - 1} aria-label="หน้าถัดไป">›</button>
         </div>

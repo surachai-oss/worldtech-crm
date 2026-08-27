@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   fetchCatalog, updateCatalog, listCatalogImages, uploadCatalogImage, updateCatalogImage,
-  softDeleteCatalogImage, setCatalogCover, reorderCatalogImages, fetchCatalogMonthlyViews,
+  softDeleteCatalogImage, setCatalogCover, reorderCatalogImages, fetchCatalogMonthlyViews, fetchCatalogBackCover,
   isValidSlug, catalogPublicUrl, CATALOG_STATUS, CATALOG_ACCEPT, MAX_CATALOG_IMAGE_SIZE, MAX_CATALOG_PDF_SIZE, isPdf,
 } from '../lib/api'
 import { pdfToImageFiles } from '../lib/pdfToImages'
@@ -50,6 +50,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const [cat, setCat] = useState(null)
   const [images, setImages] = useState([])
   const [months, setMonths] = useState([])
+  const [backCover, setBackCover] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -62,10 +63,11 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const load = async () => {
     setLoading(true)
     try {
-      const [c, imgs, mv] = await Promise.all([
+      const [c, imgs, mv, bc] = await Promise.all([
         fetchCatalog(catalogId), listCatalogImages(catalogId), fetchCatalogMonthlyViews(catalogId, 12),
+        fetchCatalogBackCover(),
       ])
-      setCat(c); setImages(imgs); setMonths(mv); setDirty(false)
+      setCat(c); setImages(imgs); setMonths(mv); setBackCover(bc); setDirty(false)
     } catch (e) { toast('โหลดแคตตาล็อกไม่สำเร็จ: ' + e.message, 'error') }
     finally { setLoading(false) }
   }
@@ -200,6 +202,8 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const totalViews = months.reduce((n, m) => n + m.views, 0)
   const previewCatalog = { name: cat.catalog_name, description: cat.description || '' }
   const previewImages = visible.map(i => ({ url: i.image_url, caption: i.caption || '' }))
+  // พรีวิวต้องเห็นปกหลังเหมือนของจริง แต่กดส่งแล้วต้องไม่สร้างลีดปลอมเข้าระบบ
+  const previewSubmit = async () => { throw new Error('พรีวิว — ยังไม่ส่งข้อมูลจริง') }
 
   // ใช้ "scroll-view" ไม่ใช่ "list-view" — App.css มีกฎ .content-area:has(>.list-view){overflow:hidden}
   // ที่ตั้งใจให้หน้าแบบตารางเลื่อนข้างในตารางเอง หน้านี้ไม่มีตาราง ถ้าใช้ list-view เนื้อหาที่เกินจอ
@@ -238,7 +242,8 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
               <button className="modal-close" onClick={() => setShowFull(false)}>×</button>
             </div>
             <div className="modal-body" style={{ padding: 0, maxHeight: '78vh', overflowY: 'auto' }}>
-              <CatalogGalleryView catalog={previewCatalog} images={previewImages} />
+              <CatalogGalleryView catalog={previewCatalog} images={previewImages}
+                backCover={backCover} onSubmitLead={previewSubmit} />
             </div>
           </div>
         </div>
@@ -366,7 +371,8 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
             {t('นี่คือสิ่งที่ลูกค้าจะเห็น — อัปเดตตามที่แก้ทันที (ยังไม่ต้องบันทึกก็เห็น)')}
           </div>
           <div className="cb-preview-frame">
-            <CatalogGalleryView catalog={previewCatalog} images={previewImages} mobile />
+            <CatalogGalleryView catalog={previewCatalog} images={previewImages}
+              backCover={backCover} onSubmitLead={previewSubmit} mobile />
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
             <button className="btn btn-outline btn-sm" style={{ flex: 1 }} onClick={() => setShowFull(true)}>{t('ดูเต็มหน้าจอ')}</button>

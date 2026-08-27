@@ -38,6 +38,21 @@ export default async (req) => {
     .eq('is_deleted', false)
     .order('display_order', { ascending: true })
 
+  // ปกหลังใช้ข้อความ/ช่องทางกลางจากตาราง settings — ส่งออกเฉพาะคีย์ของปกหลัง
+  // ไม่ดึง settings ทั้งตาราง เพราะในนั้นมีค่าตั้งค่าอื่นของระบบที่ไม่ควรหลุดออกไปข้างนอก
+  const { data: cfgRows } = await admin.from('settings').select('key, value').in('key', [
+    'catalog_backcover_enabled', 'catalog_backcover_heading',
+    'catalog_backcover_note', 'catalog_backcover_line', 'catalog_backcover_phone',
+  ])
+  const cfg = new Map((cfgRows || []).map(r => [r.key, r.value]))
+  const backCover = {
+    enabled: (cfg.get('catalog_backcover_enabled') ?? '1') === '1',
+    heading: cfg.get('catalog_backcover_heading') || 'สนใจรุ่นไหน ให้ทีมขายติดต่อกลับได้เลย',
+    note: cfg.get('catalog_backcover_note') || '',
+    line: cfg.get('catalog_backcover_line') || '',
+    phone: cfg.get('catalog_backcover_phone') || '',
+  }
+
   return json({
     state: 'ok',
     catalog: {
@@ -48,6 +63,7 @@ export default async (req) => {
       updated_at: cat.updated_at,
     },
     images: (imgs || []).map(i => ({ url: i.image_url, caption: i.caption || '' })),
+    backCover,
   })
 }
 

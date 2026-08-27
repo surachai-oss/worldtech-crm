@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchPublicCatalog, logCatalogView } from '../lib/api'
+import { fetchPublicCatalog, logCatalogView, submitCatalogLead } from '../lib/api'
 import CatalogGalleryView, { CatalogStateMessage } from './CatalogGalleryView'
 import '../App.css'
 
@@ -56,5 +56,15 @@ export default function PublicCatalogPage() {
       detail="ระบบขัดข้องชั่วคราว ลองรีเฟรชอีกครั้ง หรือติดต่อทีมขายที่ส่งลิงก์ให้คุณ" />
   }
 
-  return <CatalogGalleryView catalog={data.catalog} images={data.images} />
+  // ฟอร์มปกหลังส่งเข้าท่อลีดเดิม ลีดจะไปโผล่ที่หน้า "ผู้ติดต่อ" พร้อมชื่อเล่มที่เปิดมา
+  const sendLead = (f) => submitCatalogLead({
+    ...f, catalogName: data.catalog.name, catalogSlug: data.catalog.slug,
+  })
+
+  return (
+    <CatalogGalleryView
+      catalog={data.catalog} images={data.images}
+      backCover={data.backCover} onSubmitLead={sendLead}
+    />
+  )
 }

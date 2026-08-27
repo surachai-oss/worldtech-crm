@@ -1654,3 +1654,73 @@ export function logCatalogView(slug, source) {
     }).catch(() => {})
   } catch { /* ไม่ต้องทำอะไร */ }
 }
+
+// ===== ปกหลังแคตตาล็อก =====
+// ข้อความกับช่องทางติดต่อเก็บใน settings เป็นค่ากลาง ใช้กับทุกเล่ม แก้ที่เดียว
+export const CATALOG_BACKCOVER_KEYS = [
+  'catalog_backcover_enabled', 'catalog_backcover_heading',
+  'catalog_backcover_note', 'catalog_backcover_line', 'catalog_backcover_phone',
+]
+
+const BACKCOVER_DEFAULTS = {
+  enabled: true,
+  heading: 'สนใจรุ่นไหน ให้ทีมขายติดต่อกลับได้เลย',
+  note: 'กรอกชื่อกับเบอร์ไว้ ทีมขายติดต่อกลับในเวลาทำการ',
+  line: '',
+  phone: '',
+}
+
+export async function fetchCatalogBackCover() {
+  const rows = await supabase.from('settings').select('key, value')
+    .in('key', CATALOG_BACKCOVER_KEYS).then(handle)
+  const m = new Map(rows.map(r => [r.key, r.value]))
+  const pick = (k, d) => (m.has(`catalog_backcover_${k}`) ? (m.get(`catalog_backcover_${k}`) ?? '') : d)
+  return {
+    enabled: pick('enabled', '1') === '1',
+    heading: pick('heading', BACKCOVER_DEFAULTS.heading) || BACKCOVER_DEFAULTS.heading,
+    note: pick('note', BACKCOVER_DEFAULTS.note),
+    line: pick('line', ''),
+    phone: pick('phone', ''),
+  }
+}
+
+// upsert ทีละคีย์ — ตาราง settings เป็น key/value ล้วน ไม่มีแถวเดียวรวมทุกค่า
+export async function saveCatalogBackCover(cfg) {
+  const rows = [
+    { key: 'catalog_backcover_enabled', value: cfg.enabled ? '1' : '0' },
+    { key: 'catalog_backcover_heading', value: (cfg.heading || '').trim() },
+    { key: 'catalog_backcover_note', value: (cfg.note || '').trim() },
+    { key: 'catalog_backcover_line', value: (cfg.line || '').trim() },
+    { key: 'catalog_backcover_phone', value: (cfg.phone || '').trim() },
+  ]
+  return supabase.from('settings').upsert(rows, { onConflict: 'key' }).then(handle)
+}
+
+// ลิงก์ LINE: รับได้ทั้งลิงก์เต็มที่ก๊อปจากแอป และไอดีเปล่าที่คนพิมพ์เอง
+export function lineHref(value) {
+  const v = String(value || '').trim()
+  if (!v) return ''
+  if (/^https?:\/\//i.test(v)) return v
+  if (v.startsWith('@')) return `https://line.me/R/ti/p/${encodeURIComponent(v)}`
+  return `https://line.me/ti/p/~${encodeURIComponent(v)}`
+}
+
+// ส่งฟอร์มปกหลังเข้าท่อลีดเดิม (submit-lead ใช้ service role key เขียนตาราง leads)
+// ไม่ได้ทำฟังก์ชันใหม่ เพราะการตรวจข้อมูล ตัดความยาว และยุบชื่อช่องทาง อยู่ในนั้นครบแล้ว
+export async function submitCatalogLead({ name, phone, interest, catalogName, catalogSlug }) {
+  const res = await fetch('/.netlify/functions/submit-lead', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      subject: `ขอข้อมูลจากแคตตาล็อก ${catalogName}`.slice(0, 150),
+      full_name: name,
+      phone,
+      interested_product: interest || null,
+      source: 'แคตตาล็อกออนไลน์',
+      message: `เปิดจากแคตตาล็อก "${catalogName}" (/catalog/${catalogSlug})`,
+    }),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(json.error || 'ส่งข้อมูลไม่สำเร็จ')
+  return json
+}
