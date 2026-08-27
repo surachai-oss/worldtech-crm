@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   fetchCatalog, updateCatalog, listCatalogImages, uploadCatalogImage, updateCatalogImage,
-  softDeleteCatalogImage, setCatalogCover, reorderCatalogImages, fetchCatalogViewsBySource,
-  isValidSlug, catalogPublicUrl, CATALOG_STATUS, MAX_CATALOG_IMAGE_SIZE,
+  softDeleteCatalogImage, setCatalogCover, reorderCatalogImages, fetchCatalogMonthlyViews,
+  isValidSlug, catalogPublicUrl, CATALOG_STATUS, CATALOG_ACCEPT, MAX_CATALOG_IMAGE_SIZE, MAX_CATALOG_PDF_SIZE, isPdf,
 } from '../lib/api'
+import { pdfToImageFiles } from '../lib/pdfToImages'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import CatalogGalleryView from './CatalogGalleryView'
@@ -26,7 +27,7 @@ const LAYOUT_CSS = `
 .cb-img.hidden{background:#fafbfc;opacity:.62}
 .cb-thumb{width:96px;height:96px;object-fit:contain;background:var(--gray-bg);border-radius:6px;border:1px solid var(--border)}
 .cb-img-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.cb-preview-frame{border:1px solid var(--border);border-radius:12px;overflow:hidden;max-height:560px;overflow-y:auto;background:#f5f7fa}
+.cb-preview-frame{border:1px solid var(--border);border-radius:12px;overflow:hidden;height:560px;background:#f5f7fa}
 .cb-drop{border:2px dashed var(--border);border-radius:10px;padding:22px 14px;text-align:center;color:var(--text-light);font-size:13px;cursor:pointer}
 .cb-drop.over{border-color:var(--yellow);background:#fffdf3;color:var(--text)}
 `
@@ -47,7 +48,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
 
   const [cat, setCat] = useState(null)
   const [images, setImages] = useState([])
-  const [views, setViews] = useState({ total: 0, bySource: new Map() })
+  const [months, setMonths] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -60,10 +61,10 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const load = async () => {
     setLoading(true)
     try {
-      const [c, imgs, v] = await Promise.all([
-        fetchCatalog(catalogId), listCatalogImages(catalogId), fetchCatalogViewsBySource(catalogId),
+      const [c, imgs, mv] = await Promise.all([
+        fetchCatalog(catalogId), listCatalogImages(catalogId), fetchCatalogMonthlyViews(catalogId, 12),
       ])
-      setCat(c); setImages(imgs); setViews(v); setDirty(false)
+      setCat(c); setImages(imgs); setMonths(mv); setDirty(false)
     } catch (e) { toast('โหลดแคตตาล็อกไม่สำเร็จ: ' + e.message, 'error') }
     finally { setLoading(false) }
   }
@@ -81,10 +82,6 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
         catalog_name: cat.catalog_name.trim(),
         catalog_slug: cat.catalog_slug.trim().toLowerCase(),
         description: cat.description?.trim() || null,
-        contact_name: cat.contact_name?.trim() || null,
-        contact_line: cat.contact_line?.trim() || null,
-        contact_phone: cat.contact_phone?.trim() || null,
-        contact_email: cat.contact_email?.trim() || null,
         status: cat.status,
       }, actor)
       setDirty(false)
@@ -99,17 +96,45 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
 
   // อัปโหลดทีละไฟล์ ไม่ยิงพร้อมกัน — ได้ตัวเลขความคืบหน้าที่ตรงจริง
   // และไฟล์ที่พังไม่ไปล้มไฟล์อื่นที่อัปสำเร็จแล้ว
+  // PDF ถูกแตกเป็นรูปรายหน้าก่อนในเบราว์เซอร์ แล้วอัปเหมือนรูปธรรมดา (ดู pdfToImages.js)
   const doUpload = async (files) => {
     const list = Array.from(files || []).filter(Boolean)
     if (!list.length) return
-    setUploading({ done: 0, total: list.length })
-    let order = images.length ? Math.max(...images.map(i => i.display_order)) + 1 : 0
     const failed = []
-    let firstNew = null
+
+    // แตก PDF ตามลำดับที่เลือกมา ไม่ยกไปต่อท้าย — คนเลือกไฟล์เรียงมาแบบไหนก็ควรได้แบบนั้น
+    const queue = []
     for (const file of list) {
+      if (!isPdf(file)) { queue.push(file); continue }
+      if (file.size > MAX_CATALOG_PDF_SIZE) {
+        failed.push(`${file.name}: ไฟล์ PDF ใหญ่เกิน ${Math.round(MAX_CATALOG_PDF_SIZE / 1024 / 1024)}MB`); continue
+      }
+      try {
+        setUploading({ phase: 'pdf', done: 0, total: 0, label: file.name })
+        const { files: pages, skipped } = await pdfToImageFiles(file, (done, total) =>
+          setUploading({ phase: 'pdf', done, total, label: file.name }))
+        queue.push(...pages)
+        if (skipped) failed.push(`${file.name}: ใช้แค่ ${pages.length} หน้าแรก (ไฟล์ยาวเกินที่รองรับ)`)
+      } catch (e) {
+        failed.push(`${file.name}: แปลง PDF ไม่สำเร็จ — ${e.message}`)
+      }
+    }
+
+    if (!queue.length) {
+      setUploading(null)
+      toast(failed[0] || 'ไม่มีไฟล์ที่อัปโหลดได้', 'error')
+      return
+    }
+
+    setUploading({ phase: 'upload', done: 0, total: queue.length, label: '' })
+    let order = images.length ? Math.max(...images.map(i => i.display_order)) + 1 : 0
+    let firstNew = null
+    let okCount = 0
+    for (const file of queue) {
       try {
         const row = await uploadCatalogImage(catalogId, file, { displayOrder: order++, uploadedBy: currentUser?.id })
         if (!firstNew) firstNew = row
+        okCount++
       } catch (e) { failed.push(e.message || file.name) }
       setUploading(u => ({ ...u, done: u.done + 1 }))
     }
@@ -118,10 +143,16 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
       await setCatalogCover(firstNew.id).catch(() => {})
     }
     setUploading(null)
-    if (failed.length) toast(`อัปโหลดไม่สำเร็จ ${failed.length} ไฟล์: ${failed[0]}`, 'error')
-    else toast(`อัปโหลด ${list.length} รูปแล้ว`, 'success')
+    if (failed.length) toast(`${okCount ? `อัปโหลด ${okCount} รูปแล้ว แต่` : ''}มีปัญหา ${failed.length} รายการ: ${failed[0]}`, 'error')
+    else toast(`อัปโหลด ${okCount} รูปแล้ว`, 'success')
     load()
   }
+
+  // ข้อความบอกสถานะระหว่างทำงาน — แปลง PDF กับอัปโหลดใช้เวลาคนละแบบ ต้องบอกให้ตรงว่าตอนนี้อยู่ขั้นไหน
+  const busyLabel = !uploading ? ''
+    : uploading.phase === 'pdf'
+      ? `${t('กำลังแปลง PDF')} ${uploading.label} ${uploading.total ? `${uploading.done}/${uploading.total}` : ''}`
+      : `${t('กำลังอัปโหลด')} ${uploading.done}/${uploading.total}`
 
   const saveCaption = async (img, value) => {
     const next = value.trim() || null
@@ -165,11 +196,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   }
 
   const visible = images.filter(i => i.is_visible)
-  const previewCatalog = {
-    name: cat.catalog_name, description: cat.description || '',
-    contact_name: cat.contact_name, contact_line: cat.contact_line,
-    contact_phone: cat.contact_phone, contact_email: cat.contact_email,
-  }
+  const previewCatalog = { name: cat.catalog_name, description: cat.description || '' }
   const previewImages = visible.map(i => ({ url: i.image_url, caption: i.caption || '' }))
 
   return (
@@ -232,26 +259,6 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
             <textarea className="form-control" rows={3} value={cat.description || ''} onChange={set('description')} disabled={!canManage} />
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: .4, margin: '14px 0 8px' }}>
-            {t('ช่องทางติดต่อที่ลูกค้าจะเห็น')}
-          </div>
-          <div className="form-group">
-            <label className="form-label">{t('ชื่อผู้ดูแล')}</label>
-            <input className="form-control" value={cat.contact_name || ''} onChange={set('contact_name')} disabled={!canManage} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">{t('LINE')}</label>
-            <input className="form-control" value={cat.contact_line || ''} onChange={set('contact_line')} disabled={!canManage}
-              placeholder="@worldtech หรือวางลิงก์ LINE" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">{t('เบอร์โทร')}</label>
-            <input className="form-control" value={cat.contact_phone || ''} onChange={set('contact_phone')} disabled={!canManage} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">{t('อีเมล')}</label>
-            <input className="form-control" value={cat.contact_email || ''} onChange={set('contact_email')} disabled={!canManage} />
-          </div>
           <div className="form-group">
             <label className="form-label">{t('สถานะ')}</label>
             <select className="form-control" value={cat.status} onChange={set('status')} disabled={!canManage}>
@@ -262,18 +269,20 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
             </div>
           </div>
 
-          {views.total > 0 && (
-            <>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: .4, margin: '14px 0 8px' }}>
-                {t('ยอดเปิดดูตามช่องทาง')}
-              </div>
-              {[...views.bySource.entries()].sort((a, b) => b[1] - a[1]).map(([src, n]) => (
-                <div key={src} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0' }}>
-                  <span style={{ color: 'var(--text-light)' }}>{src}</span><b>{n}</b>
-                </div>
-              ))}
-            </>
-          )}
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: .4, margin: '14px 0 8px' }}>
+            {t('ยอดเปิดดูรายเดือน')}
+          </div>
+          {months.length ? months.map(m => (
+            <div key={m.month} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '3px 0' }}>
+              <span style={{ color: 'var(--text-light)', width: 62, flexShrink: 0 }}>{m.month}</span>
+              {/* แถบยาวตามสัดส่วนเดือนที่สูงสุด — เห็นแนวโน้มได้เร็วกว่าอ่านตัวเลขเรียงกัน */}
+              <span style={{ flex: 1, height: 6, background: 'var(--gray-bg)', borderRadius: 3, overflow: 'hidden' }}>
+                <span style={{ display: 'block', height: '100%', borderRadius: 3, background: 'var(--navy)',
+                  width: `${Math.max(4, Math.round(m.views / Math.max(...months.map(x => x.views)) * 100))}%` }} />
+              </span>
+              <b style={{ width: 34, textAlign: 'right' }}>{m.views}</b>
+            </div>
+          )) : <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ยังไม่มีคนเปิดดู')}</div>}
         </Panel>
 
         {/* ===== กลาง: จัดการรูป ===== */}
@@ -281,11 +290,11 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
           title={`${t('รูปในแคตตาล็อก')} (${images.length})`}
           right={canManage && (
             <button className="btn btn-primary btn-xs" disabled={!!uploading} onClick={() => fileRef.current?.click()}>
-              {uploading ? `${t('กำลังอัปโหลด')} ${uploading.done}/${uploading.total}` : `+ ${t('อัปโหลดรูป')}`}
+              {uploading ? busyLabel : `+ ${t('อัปโหลดรูป / PDF')}`}
             </button>
           )}
         >
-          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple style={{ display: 'none' }}
+          <input ref={fileRef} type="file" accept={CATALOG_ACCEPT} multiple style={{ display: 'none' }}
             onChange={e => { doUpload(e.target.files); e.target.value = '' }} />
 
           {canManage && (
@@ -298,8 +307,8 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
               onDrop={e => { e.preventDefault(); setDragOver(false); if (!uploading) doUpload(e.dataTransfer.files) }}
             >
               {uploading
-                ? `${t('กำลังอัปโหลด')} ${uploading.done}/${uploading.total} — ${t('อย่าเพิ่งปิดหน้านี้')}`
-                : t('ลากรูปมาวางตรงนี้ หรือคลิกเพื่อเลือกไฟล์ — JPG, PNG, WebP ไม่เกิน 10MB ต่อรูป เลือกหลายไฟล์พร้อมกันได้')}
+                ? `${busyLabel} — ${t('อย่าเพิ่งปิดหน้านี้')}`
+                : t('ลากไฟล์มาวางตรงนี้ หรือคลิกเพื่อเลือก — JPG, PNG, WebP (ไม่เกิน 10MB ต่อรูป) หรือ PDF ทั้งเล่ม ระบบจะแตกเป็นหน้าๆ ให้เอง')}
             </div>
           )}
 
@@ -307,7 +316,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
             <div className="empty-state">
               <div>{t('ยังไม่มีรูปในแคตตาล็อกนี้')}</div>
               <div style={{ fontSize: 12, color: 'var(--text-light)', marginTop: 6 }}>
-                {t('อัปโหลดรูป Artwork ที่กราฟิกทำไว้แล้วได้เลย ไม่ต้องกรอกราคาหรือสเปก')}
+                {t('อัปโหลดรูป Artwork หรือไฟล์ PDF ที่กราฟิกทำไว้แล้วได้เลย ไม่ต้องกรอกราคาหรือสเปก')}
               </div>
             </div>
           )}
@@ -362,7 +371,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
             </div>
           )}
           <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 8 }}>
-            {t('ขนาดไฟล์สูงสุด')} {Math.round(MAX_CATALOG_IMAGE_SIZE / 1024 / 1024)}MB
+            {t('ขนาดไฟล์สูงสุด')} — {t('รูป')} {Math.round(MAX_CATALOG_IMAGE_SIZE / 1024 / 1024)}MB · PDF {Math.round(MAX_CATALOG_PDF_SIZE / 1024 / 1024)}MB
           </div>
         </Panel>
       </div>

@@ -6,6 +6,7 @@ import {
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import CatalogLinkModal from './CatalogLinkModal'
+import CatalogViewReport from './CatalogViewReport'
 
 // รายการแคตตาล็อกทั้งหมด — ทุกคนใน CRM เห็นทุกอัน เพราะเป็นสื่อการตลาดร่วม ยิ่งใช้ซ้ำยิ่งดี
 // ฝ่ายบัญชีเห็นแต่แก้ไม่ได้ (บังคับที่ RLS ฝั่งนี้แค่ซ่อนปุ่ม)
@@ -103,6 +104,7 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
   const [linkFor, setLinkFor] = useState(null)
+  const [showReport, setShowReport] = useState(false)
   const canManage = !perm?.isFinance
 
   const load = async () => {
@@ -152,11 +154,15 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
             {t('สร้างแคตตาล็อกจากรูปภาพและแชร์ลิงก์ให้ลูกค้า')}
           </div>
         </div>
-        {canManage && <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ {t('สร้างแคตตาล็อก')}</button>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" onClick={() => setShowReport(true)}>{t('รายงานยอดเปิดดู')}</button>
+          {canManage && <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ {t('สร้างแคตตาล็อก')}</button>}
+        </div>
       </div>
 
       {showNew && <NewCatalogModal existingSlugs={rows.map(r => r.catalog_slug)} onClose={() => setShowNew(false)} onSave={onCreate} />}
       {linkFor && <CatalogLinkModal catalog={linkFor} onClose={() => setLinkFor(null)} />}
+      {showReport && <CatalogViewReport onClose={() => setShowReport(false)} />}
 
       <div className="card list-card">
         <div className="table-wrap">

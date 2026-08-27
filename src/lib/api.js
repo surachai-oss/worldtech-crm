@@ -1499,10 +1499,12 @@ export const fetchPriceStructure = (productId) =>
 // ระบบโชว์รูป Artwork แล้วได้ลิงก์ส่งลูกค้า — ไม่ใช่ระบบสินค้า ไม่มี SKU/ราคา/สต็อก
 export const CATALOG_IMAGES_BUCKET = 'catalog-images'
 export const CATALOG_STATUS = ['draft', 'published', 'hidden', 'archived']
-export const CATALOG_SOURCES = ['line', 'facebook', 'website', 'email', 'other']
 
 const CATALOG_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+export const CATALOG_ACCEPT = 'image/jpeg,image/png,image/webp,application/pdf'
 export const MAX_CATALOG_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB ต่อรูป ตามบรีฟ
+export const MAX_CATALOG_PDF_SIZE = 40 * 1024 * 1024   // PDF ทั้งเล่มใหญ่กว่ารูปเดี่ยวได้ เพราะจะถูกแตกเป็นหน้าๆ ก่อนอัป
+export const isPdf = (file) => file?.type === 'application/pdf' || /\.pdf$/i.test(file?.name || '')
 
 // ทำ slug จากชื่อแคตตาล็อก — ต้องผ่าน check constraint catalogs_slug_format ที่ฐานข้อมูล
 // ชื่อไทยแปลงเป็น ascii ไม่ได้ ถ้าเหลือว่างให้คนกรอกเองแทนการเดามั่ว
@@ -1519,9 +1521,8 @@ export const isValidSlug = (s) => /^[a-z0-9]+(-[a-z0-9]+)*$/.test(String(s || ''
 
 // ลิงก์สาธารณะ — ประกอบจาก origin ปัจจุบันเสมอ ไม่เก็บลงฐานข้อมูล
 // เก็บไว้แล้วมันจะค้างเป็นโดเมนเก่าในวันที่ย้ายโดเมน แล้วเซลล์จะ copy ลิงก์ตายไปส่งลูกค้า
-export function catalogPublicUrl(slug, source) {
-  const base = `${window.location.origin}/catalog/${slug}`
-  return source ? `${base}?src=${encodeURIComponent(source)}` : base
+export function catalogPublicUrl(slug) {
+  return `${window.location.origin}/catalog/${slug}`
 }
 
 export const listCatalogs = () =>
@@ -1547,16 +1548,20 @@ export async function fetchCatalogViewCounts() {
   return map
 }
 
-// สรุปยอดเปิดดูแยกช่องทางของแคตตาล็อกเดียว — โชว์ในหน้า Builder ให้รู้ว่าช่องทางไหนได้ผล
-export async function fetchCatalogViewsBySource(catalogId) {
-  const rows = await supabase.from('catalog_view_logs')
-    .select('source').eq('catalog_id', catalogId).then(handle)
-  const map = new Map()
-  rows.forEach(r => {
-    const k = r.source || 'other'
-    map.set(k, (map.get(k) || 0) + 1)
-  })
-  return { total: rows.length, bySource: map }
+// รายงานยอดเปิดดูรายเดือน — นับเดือนตามเวลาไทยที่ฝั่งฐานข้อมูล (ดู catalog_view_report ใน schema.sql)
+// คืน [{ catalog_id, catalog_name, month: 'YYYY-MM', views }]
+export const fetchCatalogViewReport = (fromDate, toDate) =>
+  supabase.rpc('catalog_view_report', { p_from: fromDate, p_to: toDate }).then(handle)
+
+// ยอดรายเดือนของแคตตาล็อกเดียว ไว้โชว์ในหน้าจัดการ — ย้อนหลังกี่เดือนก็ได้
+export async function fetchCatalogMonthlyViews(catalogId, months = 12) {
+  const now = new Date()
+  const from = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1)
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const rows = await fetchCatalogViewReport(iso(from), iso(now))
+  return rows.filter(r => r.catalog_id === catalogId)
+    .map(r => ({ month: r.month, views: Number(r.views) }))
+    .sort((a, b) => (a.month < b.month ? 1 : -1))
 }
 
 export async function createCatalog({ catalog_name, catalog_slug, description, createdByName }) {
@@ -1585,7 +1590,7 @@ export const listCatalogImages = (catalogId) =>
 // อัปโหลดรูปเข้า bucket ก่อน แล้วค่อยสร้าง record — ลำดับนี้สำคัญ
 // ถ้าสร้าง record ก่อนแล้วอัปโหลดพลาด จะเหลือแถวที่ชี้ไปยังรูปที่ไม่มีอยู่จริง แล้วหน้าลูกค้าจะขึ้นรูปแตก
 export async function uploadCatalogImage(catalogId, file, { displayOrder, uploadedBy }) {
-  if (!CATALOG_IMAGE_TYPES.includes(file.type)) throw new Error(`${file.name}: รองรับเฉพาะ JPG, PNG, WebP`)
+  if (!CATALOG_IMAGE_TYPES.includes(file.type)) throw new Error(`${file.name}: รองรับเฉพาะ JPG, PNG, WebP, PDF`)
   if (file.size > MAX_CATALOG_IMAGE_SIZE) throw new Error(`${file.name}: ไฟล์ใหญ่เกิน 10MB`)
 
   // Supabase Storage ปฏิเสธ key ที่มีอักขระไทย/เว้นวรรค ("Invalid key") ต้องเหลือแต่ ASCII

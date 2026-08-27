@@ -1,13 +1,9 @@
 import { useState } from 'react'
-import { catalogPublicUrl, CATALOG_SOURCES } from '../lib/api'
+import { catalogPublicUrl } from '../lib/api'
 import { useLanguage } from './LanguageContext'
 
-// คัดลอกลิงก์สาธารณะของแคตตาล็อก — แยกปุ่มตามช่องทางที่จะเอาไปส่ง
-// ที่ต้องแยกเพราะ ?src= คือสิ่งเดียวที่บอกได้ว่ายอดเปิดดูมาจากช่องทางไหน
-// ถ้าให้เซลล์พิมพ์เองท้ายลิงก์ ไม่มีใครทำ แล้วรายงานช่องทางจะว่างเปล่า
-const SOURCE_LABEL = {
-  line: 'LINE', facebook: 'Facebook', website: 'เว็บไซต์', email: 'อีเมล', other: 'อื่นๆ',
-}
+// ลิงก์สาธารณะของแคตตาล็อก — ลิงก์เดียวจบ ไม่แยกตามช่องทางแล้ว
+// ยอดเปิดดูดูรวมรายเดือนที่ปุ่ม "รายงานยอดเปิดดู" แทน (ดู CatalogViewReport)
 
 async function copyText(text) {
   try {
@@ -31,19 +27,15 @@ async function copyText(text) {
 
 export default function CatalogLinkModal({ catalog, onClose }) {
   const { t } = useLanguage()
-  const [copied, setCopied] = useState('')
+  const [copied, setCopied] = useState(false)
+  const url = catalogPublicUrl(catalog.catalog_slug)
   const published = catalog.status === 'published'
 
-  const doCopy = async (key, url) => {
+  const doCopy = async () => {
     const ok = await copyText(url)
-    setCopied(ok ? key : '')
-    if (ok) setTimeout(() => setCopied(c => (c === key ? '' : c)), 1800)
+    setCopied(ok)
+    if (ok) setTimeout(() => setCopied(false), 1800)
   }
-
-  const rows = [
-    { key: '', label: t('ลิงก์ปกติ (ไม่ระบุช่องทาง)'), url: catalogPublicUrl(catalog.catalog_slug) },
-    ...CATALOG_SOURCES.map(s => ({ key: s, label: SOURCE_LABEL[s], url: catalogPublicUrl(catalog.catalog_slug, s) })),
-  ]
 
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
@@ -58,25 +50,19 @@ export default function CatalogLinkModal({ catalog, onClose }) {
               {t('แคตตาล็อกนี้ยังไม่ได้เผยแพร่ — ลูกค้าเปิดลิงก์แล้วจะยังไม่เห็นรูป กด "เผยแพร่" ก่อนส่ง')}
             </div>
           )}
-          <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 10 }}>
-            {t('เลือกช่องทางที่จะเอาลิงก์ไปส่ง ระบบจะนับยอดเปิดดูแยกให้ตามช่องทางนั้น')}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input className="form-control" readOnly value={url} onFocus={e => e.target.select()} style={{ fontSize: 12 }} />
+            <button className={`btn ${copied ? 'btn-success' : 'btn-primary'}`} style={{ whiteSpace: 'nowrap', minWidth: 92 }} onClick={doCopy}>
+              {copied ? t('คัดลอกแล้ว') : t('คัดลอก')}
+            </button>
           </div>
-          {rows.map(r => (
-            <div key={r.key || 'plain'} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ width: 130, fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{t(r.label)}</div>
-              <input className="form-control" readOnly value={r.url} onFocus={e => e.target.select()} style={{ fontSize: 11 }} />
-              <button className={`btn btn-xs ${copied === r.key ? 'btn-success' : 'btn-outline'}`}
-                style={{ whiteSpace: 'nowrap', minWidth: 68 }} onClick={() => doCopy(r.key, r.url)}>
-                {copied === r.key ? t('คัดลอกแล้ว') : t('คัดลอก')}
-              </button>
-            </div>
-          ))}
+          <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 8 }}>
+            {t('ส่งลิงก์นี้ทาง LINE, Facebook, อีเมล หรือช่องทางไหนก็ได้ ทุกครั้งที่ลูกค้าเปิดจะถูกนับยอดให้อัตโนมัติ')}
+          </div>
         </div>
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>{t('ปิด')}</button>
-          <a className="btn btn-primary" href={catalogPublicUrl(catalog.catalog_slug)} target="_blank" rel="noreferrer">
-            {t('เปิดหน้าลูกค้า')}
-          </a>
+          <a className="btn btn-outline" href={url} target="_blank" rel="noreferrer">{t('เปิดหน้าลูกค้า')}</a>
         </div>
       </div>
     </div>

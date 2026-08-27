@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 // ใช้ Service Role Key แทนการเปิด RLS ให้ anon เหมือนฟอร์มลีดสาธารณะ (ดู submit-lead.js)
 // ข้อดีคือ "ฟังก์ชันนี้" เป็นคนตัดสินว่าคอลัมน์ไหนออกไปข้างนอกได้ ไม่ใช่ policy ที่แก้ทีเดียวหลุดทั้งตาราง
 // สิ่งที่ไม่เคยส่งออก: id ภายใน, created_by/updated_by, ชื่อผู้ใช้ในระบบ, สถานะร่าง, ยอดวิว
+// ช่องติดต่อถูกถอดออกจากหน้าลูกค้าแล้ว จึงไม่ดึงคอลัมน์นั้นมาด้วย (คอลัมน์ยังอยู่ในตารางเฉยๆ)
 
 const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
@@ -20,7 +21,7 @@ export default async (req) => {
 
   const { data: cat, error } = await admin
     .from('catalogs')
-    .select('id, catalog_name, catalog_slug, description, cover_image_url, status, contact_name, contact_line, contact_phone, contact_email, updated_at')
+    .select('id, catalog_name, catalog_slug, description, cover_image_url, status, updated_at')
     .eq('catalog_slug', slug)
     .maybeSingle()
 
@@ -44,10 +45,6 @@ export default async (req) => {
       slug: cat.catalog_slug,
       description: cat.description || '',
       cover_image_url: cat.cover_image_url || '',
-      contact_name: cat.contact_name || '',
-      contact_line: cat.contact_line || '',
-      contact_phone: cat.contact_phone || '',
-      contact_email: cat.contact_email || '',
       updated_at: cat.updated_at,
     },
     images: (imgs || []).map(i => ({ url: i.image_url, caption: i.caption || '' })),

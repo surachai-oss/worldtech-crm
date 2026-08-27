@@ -1,8 +1,15 @@
 [build]
-  command = "npm run build"
+  # npm install (ไม่ใช่ npm ci) เพราะ package-lock.json ในรีโปไม่ได้อัปเดตตามทุกครั้งที่เพิ่ม dependency
+  # เครื่องที่แก้โค้ดไม่มี Node เลยรัน npm install อัปเดต lock file ไม่ได้ ให้ Netlify resolve เอาเอง
+  command = "npm install --no-audit --no-fund && npm run build"
   publish = "dist"
   functions = "netlify/functions"
   edge_functions = "netlify/edge-functions"
+
+# pdfjs-dist ประกาศ engines เป็น node >=22.13 และ vite 8 ก็ต้องการ >=22.12
+# ตรึงเวอร์ชันไว้ ไม่ปล่อยให้ default ของ Netlify เปลี่ยนแล้ว build พังทีหลังโดยไม่มีใครแตะโค้ด
+[build.environment]
+  NODE_VERSION = "22"
 
 # ใส่ Open Graph meta ต่อแคตตาล็อกก่อนส่ง HTML ออกไป — ตัวอ่านลิงก์ของ LINE/Facebook ไม่รัน JS
 # ต้องมาก่อน redirect ด้านล่าง เพราะ edge function ทำงานกับ URL ต้นทาง ส่วน redirect เป็นคนเสิร์ฟ index.html ให้

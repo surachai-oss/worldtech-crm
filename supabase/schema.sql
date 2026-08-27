@@ -2550,3 +2550,23 @@ create policy "catalog_images write" on catalog_images for all
 -- ป้องกันคนนอกยิงตัวเลขยอดวิวปลอมเข้าระบบ
 drop policy if exists "catalog_view_logs read" on catalog_view_logs;
 create policy "catalog_view_logs read" on catalog_view_logs for select using (auth.role() = 'authenticated');
+
+-- รายงานยอดเปิดดูรายเดือน — ไว้ดูว่าลูกค้าเปิดแคตตาล็อกไหนเดือนไหนกี่ครั้ง
+-- นับเดือนตามเวลาไทย ไม่ใช่ UTC ไม่งั้นยอดของวันที่ 1 ตอนเช้าจะไปตกเดือนก่อนหน้า
+-- ไม่ใช่ security definer — ให้ RLS ของ catalog_view_logs ทำงานตามปกติ (คนที่ login แล้วอ่านได้)
+create or replace function catalog_view_report(p_from date, p_to date)
+returns table (catalog_id uuid, catalog_name text, month text, views bigint) as $$
+  select v.catalog_id,
+         coalesce(c.catalog_name, v.catalog_slug) as catalog_name,
+         to_char(v.viewed_at at time zone 'Asia/Bangkok', 'YYYY-MM') as month,
+         count(*) as views
+    from catalog_view_logs v
+    left join catalogs c on c.id = v.catalog_id
+   where (v.viewed_at at time zone 'Asia/Bangkok')::date >= p_from
+     and (v.viewed_at at time zone 'Asia/Bangkok')::date <= p_to
+   group by v.catalog_id, coalesce(c.catalog_name, v.catalog_slug),
+            to_char(v.viewed_at at time zone 'Asia/Bangkok', 'YYYY-MM')
+   order by month desc, views desc;
+$$ language sql stable set search_path = public;
+
+grant execute on function catalog_view_report(date, date) to authenticated;
