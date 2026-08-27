@@ -259,6 +259,10 @@ export default function CatalogGalleryView({
     const el = viewerRef.current
     if (!el) return
     const clamped = Math.max(0, Math.min(total - 1, i))
+    // อัปเดตเลขหน้าทันทีที่กด ไม่รอ scroll event
+    // เบราว์เซอร์บางตัวรวบหรือหน่วง scroll event จนเลขหน้ากับสิ่งที่เห็นไม่ตรงกัน
+    // การปัดนิ้วยังอาศัย onScroll เหมือนเดิม ซึ่งจะมาแก้ค่าให้ตรงอีกที
+    setPage(clamped)
     el.scrollTo({ left: clamped * el.clientWidth, behavior: 'smooth' })
   }, [total])
 
