@@ -125,7 +125,17 @@ function BackCover({ cfg, logoSrc, onSubmit }) {
   const [state, setState] = useState('idle')   // idle | sending | done
   const [err, setErr] = useState('')
 
-  const shown = cfg.blocks.filter(b => b.visible !== false)
+  // ช่องชื่อ ช่องเบอร์ และปุ่มส่ง ต้องโผล่เสมอ ถึงจะถูกตั้งให้ซ่อนไว้ก็ตาม
+  // ถ้าซ่อนอันใดอันหนึ่ง ลูกค้าจะเจอฟอร์มที่กรอกไม่ได้หรือส่งไม่ได้ ซึ่งแย่กว่าการฝืนแสดง
+  // หน้าตั้งค่าก็กันไม่ให้ซ่อนอยู่แล้ว ตรงนี้เป็นด่านสองเผื่อข้อมูลเก่าที่เคยตั้งซ่อนไว้
+  const mustShow = new Set()
+  cfg.blocks.forEach(b => {
+    if (b.type === 'field' && (b.role === 'name' || b.role === 'phone')) mustShow.add(b.id)
+  })
+  const firstSubmit = cfg.blocks.find(b => b.type === 'submit')
+  if (firstSubmit) mustShow.add(firstSubmit.id)
+
+  const shown = cfg.blocks.filter(b => b.visible !== false || mustShow.has(b.id))
   const fields = shown.filter(b => b.type === 'field')
   const nameB  = fields.find(b => b.role === 'name')
   const phoneB = fields.find(b => b.role === 'phone')
@@ -240,7 +250,7 @@ export function CatalogStateMessage({ title, detail }) {
 }
 
 export default function CatalogGalleryView({
-  catalog, images, backCover = null, onSubmitLead, logoSrc = '/worldtech-logo.png', mobile = false,
+  catalog, images, backCover = null, onSubmitLead, logoSrc = '/worldtech-logo.png', mobile = false, onClose,
 }) {
   const viewerRef = useRef(null)
   const [page, setPage] = useState(0)
@@ -268,15 +278,17 @@ export default function CatalogGalleryView({
     el.scrollTo({ left: clamped * el.clientWidth, behavior: 'smooth' })
   }, [total])
 
-  // ปิดหน้า — เบราว์เซอร์ยอมให้สคริปต์ปิดแท็บที่ตัวเองเปิดเท่านั้น
-  // ใน in-app browser ของ LINE/Facebook จะปิดได้จริง ส่วนแท็บที่ผู้ใช้เปิดเองจะปิดไม่ได้
-  // จึงถอยไปย้อนกลับหน้าก่อนหน้าแทน ซึ่งพาออกจากแคตตาล็อกได้เหมือนกัน
+  // ปุ่มปิด: ถ้าผู้เรียกส่ง onClose มา (พรีวิวในระบบ) ให้ทำตามนั้น — ห้ามปิดแท็บเด็ดขาด
+  // เพราะพรีวิวรันอยู่บนแท็บ CRM ของพนักงาน ปิดแท็บคือปิดงานที่เขาทำค้างอยู่
+  // เฉพาะหน้าลูกค้าจริงเท่านั้นที่พยายามปิดแท็บ (ได้ผลใน in-app browser ของ LINE/Facebook)
+  // แท็บที่ผู้ใช้เปิดเอง เบราว์เซอร์ไม่ยอมให้สคริปต์ปิด จึงถอยไปย้อนกลับหน้าก่อนหน้าแทน
   const closePage = useCallback(() => {
+    if (onClose) { onClose(); return }
     window.close()
     setTimeout(() => {
       if (!window.closed && window.history.length > 1) window.history.back()
     }, 120)
-  }, [])
+  }, [onClose])
 
   // ปุ่มลูกศรบนคีย์บอร์ด — ลูกค้าที่เปิดบนคอมคาดหวังแบบนี้เป็นปกติ
   // ผูกเฉพาะหน้าจริง ไม่ผูกในพรีวิวหลังบ้าน ไม่งั้นจะไปแย่งลูกศรของช่องกรอกข้อมูล
@@ -302,7 +314,7 @@ export default function CatalogGalleryView({
         <h1 className="wtc-title">{catalog.name}</h1>
         {catalog.description && <div className="wtc-desc">{catalog.description}</div>}
       </div>
-      {!mobile && <button className="wtc-close" onClick={closePage} aria-label="ปิด" title="ปิด">×</button>}
+      {(!mobile || onClose) && <button className="wtc-close" onClick={closePage} aria-label="ปิด" title="ปิด">×</button>}
     </header>
   )
 

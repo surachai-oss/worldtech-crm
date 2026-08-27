@@ -253,20 +253,13 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
         </div>
       </div>
       {showBack && <CatalogBackCoverModal catalog={cat} onClose={() => setShowBack(false)} onSaved={load} />}
+      {/* พรีวิวเต็มจอ — คอมโพเนนต์นี้เป็น position:fixed อยู่แล้ว จึงคลุมทั้งจอเองโดยไม่ต้องมีกรอบ modal
+          ส่ง onClose เข้าไป ปุ่ม × จึงปิดพรีวิว ไม่ใช่ปิดแท็บ CRM */}
       {showFull && (
-        <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) setShowFull(false) }}>
-          <div className="modal" style={{ maxWidth: 860, width: '95vw' }}>
-            <div className="modal-header">
-              <div className="modal-title">{t('พรีวิวหน้าลูกค้า')}</div>
-              <button className="modal-close" onClick={() => setShowFull(false)}>×</button>
-            </div>
-            <div className="modal-body" style={{ padding: 0, maxHeight: '78vh', overflowY: 'auto' }}>
-              <CatalogGalleryView catalog={previewCatalog} images={previewImages}
-                backCover={backCover} onSubmitLead={previewSubmit}
-                logoSrc={cat.logo_url || '/worldtech-logo.png'} />
-            </div>
-          </div>
-        </div>
+        <CatalogGalleryView catalog={previewCatalog} images={previewImages}
+          backCover={backCover} onSubmitLead={previewSubmit}
+          logoSrc={cat.logo_url || '/worldtech-logo.png'}
+          onClose={() => setShowFull(false)} />
       )}
 
       <div className="cb-grid">

@@ -1748,7 +1748,11 @@ export async function submitCatalogLead({ name, phone, interest, catalogName, ca
       phone,
       interested_product: interest || null,
       source: 'แคตตาล็อกออนไลน์',
-      message: `เปิดจากแคตตาล็อก "${catalogName}" (/catalog/${catalogSlug})`,
+      // ใส่คำตอบของช่องที่เพิ่มเองลงในข้อความด้วย ไม่ใช่แค่ช่องสินค้าที่สนใจ
+      // เพราะช่องนั้นถูกตัดที่ 200 ตัวอักษร ถ้าปกหลังมีหลายช่อง คำตอบท้ายๆ จะหายเงียบ
+      // ส่วนข้อความรับได้ 1000 ตัวอักษร ทีมขายจึงเห็นครบเสมอ
+      message: [`เปิดจากแคตตาล็อก "${catalogName}" (/catalog/${catalogSlug})`, interest]
+        .filter(Boolean).join('\n'),
     }),
   })
   const json = await res.json().catch(() => ({}))

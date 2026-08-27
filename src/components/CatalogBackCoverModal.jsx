@@ -3,6 +3,7 @@ import {
   saveCatalogOwnBackCover, resolveCatalogBackCover,
   uploadBackCoverLogo, lineHref,
   PRESETS, COLOR_FIELDS, ALIGN_LABELS, BLOCK_LABELS, TEXT_STYLES, LOGO_MIN, LOGO_MAX, newBlock,
+  BACKCOVER_DEFAULTS,
 } from '../lib/api'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
@@ -81,10 +82,14 @@ function BlockEditor({ block, first, last, locked, onPatch, onMove, onRemove }) 
         <span className="bc-blk-t">{BLOCK_LABELS[block.type]}</span>
         <button className="btn btn-outline btn-xs" disabled={first} onClick={() => onMove(-1)} title="เลื่อนขึ้น">↑</button>
         <button className="btn btn-outline btn-xs" disabled={last} onClick={() => onMove(1)} title="เลื่อนลง">↓</button>
-        <button className="btn btn-outline btn-xs" onClick={() => onPatch({ visible: block.visible === false })}>
-          {block.visible === false ? 'แสดง' : 'ซ่อน'}
-        </button>
+        {/* บล็อกที่จำเป็นซ่อนหรือลบไม่ได้ — ซ่อนแล้วลูกค้าจะเจอฟอร์มที่กรอกหรือส่งไม่ได้ */}
+        {!locked && (
+          <button className="btn btn-outline btn-xs" onClick={() => onPatch({ visible: block.visible === false })}>
+            {block.visible === false ? 'แสดง' : 'ซ่อน'}
+          </button>
+        )}
         {!locked && <button className="btn btn-danger btn-xs" onClick={onRemove}>ลบ</button>}
+        {locked && <span style={{ fontSize: 11, color: 'var(--text-light)' }}>จำเป็น</span>}
       </div>
 
       {block.type === 'logo' && (
@@ -183,8 +188,21 @@ export default function CatalogBackCoverModal({ catalog, onClose, onSaved }) {
     return () => { alive = false }
   }, [catalog, toast])
 
-  const editable = true
   const setColor = (k) => (v) => setCfg(c => ({ ...c, colors: { ...c.colors, [k]: v } }))
+
+  // ช่องพิมพ์รหัสสีรับอะไรก็ได้ระหว่างพิมพ์ แต่พอออกจากช่องต้องเป็น #rrggbb
+  // ค่าที่ CSS อ่านไม่ออกจะทำให้พื้นหรือตัวอักษรหายไปเฉยๆ มองไม่ออกว่าพังเพราะอะไร
+  const normalizeColor = (k) => (e) => {
+    let v = e.target.value.trim()
+    if (/^[0-9a-f]{6}$/i.test(v)) v = `#${v}`
+    if (/^#[0-9a-f]{3}$/i.test(v)) v = '#' + v.slice(1).split('').map(x => x + x).join('')
+    if (!/^#[0-9a-f]{6}$/i.test(v)) {
+      toast('รหัสสีต้องอยู่ในรูปแบบ #RRGGBB', 'error')
+      setCfg(c => ({ ...c, colors: { ...c.colors, [k]: BACKCOVER_DEFAULTS.colors[k] } }))
+      return
+    }
+    setColor(k)(v.toLowerCase())
+  }
 
   const patchBlock = (id, p) =>
     setCfg(c => ({ ...c, blocks: c.blocks.map(b => (b.id === id ? { ...b, ...p } : b)) }))
@@ -213,8 +231,12 @@ export default function CatalogBackCoverModal({ catalog, onClose, onSaved }) {
     } finally { setSaving(false) }
   }
 
+  // จำเป็น = ช่องชื่อ ช่องเบอร์ และปุ่มส่งอันแรก ขาดอย่างใดอย่างหนึ่งฟอร์มใช้งานไม่ได้
   const lockedIds = cfg
-    ? cfg.blocks.filter(b => b.type === 'field' && (b.role === 'name' || b.role === 'phone')).map(b => b.id)
+    ? [
+      ...cfg.blocks.filter(b => b.type === 'field' && (b.role === 'name' || b.role === 'phone')).map(b => b.id),
+      ...[cfg.blocks.find(b => b.type === 'submit')?.id].filter(Boolean),
+    ]
     : []
 
   return (
@@ -233,7 +255,7 @@ export default function CatalogBackCoverModal({ catalog, onClose, onSaved }) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
 
               <div style={{ flex: '1 1 380px', minWidth: 0 }}>
-                <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0, opacity: editable ? 1 : .55 }}>
+                <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
 
                   <Section title="การแสดงผล" desc="เปิดหรือปิดปกหลังทั้งหน้า และกำหนดชุดสีกับการจัดวาง">
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 12 }}>
@@ -259,7 +281,8 @@ export default function CatalogBackCoverModal({ catalog, onClose, onSaved }) {
                             <input type="color" value={cfg.colors[k]} onChange={e => setColor(k)(e.target.value)} />
                             <span style={{ flex: 1, minWidth: 0 }}>
                               {label}
-                              <input type="text" value={cfg.colors[k]} onChange={e => setColor(k)(e.target.value)} />
+                              <input type="text" value={cfg.colors[k]} onChange={e => setColor(k)(e.target.value)}
+                                onBlur={normalizeColor(k)} maxLength={7} />
                             </span>
                           </label>
                         ))}
@@ -328,7 +351,7 @@ export default function CatalogBackCoverModal({ catalog, onClose, onSaved }) {
 
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>ยกเลิก</button>
-          <button className="btn btn-primary" disabled={!cfg || saving || !editable} onClick={save}>
+          <button className="btn btn-primary" disabled={!cfg || saving} onClick={save}>
             {saving ? 'กำลังบันทึก...' : 'บันทึก'}
           </button>
         </div>
