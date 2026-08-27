@@ -34,20 +34,38 @@ export const BLOCK_LABELS = {
 
 export const TEXT_STYLES = { heading: 'ข้อความหลัก', body: 'ข้อความรอง' }
 
+// ทุกบล็อกที่มีข้อความ มีคู่ภาษาอังกฤษได้ ไม่กรอกก็ตกกลับไปใช้ภาษาไทย
+// ระบบแปลข้อความที่ทีมพิมพ์เองไม่ได้ จึงต้องมีช่องให้กรอกคู่กัน
+// (รูป Artwork ไม่แปล เพราะเป็นภาพ)
+export const EN_OF = { text: 'textEn', label: 'labelEn', title: 'titleEn' }
+
+export function pickText(obj, key, lang) {
+  const en = obj?.[EN_OF[key]]
+  return (lang === 'en' && String(en ?? '').trim()) ? en : (obj?.[key] ?? '')
+}
+
+// โชว์ปุ่มสลับภาษาก็ต่อเมื่อมีคนกรอกภาษาอังกฤษไว้จริง
+// ปุ่มที่กดแล้วหน้าไม่เปลี่ยนอะไรเลย แย่กว่าไม่มีปุ่ม
+export function hasEnglish(cfg) {
+  if (!cfg) return false
+  if (String(cfg.done?.titleEn || '').trim() || String(cfg.done?.textEn || '').trim()) return true
+  return (cfg.blocks || []).some(b => String(b.textEn || '').trim() || String(b.labelEn || '').trim())
+}
+
 export const LOGO_MIN = 20
 export const LOGO_MAX = 160
 
 // ค่าเริ่มต้น — ใช้ภาษาทางการ เพราะเป็นข้อความที่ลูกค้าภายนอกเห็น
 const defaultBlocks = () => ([
   { id: 'b-logo',   type: 'logo',   visible: true, src: '', size: 48 },
-  { id: 'b-head',   type: 'text',   visible: true, style: 'heading', text: 'สนใจสินค้า กรุณาฝากข้อมูลเพื่อให้ทีมขายติดต่อกลับ' },
-  { id: 'b-sub',    type: 'text',   visible: true, style: 'body',    text: 'ทีมขายจะติดต่อกลับภายในเวลาทำการ' },
-  { id: 'b-name',   type: 'field',  visible: true, role: 'name',  label: 'ชื่อ-นามสกุล' },
-  { id: 'b-phone',  type: 'field',  visible: true, role: 'phone', label: 'หมายเลขโทรศัพท์' },
-  { id: 'b-want',   type: 'field',  visible: true, role: 'extra', label: 'สินค้าที่สนใจ (ไม่บังคับ)' },
-  { id: 'b-submit', type: 'submit', visible: true, label: 'ส่งข้อมูลให้ทีมขาย' },
-  { id: 'b-line',   type: 'line',   visible: true, url: '', text: 'ติดต่อผ่าน LINE' },
-  { id: 'b-tel',    type: 'phone',  visible: true, number: '', text: 'โทร' },
+  { id: 'b-head',   type: 'text',   visible: true, style: 'heading', text: 'สนใจสินค้า กรุณาฝากข้อมูลเพื่อให้ทีมขายติดต่อกลับ', textEn: 'Interested? Leave your details and our sales team will call you back.' },
+  { id: 'b-sub',    type: 'text',   visible: true, style: 'body',    text: 'ทีมขายจะติดต่อกลับภายในเวลาทำการ', textEn: 'We reply during business hours.' },
+  { id: 'b-name',   type: 'field',  visible: true, role: 'name',  label: 'ชื่อ-นามสกุล', labelEn: 'Full name' },
+  { id: 'b-phone',  type: 'field',  visible: true, role: 'phone', label: 'หมายเลขโทรศัพท์', labelEn: 'Phone number' },
+  { id: 'b-want',   type: 'field',  visible: true, role: 'extra', label: 'สินค้าที่สนใจ (ไม่บังคับ)', labelEn: 'Products you are interested in (optional)' },
+  { id: 'b-submit', type: 'submit', visible: true, label: 'ส่งข้อมูลให้ทีมขาย', labelEn: 'Send to the sales team' },
+  { id: 'b-line',   type: 'line',   visible: true, url: '', text: 'ติดต่อผ่าน LINE', textEn: 'Contact us on LINE' },
+  { id: 'b-tel',    type: 'phone',  visible: true, number: '', text: 'โทร', textEn: 'Call' },
 ])
 
 export const BACKCOVER_DEFAULTS = {
@@ -58,6 +76,8 @@ export const BACKCOVER_DEFAULTS = {
   done: {
     title: 'ได้รับข้อมูลเรียบร้อยแล้ว',
     text: 'ทีมขายจะติดต่อกลับตามหมายเลขที่ท่านให้ไว้ภายในเวลาทำการ',
+    titleEn: 'Thank you, we have your details',
+    textEn: 'Our sales team will call the number you gave us during business hours.',
   },
 }
 
@@ -67,7 +87,7 @@ export const newBlockId = () => `b-${Date.now().toString(36)}-${(seq++).toString
 export function newBlock(type) {
   const id = newBlockId()
   if (type === 'text')  return { id, type, visible: true, style: 'body', text: '' }
-  if (type === 'field') return { id, type, visible: true, role: 'extra', label: '' }
+  if (type === 'field') return { id, type, visible: true, role: 'extra', label: '', labelEn: '', required: false }
   if (type === 'line')  return { id, type, visible: true, url: '', text: 'ติดต่อผ่าน LINE' }
   if (type === 'phone') return { id, type, visible: true, number: '', text: 'โทร' }
   if (type === 'logo')  return { id, type, visible: true, src: '', size: 48 }
@@ -109,11 +129,16 @@ function cleanBlock(b) {
   if (!b || !BLOCK_LABELS[b.type]) return null
   const base = { id: b.id || newBlockId(), type: b.type, visible: b.visible !== false }
   if (b.type === 'logo')   return { ...base, src: String(b.src || ''), size: clampSize(b.size) }
-  if (b.type === 'text')   return { ...base, style: b.style === 'heading' ? 'heading' : 'body', text: String(b.text ?? '') }
-  if (b.type === 'field')  return { ...base, role: ['name', 'phone', 'extra'].includes(b.role) ? b.role : 'extra', label: String(b.label ?? '') }
-  if (b.type === 'submit') return { ...base, label: String(b.label || 'ส่งข้อมูล') }
-  if (b.type === 'line')   return { ...base, url: String(b.url || ''), text: String(b.text || 'ติดต่อผ่าน LINE') }
-  return { ...base, number: String(b.number || ''), text: String(b.text ?? 'โทร') }
+  if (b.type === 'text')   return { ...base, style: b.style === 'heading' ? 'heading' : 'body', text: String(b.text ?? ''), textEn: String(b.textEn ?? '') }
+  if (b.type === 'field') {
+    const role = ['name', 'phone', 'extra'].includes(b.role) ? b.role : 'extra'
+    // ชื่อกับเบอร์บังคับกรอกเสมอ ไม่มีสองอย่างนี้สร้างผู้ติดต่อไม่ได้ ช่องอื่นเลือกเองได้
+    return { ...base, role, label: String(b.label ?? ''), labelEn: String(b.labelEn ?? ''),
+      required: role === 'name' || role === 'phone' ? true : b.required === true }
+  }
+  if (b.type === 'submit') return { ...base, label: String(b.label || 'ส่งข้อมูล'), labelEn: String(b.labelEn ?? '') }
+  if (b.type === 'line')   return { ...base, url: String(b.url || ''), text: String(b.text || 'ติดต่อผ่าน LINE'), textEn: String(b.textEn ?? '') }
+  return { ...base, number: String(b.number || ''), text: String(b.text ?? 'โทร'), textEn: String(b.textEn ?? '') }
 }
 
 export function mergeBackCover(raw) {
@@ -142,6 +167,8 @@ export function mergeBackCover(raw) {
     done: {
       title: String(src.done?.title || BACKCOVER_DEFAULTS.done.title),
       text: String(src.done?.text ?? BACKCOVER_DEFAULTS.done.text),
+      titleEn: String(src.done?.titleEn ?? ''),
+      textEn: String(src.done?.textEn ?? ''),
     },
   }
 }

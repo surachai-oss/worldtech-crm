@@ -119,13 +119,22 @@ function BlockEditor({ block, first, last, locked, onPatch, onMove, onRemove }) 
           </div>
           <textarea className="form-control" rows={2} value={block.text}
             onChange={e => onPatch({ text: e.target.value })} placeholder="ข้อความที่ลูกค้าเห็น" />
+          <textarea className="form-control" rows={2} value={block.textEn || ''} style={{ marginTop: 6 }}
+            onChange={e => onPatch({ textEn: e.target.value })} placeholder="English (ไม่กรอกจะใช้ภาษาไทย)" />
         </>
       )}
 
       {block.type === 'field' && (
         <>
           <input className="form-control" value={block.label} onChange={e => onPatch({ label: e.target.value })}
-            placeholder="ข้อความในช่อง เช่น ชื่อผู้ติดต่อ" />
+            placeholder="ชื่อช่อง เช่น ชื่อผู้ติดต่อ" />
+          <input className="form-control" value={block.labelEn || ''} style={{ marginTop: 6 }}
+            onChange={e => onPatch({ labelEn: e.target.value })} placeholder="English (ไม่กรอกจะใช้ภาษาไทย)" />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, marginTop: 8 }}>
+            <input type="checkbox" checked={!!block.required} disabled={locked}
+              onChange={e => onPatch({ required: e.target.checked })} />
+            บังคับกรอก {locked && <span style={{ color: 'var(--text-light)' }}>(ช่องนี้บังคับเสมอ)</span>}
+          </label>
           <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
             {block.role === 'name' ? 'ช่องนี้บันทึกเป็นชื่อผู้ติดต่อ ลบไม่ได้'
               : block.role === 'phone' ? 'ช่องนี้บันทึกเป็นหมายเลขโทรศัพท์ ลบไม่ได้'
@@ -135,8 +144,12 @@ function BlockEditor({ block, first, last, locked, onPatch, onMove, onRemove }) 
       )}
 
       {block.type === 'submit' && (
-        <input className="form-control" value={block.label} onChange={e => onPatch({ label: e.target.value })}
-          placeholder="ข้อความบนปุ่ม" />
+        <>
+          <input className="form-control" value={block.label} onChange={e => onPatch({ label: e.target.value })}
+            placeholder="ข้อความบนปุ่ม" />
+          <input className="form-control" value={block.labelEn || ''} style={{ marginTop: 6 }}
+            onChange={e => onPatch({ labelEn: e.target.value })} placeholder="English (ไม่กรอกจะใช้ภาษาไทย)" />
+        </>
       )}
 
       {block.type === 'line' && (
@@ -149,6 +162,8 @@ function BlockEditor({ block, first, last, locked, onPatch, onMove, onRemove }) 
             <div className="form-group" style={{ marginBottom: 6 }}>
               <label className="form-label">ข้อความที่แสดง</label>
               <input className="form-control" value={block.text} onChange={e => onPatch({ text: e.target.value })} />
+              <input className="form-control" value={block.textEn || ''} style={{ marginTop: 6 }}
+                onChange={e => onPatch({ textEn: e.target.value })} placeholder="English" />
             </div>
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-light)', wordBreak: 'break-all' }}>
@@ -166,6 +181,8 @@ function BlockEditor({ block, first, last, locked, onPatch, onMove, onRemove }) 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">คำนำหน้า</label>
             <input className="form-control" value={block.text} onChange={e => onPatch({ text: e.target.value })} />
+            <input className="form-control" value={block.textEn || ''} style={{ marginTop: 6 }}
+              onChange={e => onPatch({ textEn: e.target.value })} placeholder="English" />
           </div>
         </div>
       )}
@@ -297,7 +314,7 @@ export default function CatalogBackCoverModal({ catalog, onClose, onSaved }) {
                   </Section>
 
                   <Section title="เนื้อหาบนปกหลัง"
-                    desc="เรียงลำดับด้วยปุ่มลูกศร ซ่อนบล็อกที่ยังไม่ใช้ หรือเพิ่มบล็อกใหม่ได้ตามต้องการ ลำดับบนหน้าจอคือลำดับที่ลูกค้าเห็น">
+                    desc="เรียงลำดับด้วยปุ่มลูกศร ซ่อนบล็อกที่ยังไม่ใช้ หรือเพิ่มบล็อกใหม่ได้ตามต้องการ ลำดับบนหน้าจอคือลำดับที่ลูกค้าเห็น · ช่อง English ไม่บังคับ ถ้ากรอกไว้อย่างน้อยหนึ่งช่อง หน้าลูกค้าจะมีปุ่มสลับ ไทย/EN ให้อัตโนมัติ (รูปสินค้าเป็นภาพ แปลไม่ได้)">
                     {cfg.blocks.map((b, i) => (
                       <BlockEditor key={b.id} block={b} first={i === 0} last={i === cfg.blocks.length - 1}
                         locked={lockedIds.includes(b.id)}
@@ -318,11 +335,17 @@ export default function CatalogBackCoverModal({ catalog, onClose, onSaved }) {
                       <label className="form-label">หัวข้อ</label>
                       <input className="form-control" value={cfg.done.title} maxLength={60}
                         onChange={e => setCfg(c => ({ ...c, done: { ...c.done, title: e.target.value } }))} />
+                      <input className="form-control" value={cfg.done.titleEn || ''} maxLength={60} style={{ marginTop: 6 }}
+                        onChange={e => setCfg(c => ({ ...c, done: { ...c.done, titleEn: e.target.value } }))}
+                        placeholder="English (ไม่กรอกจะใช้ภาษาไทย)" />
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label className="form-label">รายละเอียด</label>
                       <textarea className="form-control" rows={2} value={cfg.done.text} maxLength={200}
                         onChange={e => setCfg(c => ({ ...c, done: { ...c.done, text: e.target.value } }))} />
+                      <textarea className="form-control" rows={2} value={cfg.done.textEn || ''} maxLength={200} style={{ marginTop: 6 }}
+                        onChange={e => setCfg(c => ({ ...c, done: { ...c.done, textEn: e.target.value } }))}
+                        placeholder="English (ไม่กรอกจะใช้ภาษาไทย)" />
                     </div>
                   </Section>
                 </fieldset>

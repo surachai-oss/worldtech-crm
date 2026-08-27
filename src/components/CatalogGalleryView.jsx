@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { lineHref, isDark } from '../lib/catalogBackCover'
+import { lineHref, isDark, pickText, hasEnglish } from '../lib/catalogBackCover'
 
 // หน้าตาแคตตาล็อกที่ลูกค้าเห็น — เป็น presentational ล้วน ไม่ยุ่งกับ Supabase หรือ auth
 // ใช้ร่วมกันสองที่: หน้าสาธารณะจริง (/catalog/:slug) กับ Preview ในหลังบ้าน
@@ -25,6 +25,15 @@ const CSS = `
 .wtc-logo{height:26px;width:auto;flex:none}
 .wtc-logo-text{font-size:14px;font-weight:700;letter-spacing:.5px;color:var(--wtc-blue);flex:none}
 .wtc-head-txt{flex:1;min-width:0}
+.wtc-lang{flex:none;display:flex;border:1px solid var(--wtc-line);border-radius:8px;overflow:hidden}
+.wtc-lang button{border:0;background:#fff;color:var(--wtc-muted);font-family:inherit;font-size:11px;
+  font-weight:600;padding:6px 9px;cursor:pointer;line-height:1}
+.wtc-lang button[aria-pressed="true"]{background:var(--wtc-blue);color:#fff}
+/* ป้ายชื่อช่องอยู่เหนือช่อง ไม่ใช่ placeholder ที่หายไปตอนพิมพ์
+   ฟอร์มที่เพิ่มช่องได้เองอาจยาวหลายช่อง ถ้าชื่อช่องหายจะไม่รู้ว่าช่องไหนคืออะไร */
+.wtc-lbl{display:block;font-size:12px;font-weight:500;color:var(--bc-fg);margin-bottom:3px;opacity:.9}
+.wtc-req{color:#D0342C;font-weight:700}
+.wtc-field{display:block;width:100%;text-align:inherit}
 .wtc-close{flex:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--wtc-line);
   background:#fff;color:var(--wtc-muted);font-size:20px;line-height:1;cursor:pointer;
   display:grid;place-items:center;font-family:inherit}
@@ -120,7 +129,14 @@ function colorVars(c) {
 
 // ปกหลัง — เรนเดอร์ตามลำดับบล็อกที่ผู้ออกแบบจัดไว้ ไม่มีโครงตายตัวในโค้ด
 // onSubmit ส่งมาจากภายนอก หน้าจริงส่งเข้าระบบผู้ติดต่อ ส่วนตัวอย่างในระบบส่งตัวที่ไม่ทำงาน
-function BackCover({ cfg, logoSrc, onSubmit }) {
+// ข้อความที่ระบบสร้างเอง ไม่ใช่ที่ทีมพิมพ์ จึงแปลได้เลยไม่ต้องให้ใครกรอก
+const SYS = {
+  th: { need: 'กรุณากรอก', sending: 'กำลังส่ง...', failed: 'ส่งข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', field: 'ข้อมูล' },
+  en: { need: 'Please fill in', sending: 'Sending...', failed: 'Could not send. Please try again.', field: 'Field' },
+}
+
+function BackCover({ cfg, logoSrc, onSubmit, lang = 'th' }) {
+  const sys = SYS[lang] || SYS.th
   const [values, setValues] = useState({})
   const [state, setState] = useState('idle')   // idle | sending | done
   const [err, setErr] = useState('')
@@ -145,7 +161,12 @@ function BackCover({ cfg, logoSrc, onSubmit }) {
     e.preventDefault()
     const name = (values[nameB?.id] || '').trim()
     const phone = (values[phoneB?.id] || '').trim()
-    if (!name || !phone) { setErr('กรุณากรอกชื่อและหมายเลขโทรศัพท์'); return }
+    // ตรวจทุกช่องที่ตั้งว่าบังคับ ไม่ใช่แค่ชื่อกับเบอร์ — และบอกชื่อช่องที่ยังว่าง
+    const missing = fields
+      .filter(b => b.required && !(values[b.id] || '').trim())
+      .map(b => pickText(b, 'label', lang) || sys.field)
+    if (missing.length) { setErr(`${sys.need}: ${missing.join(', ')}`); return }
+    if (!name || !phone) { setErr(sys.need); return }
     // ช่องที่เพิ่มเองรวมเป็นข้อความเดียว ติดไปกับลีดให้ทีมขายเห็นครบ
     const extra = fields
       .filter(b => b.role === 'extra' && (values[b.id] || '').trim())
@@ -156,7 +177,7 @@ function BackCover({ cfg, logoSrc, onSubmit }) {
       await onSubmit({ name, phone, interest: extra })
       setState('done')
     } catch (e2) {
-      setErr(e2.message || 'ส่งข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
+      setErr(e2.message || sys.failed)
       setState('idle')
     }
   }
@@ -170,34 +191,44 @@ function BackCover({ cfg, logoSrc, onSubmit }) {
         onError={e => { e.currentTarget.style.display = 'none' }} />
     }
     if (b.type === 'text') {
-      if (!String(b.text || '').trim()) return null
+      if (!String(pickText(b, 'text', lang) || '').trim()) return null
       return b.style === 'heading'
-        ? <p key={b.id} className="wtc-back-h">{b.text}</p>
-        : <p key={b.id} className="wtc-back-p">{b.text}</p>
+        ? <p key={b.id} className="wtc-back-h">{pickText(b, 'text', lang)}</p>
+        : <p key={b.id} className="wtc-back-p">{pickText(b, 'text', lang)}</p>
     }
     if (b.type === 'field') {
-      return <input key={b.id} className="wtc-fld" value={values[b.id] || ''}
-        onChange={e => setValues(v => ({ ...v, [b.id]: e.target.value }))}
-        placeholder={b.label} aria-label={b.label || 'ข้อมูล'}
-        inputMode={b.role === 'phone' ? 'tel' : undefined}
-        autoComplete={b.role === 'name' ? 'name' : b.role === 'phone' ? 'tel' : 'off'} />
+      const label = pickText(b, 'label', lang)
+      return (
+        <label className="wtc-field" key={b.id}>
+          {label && (
+            <span className="wtc-lbl">
+              {label}{b.required && <span className="wtc-req"> *</span>}
+            </span>
+          )}
+          <input className="wtc-fld" value={values[b.id] || ''}
+            onChange={e => setValues(v => ({ ...v, [b.id]: e.target.value }))}
+            aria-label={label || sys.field} aria-required={b.required || undefined}
+            inputMode={b.role === 'phone' ? 'tel' : undefined}
+            autoComplete={b.role === 'name' ? 'name' : b.role === 'phone' ? 'tel' : 'off'} />
+        </label>
+      )
     }
     if (b.type === 'submit') {
       return (
         <button key={b.id} className="wtc-send" type="submit" disabled={state === 'sending'}>
-          {state === 'sending' ? 'กำลังส่ง...' : b.label}
+          {state === 'sending' ? sys.sending : pickText(b, 'label', lang)}
         </button>
       )
     }
     if (b.type === 'line') {
       const href = lineHref(b.url)
       if (!href) return null
-      return <a key={b.id} className="wtc-alt" href={href} target="_blank" rel="noreferrer">{b.text}</a>
+      return <a key={b.id} className="wtc-alt" href={href} target="_blank" rel="noreferrer">{pickText(b, 'text', lang)}</a>
     }
     if (!String(b.number || '').trim()) return null
     return (
       <a key={b.id} className="wtc-tel" href={`tel:${String(b.number).replace(/[^\d+]/g, '')}`}>
-        {[b.text, b.number].filter(Boolean).join(' ')}
+        {[pickText(b, 'text', lang), b.number].filter(Boolean).join(' ')}
       </a>
     )
   }
@@ -212,8 +243,8 @@ function BackCover({ cfg, logoSrc, onSubmit }) {
           {logo && renderBlock(logo)}
           <div className="wtc-done">
             <div className="wtc-done-i">✓</div>
-            <p className="wtc-back-h">{cfg.done.title}</p>
-            {cfg.done.text && <p className="wtc-back-p">{cfg.done.text}</p>}
+            <p className="wtc-back-h">{pickText(cfg.done, 'title', lang) || cfg.done.title}</p>
+            {pickText(cfg.done, 'text', lang) && <p className="wtc-back-p">{pickText(cfg.done, 'text', lang)}</p>}
           </div>
           {shown.filter(b => b.type === 'line' || b.type === 'phone').map(renderBlock)}
         </div>
@@ -254,6 +285,15 @@ export default function CatalogGalleryView({
 }) {
   const viewerRef = useRef(null)
   const [page, setPage] = useState(0)
+  // ภาษาของ "ข้อความบนหน้า" เท่านั้น — รูป Artwork เป็นภาพ แปลไม่ได้
+  // จำไว้ในเครื่องลูกค้า เปิดแคตตาล็อกเล่มอื่นต่อจะได้ไม่ต้องกดใหม่
+  const [lang, setLang] = useState(() => {
+    try { return localStorage.getItem('wtcLang') === 'en' ? 'en' : 'th' } catch { return 'th' }
+  })
+  const switchLang = useCallback((v) => {
+    setLang(v)
+    try { localStorage.setItem('wtcLang', v) } catch { /* โหมดส่วนตัว ฯลฯ */ }
+  }, [])
   // ปกหลังนับเป็นอีกหนึ่งหน้าในเครื่องอ่าน แต่ไม่นับรวมใน "หน้าที่ x จาก y" ของรูปสินค้า
   const hasBack = Boolean(backCover?.enabled && images.length && onSubmitLead)
   const total = images.length + (hasBack ? 1 : 0)
@@ -305,6 +345,9 @@ export default function CatalogGalleryView({
     return () => window.removeEventListener('keydown', onKey)
   }, [mobile, page, goTo])
 
+  // ปุ่มภาษาโผล่เมื่อมีคนกรอกข้อความอังกฤษไว้จริงเท่านั้น
+  const showLang = hasEnglish(backCover)
+
   const header = (
     <header className="wtc-head">
       {logoSrc
@@ -314,6 +357,12 @@ export default function CatalogGalleryView({
         <h1 className="wtc-title">{catalog.name}</h1>
         {catalog.description && <div className="wtc-desc">{catalog.description}</div>}
       </div>
+      {showLang && (
+        <div className="wtc-lang" role="group" aria-label="ภาษา">
+          <button type="button" aria-pressed={lang === 'th'} onClick={() => switchLang('th')}>ไทย</button>
+          <button type="button" aria-pressed={lang === 'en'} onClick={() => switchLang('en')}>EN</button>
+        </div>
+      )}
       {(!mobile || onClose) && <button className="wtc-close" onClick={closePage} aria-label="ปิด" title="ปิด">×</button>}
     </header>
   )
@@ -363,7 +412,7 @@ export default function CatalogGalleryView({
           ))}
           {hasBack && (
             <div className="wtc-page" style={{ padding: 0 }} key="__back">
-              <BackCover cfg={backCover} logoSrc={logoSrc} onSubmit={onSubmitLead} />
+              <BackCover cfg={backCover} logoSrc={logoSrc} onSubmit={onSubmitLead} lang={lang} />
             </div>
           )}
         </div>
