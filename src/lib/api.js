@@ -1660,6 +1660,7 @@ export function logCatalogView(slug, source) {
 export const CATALOG_BACKCOVER_KEYS = [
   'catalog_backcover_enabled', 'catalog_backcover_heading',
   'catalog_backcover_note', 'catalog_backcover_line', 'catalog_backcover_phone',
+  'catalog_backcover_logo', 'catalog_backcover_button', 'catalog_backcover_interest',
 ]
 
 const BACKCOVER_DEFAULTS = {
@@ -1668,6 +1669,9 @@ const BACKCOVER_DEFAULTS = {
   note: 'กรอกชื่อกับเบอร์ไว้ ทีมขายติดต่อกลับในเวลาทำการ',
   line: '',
   phone: '',
+  logo: 'md',
+  button: 'ให้ทีมขายติดต่อกลับ',
+  showInterest: true,
 }
 
 export async function fetchCatalogBackCover() {
@@ -1681,6 +1685,9 @@ export async function fetchCatalogBackCover() {
     note: pick('note', BACKCOVER_DEFAULTS.note),
     line: pick('line', ''),
     phone: pick('phone', ''),
+    logo: pick('logo', BACKCOVER_DEFAULTS.logo) || BACKCOVER_DEFAULTS.logo,
+    button: pick('button', BACKCOVER_DEFAULTS.button) || BACKCOVER_DEFAULTS.button,
+    showInterest: pick('interest', '1') !== '0',
   }
 }
 
@@ -1692,6 +1699,9 @@ export async function saveCatalogBackCover(cfg) {
     { key: 'catalog_backcover_note', value: (cfg.note || '').trim() },
     { key: 'catalog_backcover_line', value: (cfg.line || '').trim() },
     { key: 'catalog_backcover_phone', value: (cfg.phone || '').trim() },
+    { key: 'catalog_backcover_logo', value: cfg.logo || 'md' },
+    { key: 'catalog_backcover_button', value: (cfg.button || '').trim() || BACKCOVER_DEFAULTS.button },
+    { key: 'catalog_backcover_interest', value: cfg.showInterest ? '1' : '0' },
   ]
   return supabase.from('settings').upsert(rows, { onConflict: 'key' }).then(handle)
 }

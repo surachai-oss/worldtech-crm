@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react'
 import { fetchCatalogBackCover, saveCatalogBackCover, lineHref } from '../lib/api'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
-import CatalogGalleryView from './CatalogGalleryView'
+import CatalogGalleryView, { LOGO_SIZES } from './CatalogGalleryView'
+
+// ดึงตัวเลือกจากชุดขนาดจริงที่หน้าลูกค้าใช้ ไม่เขียนรายการซ้ำ
+// ถ้าเขียนซ้ำ วันที่เพิ่ม/ลบขนาดจะลืมแก้ที่ใดที่หนึ่งแล้วปุ่มกับผลลัพธ์ไม่ตรงกัน
+const LOGO_LABELS = { off: 'ไม่มีโลโก้', sm: 'เล็ก', md: 'กลาง', lg: 'ใหญ่' }
+const LOGO_CHOICES = Object.keys(LOGO_SIZES).map(v => ({ v, label: LOGO_LABELS[v] || v }))
 
 // ตั้งค่าปกหลัง — หน้าสุดท้ายของทุกแคตตาล็อก
 // ดีไซน์ตายตัว แก้ได้แค่ข้อความกับช่องทางติดต่อ ตั้งใจไม่ให้เลือกสี/เพิ่มปุ่มเองได้
@@ -107,6 +112,38 @@ export default function CatalogBackCoverModal({ onClose, onSaved }) {
                 <div className="form-group">
                   <label className="form-label">{t('เบอร์โทร')}</label>
                   <input className="form-control" value={cfg.phone} onChange={set('phone')} placeholder="02-000-0000" />
+                </div>
+
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: .4, margin: '16px 0 8px' }}>
+                  {t('หน้าตา')}
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">{t('ขนาดโลโก้')}</label>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {LOGO_CHOICES.map(o => (
+                      <button key={o.v} type="button"
+                        className={`btn btn-xs ${cfg.logo === o.v ? 'btn-primary' : 'btn-outline'}`}
+                        onClick={() => setCfg(c => ({ ...c, logo: o.v }))}>{t(o.label)}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">{t('ข้อความบนปุ่ม')}</label>
+                  <input className="form-control" value={cfg.button} onChange={set('button')} maxLength={40}
+                    placeholder="ให้ทีมขายติดต่อกลับ" />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                    <input type="checkbox" checked={cfg.showInterest !== false}
+                      onChange={e => setCfg(c => ({ ...c, showInterest: e.target.checked }))} />
+                    {t('มีช่อง "สนใจสินค้าอะไร"')}
+                  </label>
+                  <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
+                    {t('ปิดแล้วเหลือแค่ชื่อกับเบอร์ — ช่องน้อยลง คนกรอกมากขึ้น แต่เซลล์ต้องถามเองว่าสนใจอะไร')}
+                  </div>
                 </div>
 
                 <div style={{ fontSize: 11, color: 'var(--text-light)', lineHeight: 1.7 }}>

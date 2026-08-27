@@ -2647,3 +2647,11 @@ insert into settings (key, value) values
   ('catalog_backcover_line',    ''),
   ('catalog_backcover_phone',   '')
 on conflict (key) do nothing;
+
+-- ตัวเลือกหน้าตาปกหลังที่ปรับได้จากหน้าจอ (ขนาดโลโก้ / ข้อความบนปุ่ม / จะมีช่อง "สนใจสินค้าอะไร" ไหม)
+-- จงใจให้ขนาดโลโก้เป็นชุดที่เลือก ไม่ใช่ช่องกรอกตัวเลข — ทุกค่าในชุดผ่านตาแล้วว่าไม่ล้นและไม่เล็กจนอ่านไม่ออก
+insert into settings (key, value) values
+  ('catalog_backcover_logo',     'md'),
+  ('catalog_backcover_button',   'ให้ทีมขายติดต่อกลับ'),
+  ('catalog_backcover_interest', '1')
+on conflict (key) do nothing;

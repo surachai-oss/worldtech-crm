@@ -31,7 +31,9 @@ const CSS = `
 .wtc-viewer::-webkit-scrollbar{display:none}
 .wtc-page{flex:0 0 100%;scroll-snap-align:center;scroll-snap-stop:always;
   display:flex;align-items:center;justify-content:center;padding:14px 14px 6px;min-width:0}
-.wtc-page img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;
+/* ">" สำคัญ — ถ้าเขียน ".wtc-page img" เฉยๆ จะไปครอบโลโก้ในปกหลังด้วย
+   แล้ว height:auto ตรงนี้จะทับความสูงของโลโก้ กลายเป็นรูปขนาดไฟล์จริงเต็มหน้า */
+.wtc-page > img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;
   background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(21,35,59,.10)}
 
 .wtc-bar{flex:none;background:#fff;border-top:1px solid var(--wtc-line);padding:8px 10px;
@@ -48,18 +50,23 @@ const CSS = `
 /* ปกหลัง — หน้าสุดท้ายของเล่ม ดีไซน์ตายตัว มีแค่ข้อความกับช่องทางที่ตั้งค่าได้
    จงใจให้มีปุ่มหลักปุ่มเดียว ที่เหลือเป็นลิงก์ตัวเล็ก ไม่ให้แย่งกันเอง */
 .wtc-page > .wtc-back{align-self:stretch;width:100%}
-.wtc-back{flex:1;min-height:0;overflow-y:auto;background:#fff;
-  display:flex;flex-direction:column;justify-content:center;gap:14px;padding:26px 22px;text-align:center}
-.wtc-back-logo{height:34px;width:auto;margin:0 auto 2px;display:block}
+/* จัดกลางด้วย margin:auto ของลูก ไม่ใช่ justify-content:center ของพ่อ
+   เพราะพอเนื้อหาสูงเกินกรอบ (จอเตี้ย/โลโก้ใหญ่) justify-content:center จะดันส่วนบนออกนอก
+   ขอบเขต scroll แล้วเลื่อนขึ้นไปดูไม่ได้ — margin:auto ยุบเองเมื่อที่ไม่พอ */
+.wtc-back{flex:1;min-height:0;overflow-y:auto;background:#fff;display:flex;padding:18px 20px}
+.wtc-back-in{margin:auto;width:100%;display:flex;flex-direction:column;gap:11px;text-align:center}
+.wtc-back-logo{display:block;margin:0 auto;width:auto;max-width:72%;
+  height:var(--wtc-logo-h,48px);max-height:var(--wtc-logo-h,48px);
+  object-fit:contain;border-radius:0;box-shadow:none;background:none}
 .wtc-back-mark{font-size:15px;font-weight:600;letter-spacing:.1em;color:var(--wtc-ink)}
-.wtc-back-h{font-size:17px;font-weight:500;line-height:1.5;margin:0;text-wrap:balance}
+.wtc-back-h{font-size:16px;font-weight:500;line-height:1.5;margin:0;text-wrap:balance}
 .wtc-back-p{font-size:12.5px;line-height:1.65;color:var(--wtc-muted);margin:0}
-.wtc-form{display:flex;flex-direction:column;gap:9px;max-width:340px;width:100%;margin:0 auto}
-.wtc-fld{height:42px;border:1px solid #DDE3EB;border-radius:9px;background:#FBFCFD;
+.wtc-form{display:flex;flex-direction:column;gap:8px;max-width:340px;width:100%;margin:0 auto}
+.wtc-fld{height:40px;border:1px solid #DDE3EB;border-radius:9px;background:#FBFCFD;
   font-family:inherit;font-size:14px;color:var(--wtc-ink);padding:0 13px;width:100%}
 .wtc-fld:focus{outline:none;border-color:var(--wtc-blue);box-shadow:0 0 0 3px rgba(27,118,255,.15)}
 .wtc-fld::placeholder{color:#9BA5B4}
-.wtc-send{height:46px;border:0;border-radius:10px;background:var(--wtc-blue);color:#fff;
+.wtc-send{height:44px;border:0;border-radius:10px;background:var(--wtc-blue);color:#fff;
   font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;width:100%}
 .wtc-send:disabled{background:#A9C7F5;cursor:default}
 .wtc-alt{font-size:13px;color:var(--wtc-blue);text-decoration:none;font-weight:500}
@@ -80,6 +87,10 @@ const CSS = `
 
 // ปกหลัง: ฟอร์มสั้นสามช่อง + ทางเลือกรองเป็นลิงก์ LINE/เบอร์
 // onSubmit ถูกส่งมาจากข้างนอก — หน้าจริงส่งเข้าท่อลีด ส่วนพรีวิวหลังบ้านส่งฟังก์ชันที่ไม่ทำอะไร
+// ขนาดโลโก้บนปกหลัง — ให้เลือกจากชุดที่จัดไว้ ไม่ให้กรอกตัวเลขเอง
+// ทุกค่าในชุดนี้ผ่านตาแล้วว่าไม่ล้นและไม่เล็กจนอ่านไม่ออก
+export const LOGO_SIZES = { off: 0, sm: 32, md: 48, lg: 72 }
+
 function BackCover({ cfg, logoSrc, onSubmit }) {
   const [f, setF] = useState({ name: '', phone: '', interest: '' })
   const [state, setState] = useState('idle')   // idle | sending | done
@@ -100,40 +111,50 @@ function BackCover({ cfg, logoSrc, onSubmit }) {
   }
 
   const line = lineHref(cfg.line)
-  const mark = logoSrc
-    ? <img className="wtc-back-logo" src={logoSrc} alt="Worldtech" onError={e => { e.currentTarget.style.display = 'none' }} />
-    : <div className="wtc-back-mark">WORLDTECH</div>
+  const logoH = LOGO_SIZES[cfg.logo] ?? LOGO_SIZES.md
+  const mark = (cfg.logo === 'off' || !logoSrc)
+    ? <div className="wtc-back-mark">WORLDTECH</div>
+    : <img className="wtc-back-logo" src={logoSrc} alt="Worldtech"
+        style={{ '--wtc-logo-h': `${logoH}px` }}
+        onError={e => { e.currentTarget.style.display = 'none' }} />
 
   if (state === 'done') {
     return (
       <div className="wtc-back">
-        {mark}
-        <div className="wtc-done">
-          <div className="wtc-done-i">✓</div>
-          <p className="wtc-back-h">ได้รับข้อมูลแล้ว</p>
-          <p className="wtc-back-p">ทีมขาย WORLDTECH จะติดต่อกลับที่เบอร์ {f.phone} ในเวลาทำการ</p>
+        <div className="wtc-back-in">
+          {mark}
+          <div className="wtc-done">
+            <div className="wtc-done-i">✓</div>
+            <p className="wtc-back-h">ได้รับข้อมูลแล้ว</p>
+            <p className="wtc-back-p">ทีมขาย WORLDTECH จะติดต่อกลับที่เบอร์ {f.phone} ในเวลาทำการ</p>
+          </div>
+          {line && <a className="wtc-alt" href={line} target="_blank" rel="noreferrer">อยากคุยเลย ทักแชท LINE ได้</a>}
         </div>
-        {line && <a className="wtc-alt" href={line} target="_blank" rel="noreferrer">อยากคุยเลย ทักแชท LINE ได้</a>}
       </div>
     )
   }
 
   return (
     <div className="wtc-back">
+      <div className="wtc-back-in">
       {mark}
       <p className="wtc-back-h">{cfg.heading}</p>
       {cfg.note && <p className="wtc-back-p">{cfg.note}</p>}
       <form className="wtc-form" onSubmit={send}>
         <input className="wtc-fld" value={f.name} onChange={set('name')} placeholder="ชื่อผู้ติดต่อ" aria-label="ชื่อผู้ติดต่อ" autoComplete="name" />
         <input className="wtc-fld" value={f.phone} onChange={set('phone')} placeholder="เบอร์โทร" aria-label="เบอร์โทร" inputMode="tel" autoComplete="tel" />
-        <input className="wtc-fld" value={f.interest} onChange={set('interest')} placeholder="สนใจสินค้าอะไร (ไม่ใส่ก็ได้)" aria-label="สนใจสินค้าอะไร" />
+        {cfg.showInterest !== false && (
+          <input className="wtc-fld" value={f.interest} onChange={set('interest')}
+            placeholder="สนใจสินค้าอะไร (ไม่ใส่ก็ได้)" aria-label="สนใจสินค้าอะไร" />
+        )}
         {err && <p className="wtc-err">{err}</p>}
         <button className="wtc-send" type="submit" disabled={state === 'sending'}>
-          {state === 'sending' ? 'กำลังส่ง...' : 'ให้ทีมขายติดต่อกลับ'}
+          {state === 'sending' ? 'กำลังส่ง...' : (cfg.button || 'ให้ทีมขายติดต่อกลับ')}
         </button>
       </form>
       {line && <a className="wtc-alt" href={line} target="_blank" rel="noreferrer">หรือทักแชท LINE ทันที</a>}
       {cfg.phone && <a className="wtc-tel" href={`tel:${cfg.phone.replace(/[^\d+]/g, '')}`}>โทร {cfg.phone}</a>}
+      </div>
     </div>
   )
 }

@@ -43,6 +43,7 @@ export default async (req) => {
   const { data: cfgRows } = await admin.from('settings').select('key, value').in('key', [
     'catalog_backcover_enabled', 'catalog_backcover_heading',
     'catalog_backcover_note', 'catalog_backcover_line', 'catalog_backcover_phone',
+    'catalog_backcover_logo', 'catalog_backcover_button', 'catalog_backcover_interest',
   ])
   const cfg = new Map((cfgRows || []).map(r => [r.key, r.value]))
   const backCover = {
@@ -51,6 +52,9 @@ export default async (req) => {
     note: cfg.get('catalog_backcover_note') || '',
     line: cfg.get('catalog_backcover_line') || '',
     phone: cfg.get('catalog_backcover_phone') || '',
+    logo: cfg.get('catalog_backcover_logo') || 'md',
+    button: cfg.get('catalog_backcover_button') || 'ให้ทีมขายติดต่อกลับ',
+    showInterest: (cfg.get('catalog_backcover_interest') ?? '1') !== '0',
   }
 
   return json({
