@@ -5,7 +5,8 @@ const NAV = [
   { section: 'หลัก', items: [{ id: 'dashboard', label: 'แดชบอร์ด' }] },
   { section: 'ข้อมูลลูกค้า', items: [{ id: 'companies', label: 'บริษัทลูกค้า' }, { id: 'leads', label: 'ผู้ติดต่อ' }, { id: 'tasks', label: 'งานติดตาม' }] },
   { section: 'การขาย', items: [{ id: 'deals', label: 'ดีลการขาย' }, { id: 'quotations', label: 'ใบเสนอราคา' }, { id: 'orders', label: 'ออเดอร์' }, { id: 'price-check', label: 'เช็คราคา' }] },
-  { section: 'ข้อมูลสินค้า', items: [{ id: 'products', label: 'สินค้า' }] },
+  // "แคตตาล็อกออนไลน์" อยู่กลุ่มเดียวกับสินค้า เป็นเครื่องมือให้เซลล์หยิบไปคุยกับลูกค้า (sale enablement)
+  { section: 'ข้อมูลสินค้า', items: [{ id: 'products', label: 'สินค้า' }, { id: 'catalogs', label: 'แคตตาล็อกออนไลน์' }] },
 ]
 const ADMIN_SECTION = { section: 'ผู้ดูแลระบบ', items: [
   { id: 'users', label: 'ผู้ใช้งาน' },
@@ -53,7 +54,7 @@ export default function Sidebar({ activeView, onNav, user, isAdmin, isFinance, o
           {sec.items.map(it => (
             <div
               key={it.id}
-              className={`nav-item${activeView === it.id || (activeView === 'company-detail' && it.id === 'companies') ? ' active' : ''}`}
+              className={`nav-item${activeView === it.id || (activeView === 'company-detail' && it.id === 'companies') || (activeView === 'catalog-builder' && it.id === 'catalogs') ? ' active' : ''}`}
               onClick={() => onNav(it.id)}
             >
               <span>{t(it.label)}</span>

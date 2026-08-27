@@ -2361,3 +2361,192 @@ end;
 $$ language plpgsql stable security definer set search_path = public;
 
 grant execute on function margin_product_price_structure(uuid) to authenticated;
+
+
+-- =====================================================================
+-- ===== แคตตาล็อกออนไลน์ (Image Catalog Gallery) =====
+-- ระบบโชว์รูป Artwork ที่กราฟิกทำมาแล้ว แล้วได้ลิงก์ส่งลูกค้าทาง LINE/Facebook
+-- ไม่ใช่ระบบสินค้า — ไม่มี SKU/ราคา/สต็อก เพราะข้อมูลทั้งหมดอยู่ในรูปแล้ว
+--
+-- หน้าลูกค้า (/catalog/:slug) ไม่ต้อง login แต่ "ไม่ได้" เปิด RLS ให้ anon
+-- อ่านผ่าน Netlify Function (service role key) เหมือนฟอร์มลีดสาธารณะ
+-- ฟังก์ชันเป็นคนเลือกว่าคอลัมน์ไหนออกไปข้างนอกได้บ้าง ข้อมูลภายในจึงรั่วไม่ได้
+-- =====================================================================
+
+create table if not exists catalogs (
+  id              uuid primary key default gen_random_uuid(),
+  catalog_name    text not null,
+  catalog_slug    text unique not null,
+  description     text,
+  cover_image_url text,
+  status          text not null default 'draft',   -- draft | published | hidden | archived
+  contact_name    text,
+  contact_line    text,
+  contact_phone   text,
+  contact_email   text,
+  created_by      uuid references auth.users(id),
+  created_by_name text,
+  created_at      timestamptz default now(),
+  updated_by      uuid references auth.users(id),
+  updated_by_name text,
+  updated_at      timestamptz default now()
+);
+
+-- slug ไปอยู่บน URL จริง จึงบังคับรูปแบบที่ฐานข้อมูลเลย ไม่ปล่อยให้ฝั่ง client เป็นคนกันอย่างเดียว
+-- (ตัวเล็ก/ตัวเลข/ขีดกลาง ห้ามขึ้นหรือลงท้ายด้วยขีด ห้ามขีดติดกัน)
+do $$ begin
+  alter table catalogs add constraint catalogs_slug_format
+    check (catalog_slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table catalogs add constraint catalogs_status_valid
+    check (status in ('draft', 'published', 'hidden', 'archived'));
+exception when duplicate_object then null; end $$;
+
+create table if not exists catalog_images (
+  id            uuid primary key default gen_random_uuid(),
+  catalog_id    uuid not null references catalogs(id) on delete cascade,
+  image_name    text,
+  image_url     text not null,
+  storage_path  text,
+  caption       text,
+  display_order integer not null default 0,
+  is_visible    boolean not null default true,
+  is_cover      boolean not null default false,
+  -- ลบแบบ soft delete — รูปที่เคยส่งลิงก์ให้ลูกค้าไปแล้วยังตามดูได้ว่าเคยมีอะไรอยู่
+  is_deleted    boolean not null default false,
+  uploaded_by   uuid references auth.users(id),
+  uploaded_at   timestamptz default now(),
+  updated_at    timestamptz default now()
+);
+create index if not exists catalog_images_catalog_idx on catalog_images(catalog_id, display_order);
+
+-- ปกได้แค่รูปเดียวต่อแคตตาล็อก บังคับที่ฐานข้อมูล ไม่ใช่แค่ที่ปุ่มบนหน้าจอ
+create unique index if not exists catalog_images_one_cover
+  on catalog_images(catalog_id) where is_cover and not is_deleted;
+
+-- นับยอดเปิดดูแยกตามช่องทางที่เซลล์ส่งลิงก์ไป (?src=line / facebook / website / email / other)
+create table if not exists catalog_view_logs (
+  id           uuid primary key default gen_random_uuid(),
+  catalog_id   uuid references catalogs(id) on delete cascade,
+  catalog_slug text,
+  source       text,
+  referrer     text,
+  user_agent   text,
+  viewed_at    timestamptz default now()
+);
+create index if not exists catalog_view_logs_catalog_idx on catalog_view_logs(catalog_id, viewed_at desc);
+
+drop trigger if exists trg_catalogs_updated on catalogs;
+create trigger trg_catalogs_updated before update on catalogs
+  for each row execute function set_updated_at();
+
+drop trigger if exists trg_catalog_images_updated on catalog_images;
+create trigger trg_catalog_images_updated before update on catalog_images
+  for each row execute function set_updated_at();
+
+drop trigger if exists trg_catalogs_created_by on catalogs;
+create trigger trg_catalogs_created_by before insert on catalogs
+  for each row execute function set_created_by();
+
+-- ใครจัดการแคตตาล็อกได้: แอดมิน กับ เซลล์ (ทุก role ที่ไม่ใช่ finance)
+-- ต้องเช็ค authenticated ด้วยเสมอ — "not is_finance()" เฉยๆ เป็นจริงกับคนที่ยังไม่ login ด้วย
+create or replace function catalog_can_manage() returns boolean as $$
+  select auth.role() = 'authenticated' and (is_admin() or not is_finance());
+$$ language sql security definer stable set search_path = public;
+
+grant execute on function catalog_can_manage() to authenticated;
+
+-- ตั้งรูปปก — ต้องล้างปกเดิมกับตั้งปกใหม่ในทีเดียว ไม่งั้นชน unique index ระหว่างทาง
+-- และ sync cover_image_url ที่ตาราง catalogs ไปด้วย หน้า list กับ OG preview จะได้ไม่ต้อง join
+create or replace function catalog_set_cover(p_image_id uuid) returns void as $$
+declare
+  v_catalog uuid;
+  v_url     text;
+begin
+  -- security definer = ข้าม RLS ต้องเช็คสิทธิ์เองตรงนี้ ไม่งั้นฝ่ายบัญชีก็เรียกได้
+  if not catalog_can_manage() then raise exception 'ไม่มีสิทธิ์แก้ไขแคตตาล็อก'; end if;
+
+  select catalog_id, image_url into v_catalog, v_url
+  from catalog_images where id = p_image_id and not is_deleted;
+  if not found then raise exception 'ไม่พบรูปนี้'; end if;
+
+  update catalog_images set is_cover = false where catalog_id = v_catalog and is_cover;
+  update catalog_images set is_cover = true  where id = p_image_id;
+  update catalogs set cover_image_url = v_url, updated_by = auth.uid() where id = v_catalog;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+grant execute on function catalog_set_cover(uuid) to authenticated;
+
+-- เขียนลำดับรูปใหม่ทั้งชุดในทีเดียว — รับ array ของ id เรียงตามที่อยากให้แสดง
+-- ทำทั้งชุดแทนการสลับทีละคู่ เพราะได้ลำดับที่ 0..n-1 เสมอ ต่อให้ข้อมูลเดิมเลขซ้ำหรือมีช่องว่าง
+-- และเป็น atomic — กดปุ่มขึ้น/ลงรัวๆ แล้วลำดับไม่เพี้ยนกลางคัน
+create or replace function catalog_reorder_images(p_catalog uuid, p_ids uuid[]) returns void as $$
+begin
+  if not catalog_can_manage() then raise exception 'ไม่มีสิทธิ์แก้ไขแคตตาล็อก'; end if;
+
+  update catalog_images ci
+     set display_order = pos.ord
+    from (select unnest(p_ids) as id, generate_subscripts(p_ids, 1) as ord) pos
+   where ci.id = pos.id and ci.catalog_id = p_catalog;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+grant execute on function catalog_reorder_images(uuid, uuid[]) to authenticated;
+
+-- ===== Storage bucket สำหรับรูปแคตตาล็อก =====
+-- public เหมือน "product-images" เพราะลูกค้าต้องเปิดรูปได้ตรงๆ จาก <img> โดยไม่ login
+-- และไม่ใช่ข้อมูลลับ — เป็น Artwork ที่ตั้งใจส่งออกไปข้างนอกอยู่แล้ว
+insert into storage.buckets (id, name, public)
+values ('catalog-images', 'catalog-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists "catalog-images: public read" on storage.objects;
+create policy "catalog-images: public read" on storage.objects
+  for select using (bucket_id = 'catalog-images');
+
+-- อัปโหลด/ลบได้เฉพาะแอดมินกับเซลล์ — ฝ่ายบัญชีไม่เกี่ยวกับงานแคตตาล็อก
+drop policy if exists "catalog-images: sales upload" on storage.objects;
+create policy "catalog-images: sales upload" on storage.objects
+  for insert with check (bucket_id = 'catalog-images' and catalog_can_manage());
+
+drop policy if exists "catalog-images: sales delete" on storage.objects;
+create policy "catalog-images: sales delete" on storage.objects
+  for delete using (bucket_id = 'catalog-images' and catalog_can_manage());
+
+-- ===== RLS =====
+alter table catalogs         enable row level security;
+alter table catalog_images   enable row level security;
+alter table catalog_view_logs enable row level security;
+
+-- คนใน CRM ที่ login แล้วเห็นแคตตาล็อกได้ทุกอัน (เป็นสื่อการตลาดร่วม ยิ่งใช้ซ้ำยิ่งดี)
+-- แต่ "แก้/ลบ" ทำได้เฉพาะแอดมินกับเซลล์ ฝ่ายบัญชีดูได้อย่างเดียว
+drop policy if exists "catalogs read" on catalogs;
+create policy "catalogs read" on catalogs for select using (auth.role() = 'authenticated');
+
+drop policy if exists "catalogs write" on catalogs;
+create policy "catalogs write" on catalogs for insert with check (catalog_can_manage());
+
+drop policy if exists "catalogs update" on catalogs;
+create policy "catalogs update" on catalogs for update
+  using (catalog_can_manage()) with check (catalog_can_manage());
+
+-- ลบทั้งแคตตาล็อกได้เฉพาะเจ้าของกับแอดมิน (เหมือน adminOnlyDelete ของข้อมูลอื่น แต่ผ่อนให้เจ้าของลบของตัวเองได้)
+drop policy if exists "catalogs delete" on catalogs;
+create policy "catalogs delete" on catalogs for delete
+  using (is_admin() or (catalog_can_manage() and created_by = auth.uid()));
+
+drop policy if exists "catalog_images read" on catalog_images;
+create policy "catalog_images read" on catalog_images for select using (auth.role() = 'authenticated');
+
+drop policy if exists "catalog_images write" on catalog_images;
+create policy "catalog_images write" on catalog_images for all
+  using (catalog_can_manage()) with check (catalog_can_manage());
+
+-- ยอดเข้าชม: อ่านได้ทุกคนที่ login (เอาไปโชว์ในหน้า list) แต่ไม่มี policy insert เลย
+-- เขียนได้ทางเดียวคือ Netlify Function ที่ใช้ service role key ซึ่ง bypass RLS
+-- ป้องกันคนนอกยิงตัวเลขยอดวิวปลอมเข้าระบบ
+drop policy if exists "catalog_view_logs read" on catalog_view_logs;
+create policy "catalog_view_logs read" on catalog_view_logs for select using (auth.role() = 'authenticated');

@@ -1,0 +1,371 @@
+import { useEffect, useRef, useState } from 'react'
+import {
+  fetchCatalog, updateCatalog, listCatalogImages, uploadCatalogImage, updateCatalogImage,
+  softDeleteCatalogImage, setCatalogCover, reorderCatalogImages, fetchCatalogViewsBySource,
+  isValidSlug, catalogPublicUrl, CATALOG_STATUS, MAX_CATALOG_IMAGE_SIZE,
+} from '../lib/api'
+import { useUi } from './UiContext'
+import { useLanguage } from './LanguageContext'
+import CatalogGalleryView from './CatalogGalleryView'
+import CatalogLinkModal from './CatalogLinkModal'
+import { StatusBadge, CATALOG_STATUS_LABEL } from './Catalogs'
+
+// หน้าจัดการแคตตาล็อก — ซ้าย: ตั้งค่า / กลาง: จัดการรูป / ขวา: พรีวิวมือถือ
+// พรีวิวใช้คอมโพเนนต์ตัวเดียวกับหน้าลูกค้าจริง (CatalogGalleryView) จะได้ไม่มีวันเพี้ยนจากกัน
+// จอแคบจะไหลลงเป็น ตั้งค่า > จัดการรูป > พรีวิว ตามลำดับ
+
+const LAYOUT_CSS = `
+.cb-grid{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
+@media (min-width:1100px){ .cb-grid{grid-template-columns:300px minmax(0,1fr) 340px} }
+.cb-panel{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.cb-panel-h{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:600;font-size:13px;color:var(--navy);
+  display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cb-panel-b{padding:14px}
+.cb-img{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;padding:12px;border:1px solid var(--border);
+  border-radius:8px;margin-bottom:10px;background:#fff}
+.cb-img.hidden{background:#fafbfc;opacity:.62}
+.cb-thumb{width:96px;height:96px;object-fit:contain;background:var(--gray-bg);border-radius:6px;border:1px solid var(--border)}
+.cb-img-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.cb-preview-frame{border:1px solid var(--border);border-radius:12px;overflow:hidden;max-height:560px;overflow-y:auto;background:#f5f7fa}
+.cb-drop{border:2px dashed var(--border);border-radius:10px;padding:22px 14px;text-align:center;color:var(--text-light);font-size:13px;cursor:pointer}
+.cb-drop.over{border-color:var(--yellow);background:#fffdf3;color:var(--text)}
+`
+
+function Panel({ title, right, children, style }) {
+  return (
+    <div className="cb-panel" style={style}>
+      <div className="cb-panel-h"><span>{title}</span>{right}</div>
+      <div className="cb-panel-b">{children}</div>
+    </div>
+  )
+}
+
+export default function CatalogBuilder({ catalogId, perm, currentUser, onBack }) {
+  const { toast, confirm } = useUi()
+  const { t } = useLanguage()
+  const canManage = !perm?.isFinance
+
+  const [cat, setCat] = useState(null)
+  const [images, setImages] = useState([])
+  const [views, setViews] = useState({ total: 0, bySource: new Map() })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [uploading, setUploading] = useState(null) // { done, total }
+  const [dragOver, setDragOver] = useState(false)
+  const [showLink, setShowLink] = useState(false)
+  const [showFull, setShowFull] = useState(false)
+  const fileRef = useRef(null)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const [c, imgs, v] = await Promise.all([
+        fetchCatalog(catalogId), listCatalogImages(catalogId), fetchCatalogViewsBySource(catalogId),
+      ])
+      setCat(c); setImages(imgs); setViews(v); setDirty(false)
+    } catch (e) { toast('โหลดแคตตาล็อกไม่สำเร็จ: ' + e.message, 'error') }
+    finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [catalogId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const set = (k) => (e) => { setDirty(true); setCat(c => ({ ...c, [k]: e.target.value })) }
+  const actor = { name: currentUser?.name, id: currentUser?.id }
+
+  const save = async () => {
+    if (!cat.catalog_name?.trim()) { toast('กรุณากรอกชื่อแคตตาล็อก', 'error'); return }
+    if (!isValidSlug(cat.catalog_slug || '')) { toast('ลิงก์ (slug) ใช้ได้เฉพาะ a-z, 0-9 และขีดกลาง', 'error'); return }
+    setSaving(true)
+    try {
+      await updateCatalog(cat.id, {
+        catalog_name: cat.catalog_name.trim(),
+        catalog_slug: cat.catalog_slug.trim().toLowerCase(),
+        description: cat.description?.trim() || null,
+        contact_name: cat.contact_name?.trim() || null,
+        contact_line: cat.contact_line?.trim() || null,
+        contact_phone: cat.contact_phone?.trim() || null,
+        contact_email: cat.contact_email?.trim() || null,
+        status: cat.status,
+      }, actor)
+      setDirty(false)
+      toast('บันทึกแล้ว', 'success')
+      load()
+    } catch (e) {
+      // unique violation ของ slug เป็นเคสที่เจอบ่อยสุด แปลให้เป็นภาษาคนแทนข้อความดิบของ postgres
+      const msg = /duplicate key|unique/i.test(e.message) ? 'ลิงก์ (slug) นี้มีคนใช้แล้ว เปลี่ยนเป็นชื่ออื่น' : e.message
+      toast('บันทึกไม่สำเร็จ: ' + msg, 'error')
+    } finally { setSaving(false) }
+  }
+
+  // อัปโหลดทีละไฟล์ ไม่ยิงพร้อมกัน — ได้ตัวเลขความคืบหน้าที่ตรงจริง
+  // และไฟล์ที่พังไม่ไปล้มไฟล์อื่นที่อัปสำเร็จแล้ว
+  const doUpload = async (files) => {
+    const list = Array.from(files || []).filter(Boolean)
+    if (!list.length) return
+    setUploading({ done: 0, total: list.length })
+    let order = images.length ? Math.max(...images.map(i => i.display_order)) + 1 : 0
+    const failed = []
+    let firstNew = null
+    for (const file of list) {
+      try {
+        const row = await uploadCatalogImage(catalogId, file, { displayOrder: order++, uploadedBy: currentUser?.id })
+        if (!firstNew) firstNew = row
+      } catch (e) { failed.push(e.message || file.name) }
+      setUploading(u => ({ ...u, done: u.done + 1 }))
+    }
+    // รูปแรกของแคตตาล็อกตั้งเป็นปกให้เลย ถ้ายังไม่มีปก — จะได้มีรูปขึ้นตอนแชร์ลิงก์โดยไม่ต้องกดเอง
+    if (firstNew && !images.some(i => i.is_cover)) {
+      await setCatalogCover(firstNew.id).catch(() => {})
+    }
+    setUploading(null)
+    if (failed.length) toast(`อัปโหลดไม่สำเร็จ ${failed.length} ไฟล์: ${failed[0]}`, 'error')
+    else toast(`อัปโหลด ${list.length} รูปแล้ว`, 'success')
+    load()
+  }
+
+  const saveCaption = async (img, value) => {
+    const next = value.trim() || null
+    if ((img.caption || null) === next) return
+    try {
+      await updateCatalogImage(img.id, { caption: next })
+      setImages(rows => rows.map(r => (r.id === img.id ? { ...r, caption: next } : r)))
+    } catch (e) { toast('บันทึกคำบรรยายไม่สำเร็จ: ' + e.message, 'error') }
+  }
+
+  const toggleVisible = async (img) => {
+    try {
+      await updateCatalogImage(img.id, { is_visible: !img.is_visible })
+      setImages(rows => rows.map(r => (r.id === img.id ? { ...r, is_visible: !img.is_visible } : r)))
+    } catch (e) { toast('เปลี่ยนไม่สำเร็จ: ' + e.message, 'error') }
+  }
+
+  const makeCover = async (img) => {
+    try { await setCatalogCover(img.id); toast('ตั้งเป็นรูปปกแล้ว', 'success'); load() }
+    catch (e) { toast('ตั้งรูปปกไม่สำเร็จ: ' + e.message, 'error') }
+  }
+
+  const removeImage = async (img) => {
+    if (!(await confirm('ลบรูปนี้ออกจากแคตตาล็อก?'))) return
+    try { await softDeleteCatalogImage(img); toast('ลบแล้ว', 'success'); load() }
+    catch (e) { toast('ลบไม่สำเร็จ: ' + e.message, 'error') }
+  }
+
+  const move = async (index, delta) => {
+    const to = index + delta
+    if (to < 0 || to >= images.length) return
+    const next = [...images]
+    ;[next[index], next[to]] = [next[to], next[index]]
+    setImages(next)   // ขยับบนจอก่อน แล้วค่อยเขียนลงฐาน ไม่ให้ปุ่มหน่วง
+    try { await reorderCatalogImages(catalogId, next.map(i => i.id)) }
+    catch (e) { toast('จัดลำดับไม่สำเร็จ: ' + e.message, 'error'); load() }
+  }
+
+  if (loading || !cat) {
+    return <div className="list-view"><div className="empty-state">{t('กำลังโหลด...')}</div></div>
+  }
+
+  const visible = images.filter(i => i.is_visible)
+  const previewCatalog = {
+    name: cat.catalog_name, description: cat.description || '',
+    contact_name: cat.contact_name, contact_line: cat.contact_line,
+    contact_phone: cat.contact_phone, contact_email: cat.contact_email,
+  }
+  const previewImages = visible.map(i => ({ url: i.image_url, caption: i.caption || '' }))
+
+  return (
+    <div className="list-view">
+      <style>{LAYOUT_CSS}</style>
+
+      <div className="section-header">
+        <div>
+          <button className="btn btn-outline btn-xs" onClick={onBack} style={{ marginBottom: 6 }}>← {t('กลับไปรายการแคตตาล็อก')}</button>
+          <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {cat.catalog_name} <StatusBadge status={cat.status} t={t} />
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-light)', marginTop: 2 }}>
+            /catalog/{cat.catalog_slug} · {t('รูปที่แสดง')} {visible.length}/{images.length} · {t('เปิดดู')} {views.total}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" onClick={() => setShowFull(true)}>{t('ดูเต็มหน้าจอ')}</button>
+          <button className="btn btn-outline" onClick={() => setShowLink(true)}>{t('คัดลอกลิงก์')}</button>
+          {canManage && (
+            <button className="btn btn-primary" disabled={saving || !dirty} onClick={save}>
+              {saving ? t('กำลังบันทึก...') : dirty ? t('บันทึกการตั้งค่า') : t('บันทึกแล้ว')}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showLink && <CatalogLinkModal catalog={cat} onClose={() => setShowLink(false)} />}
+      {showFull && (
+        <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) setShowFull(false) }}>
+          <div className="modal" style={{ maxWidth: 860, width: '95vw' }}>
+            <div className="modal-header">
+              <div className="modal-title">{t('พรีวิวหน้าลูกค้า')}</div>
+              <button className="modal-close" onClick={() => setShowFull(false)}>×</button>
+            </div>
+            <div className="modal-body" style={{ padding: 0, maxHeight: '78vh', overflowY: 'auto' }}>
+              <CatalogGalleryView catalog={previewCatalog} images={previewImages} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="cb-grid">
+        {/* ===== ซ้าย: ตั้งค่าแคตตาล็อก ===== */}
+        <Panel title={t('ตั้งค่าแคตตาล็อก')}>
+          <div className="form-group">
+            <label className="form-label required">{t('ชื่อแคตตาล็อก')}</label>
+            <input className="form-control" value={cat.catalog_name || ''} onChange={set('catalog_name')} disabled={!canManage} />
+          </div>
+          <div className="form-group">
+            <label className="form-label required">{t('ลิงก์ (slug)')}</label>
+            <input className="form-control" value={cat.catalog_slug || ''} disabled={!canManage}
+              onChange={e => { setDirty(true); setCat(c => ({ ...c, catalog_slug: e.target.value.toLowerCase() })) }} />
+            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
+              {t('เปลี่ยน slug แล้วลิงก์เดิมที่เคยส่งลูกค้าจะใช้ไม่ได้ทันที')}
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">{t('คำอธิบายสั้นๆ')}</label>
+            <textarea className="form-control" rows={3} value={cat.description || ''} onChange={set('description')} disabled={!canManage} />
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: .4, margin: '14px 0 8px' }}>
+            {t('ช่องทางติดต่อที่ลูกค้าจะเห็น')}
+          </div>
+          <div className="form-group">
+            <label className="form-label">{t('ชื่อผู้ดูแล')}</label>
+            <input className="form-control" value={cat.contact_name || ''} onChange={set('contact_name')} disabled={!canManage} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">{t('LINE')}</label>
+            <input className="form-control" value={cat.contact_line || ''} onChange={set('contact_line')} disabled={!canManage}
+              placeholder="@worldtech หรือวางลิงก์ LINE" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">{t('เบอร์โทร')}</label>
+            <input className="form-control" value={cat.contact_phone || ''} onChange={set('contact_phone')} disabled={!canManage} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">{t('อีเมล')}</label>
+            <input className="form-control" value={cat.contact_email || ''} onChange={set('contact_email')} disabled={!canManage} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">{t('สถานะ')}</label>
+            <select className="form-control" value={cat.status} onChange={set('status')} disabled={!canManage}>
+              {CATALOG_STATUS.map(s => <option key={s} value={s}>{t(CATALOG_STATUS_LABEL[s])}</option>)}
+            </select>
+            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
+              {t('ลูกค้าเปิดลิงก์เห็นรูปได้เฉพาะสถานะ "เผยแพร่แล้ว" เท่านั้น')}
+            </div>
+          </div>
+
+          {views.total > 0 && (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: .4, margin: '14px 0 8px' }}>
+                {t('ยอดเปิดดูตามช่องทาง')}
+              </div>
+              {[...views.bySource.entries()].sort((a, b) => b[1] - a[1]).map(([src, n]) => (
+                <div key={src} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0' }}>
+                  <span style={{ color: 'var(--text-light)' }}>{src}</span><b>{n}</b>
+                </div>
+              ))}
+            </>
+          )}
+        </Panel>
+
+        {/* ===== กลาง: จัดการรูป ===== */}
+        <Panel
+          title={`${t('รูปในแคตตาล็อก')} (${images.length})`}
+          right={canManage && (
+            <button className="btn btn-primary btn-xs" disabled={!!uploading} onClick={() => fileRef.current?.click()}>
+              {uploading ? `${t('กำลังอัปโหลด')} ${uploading.done}/${uploading.total}` : `+ ${t('อัปโหลดรูป')}`}
+            </button>
+          )}
+        >
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple style={{ display: 'none' }}
+            onChange={e => { doUpload(e.target.files); e.target.value = '' }} />
+
+          {canManage && (
+            <div
+              className={`cb-drop${dragOver ? ' over' : ''}`}
+              style={{ marginBottom: 12 }}
+              onClick={() => !uploading && fileRef.current?.click()}
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => { e.preventDefault(); setDragOver(false); if (!uploading) doUpload(e.dataTransfer.files) }}
+            >
+              {uploading
+                ? `${t('กำลังอัปโหลด')} ${uploading.done}/${uploading.total} — ${t('อย่าเพิ่งปิดหน้านี้')}`
+                : t('ลากรูปมาวางตรงนี้ หรือคลิกเพื่อเลือกไฟล์ — JPG, PNG, WebP ไม่เกิน 10MB ต่อรูป เลือกหลายไฟล์พร้อมกันได้')}
+            </div>
+          )}
+
+          {images.length === 0 && !uploading && (
+            <div className="empty-state">
+              <div>{t('ยังไม่มีรูปในแคตตาล็อกนี้')}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-light)', marginTop: 6 }}>
+                {t('อัปโหลดรูป Artwork ที่กราฟิกทำไว้แล้วได้เลย ไม่ต้องกรอกราคาหรือสเปก')}
+              </div>
+            </div>
+          )}
+
+          {images.map((img, i) => (
+            <div className={`cb-img${img.is_visible ? '' : ' hidden'}`} key={img.id}>
+              <div>
+                <img className="cb-thumb" src={img.image_url} alt="" loading="lazy" />
+                <div style={{ fontSize: 10, color: 'var(--text-light)', textAlign: 'center', marginTop: 4 }}>#{i + 1}</div>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, wordBreak: 'break-all' }}>{img.image_name || t('รูปภาพ')}</span>
+                  {img.is_cover && <span className="badge badge-yellow">{t('รูปปก')}</span>}
+                  {!img.is_visible && <span className="badge badge-gray">{t('ซ่อนอยู่')}</span>}
+                </div>
+                <input className="form-control" defaultValue={img.caption || ''} disabled={!canManage}
+                  placeholder={t('คำบรรยายใต้รูป (ไม่ใส่ก็ได้)')} style={{ fontSize: 12 }}
+                  onBlur={e => canManage && saveCaption(img, e.target.value)} />
+                {canManage && (
+                  <div className="cb-img-actions">
+                    <button className="btn btn-outline btn-xs" disabled={i === 0} onClick={() => move(i, -1)} title={t('เลื่อนขึ้น')}>↑</button>
+                    <button className="btn btn-outline btn-xs" disabled={i === images.length - 1} onClick={() => move(i, 1)} title={t('เลื่อนลง')}>↓</button>
+                    <button className="btn btn-outline btn-xs" onClick={() => toggleVisible(img)}>
+                      {t(img.is_visible ? 'ซ่อนรูป' : 'แสดงรูป')}
+                    </button>
+                    {!img.is_cover && <button className="btn btn-outline btn-xs" onClick={() => makeCover(img)}>{t('ตั้งเป็นปก')}</button>}
+                    <button className="btn btn-danger btn-xs" onClick={() => removeImage(img)}>{t('ลบ')}</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </Panel>
+
+        {/* ===== ขวา: พรีวิวมือถือ ===== */}
+        <Panel title={t('พรีวิวบนมือถือ')} style={{ position: 'sticky', top: 0 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-light)', marginBottom: 8 }}>
+            {t('นี่คือสิ่งที่ลูกค้าจะเห็น — อัปเดตตามที่แก้ทันที (ยังไม่ต้องบันทึกก็เห็น)')}
+          </div>
+          <div className="cb-preview-frame">
+            <CatalogGalleryView catalog={previewCatalog} images={previewImages} mobile />
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+            <button className="btn btn-outline btn-sm" style={{ flex: 1 }} onClick={() => setShowFull(true)}>{t('ดูเต็มหน้าจอ')}</button>
+            <a className="btn btn-outline btn-sm" style={{ flex: 1, textAlign: 'center' }}
+              href={catalogPublicUrl(cat.catalog_slug)} target="_blank" rel="noreferrer">{t('เปิดลิงก์จริง')}</a>
+          </div>
+          {cat.status !== 'published' && (
+            <div style={{ fontSize: 11, color: '#c05621', marginTop: 8 }}>
+              {t('ยังไม่เผยแพร่ — เปิดลิงก์จริงตอนนี้ลูกค้าจะเห็นข้อความว่ายังไม่เปิดให้เข้าชม')}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 8 }}>
+            {t('ขนาดไฟล์สูงสุด')} {Math.round(MAX_CATALOG_IMAGE_SIZE / 1024 / 1024)}MB
+          </div>
+        </Panel>
+      </div>
+    </div>
+  )
+}

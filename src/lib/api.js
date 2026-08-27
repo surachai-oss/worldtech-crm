@@ -1494,3 +1494,158 @@ export const setOrderCostFactor = (orderId, percent) =>
 // คืน null ถ้าสินค้านั้นยังไม่ได้ตั้งต้นทุน
 export const fetchPriceStructure = (productId) =>
   supabase.rpc('margin_product_price_structure', { p_product_id: productId }).then(handle)
+
+// ===== แคตตาล็อกออนไลน์ (Image Catalog Gallery) =====
+// ระบบโชว์รูป Artwork แล้วได้ลิงก์ส่งลูกค้า — ไม่ใช่ระบบสินค้า ไม่มี SKU/ราคา/สต็อก
+export const CATALOG_IMAGES_BUCKET = 'catalog-images'
+export const CATALOG_STATUS = ['draft', 'published', 'hidden', 'archived']
+export const CATALOG_SOURCES = ['line', 'facebook', 'website', 'email', 'other']
+
+const CATALOG_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+export const MAX_CATALOG_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB ต่อรูป ตามบรีฟ
+
+// ทำ slug จากชื่อแคตตาล็อก — ต้องผ่าน check constraint catalogs_slug_format ที่ฐานข้อมูล
+// ชื่อไทยแปลงเป็น ascii ไม่ได้ ถ้าเหลือว่างให้คนกรอกเองแทนการเดามั่ว
+export function slugify(text) {
+  return String(text || '')
+    .toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+    .replace(/-+$/g, '')
+}
+
+export const isValidSlug = (s) => /^[a-z0-9]+(-[a-z0-9]+)*$/.test(String(s || ''))
+
+// ลิงก์สาธารณะ — ประกอบจาก origin ปัจจุบันเสมอ ไม่เก็บลงฐานข้อมูล
+// เก็บไว้แล้วมันจะค้างเป็นโดเมนเก่าในวันที่ย้ายโดเมน แล้วเซลล์จะ copy ลิงก์ตายไปส่งลูกค้า
+export function catalogPublicUrl(slug, source) {
+  const base = `${window.location.origin}/catalog/${slug}`
+  return source ? `${base}?src=${encodeURIComponent(source)}` : base
+}
+
+export const listCatalogs = () =>
+  supabase.from('catalogs').select('*').order('updated_at', { ascending: false }).then(handle)
+
+export const fetchCatalog = (id) =>
+  supabase.from('catalogs').select('*').eq('id', id).single().then(handle)
+
+// นับจำนวนรูปที่ลูกค้าจะเห็นจริง (visible + ยังไม่ลบ) ของทุกแคตตาล็อก ไว้โชว์ในหน้า list
+export async function fetchCatalogImageCounts() {
+  const rows = await supabase.from('catalog_images')
+    .select('catalog_id').eq('is_visible', true).eq('is_deleted', false).then(handle)
+  const map = new Map()
+  rows.forEach(r => map.set(r.catalog_id, (map.get(r.catalog_id) || 0) + 1))
+  return map
+}
+
+// ยอดเปิดดูรวมต่อแคตตาล็อก — ดึงมาทีเดียวแล้วนับฝั่ง client (ตารางนี้เล็ก ไม่คุ้มทำ view แยก)
+export async function fetchCatalogViewCounts() {
+  const rows = await supabase.from('catalog_view_logs').select('catalog_id').then(handle)
+  const map = new Map()
+  rows.forEach(r => map.set(r.catalog_id, (map.get(r.catalog_id) || 0) + 1))
+  return map
+}
+
+// สรุปยอดเปิดดูแยกช่องทางของแคตตาล็อกเดียว — โชว์ในหน้า Builder ให้รู้ว่าช่องทางไหนได้ผล
+export async function fetchCatalogViewsBySource(catalogId) {
+  const rows = await supabase.from('catalog_view_logs')
+    .select('source').eq('catalog_id', catalogId).then(handle)
+  const map = new Map()
+  rows.forEach(r => {
+    const k = r.source || 'other'
+    map.set(k, (map.get(k) || 0) + 1)
+  })
+  return { total: rows.length, bySource: map }
+}
+
+export async function createCatalog({ catalog_name, catalog_slug, description, createdByName }) {
+  const rows = await supabase.from('catalogs').insert({
+    catalog_name, catalog_slug, description: description || null,
+    created_by_name: createdByName || null, updated_by_name: createdByName || null,
+  }).select().then(handle)
+  return rows[0]
+}
+
+export async function updateCatalog(id, patch, actor) {
+  const row = { ...patch }
+  if (actor?.name) row.updated_by_name = actor.name
+  if (actor?.id) row.updated_by = actor.id
+  const rows = await supabase.from('catalogs').update(row).eq('id', id).select().then(handle)
+  return rows[0]
+}
+
+export const deleteCatalog = (id) => supabase.from('catalogs').delete().eq('id', id).then(handle)
+
+export const listCatalogImages = (catalogId) =>
+  supabase.from('catalog_images').select('*')
+    .eq('catalog_id', catalogId).eq('is_deleted', false)
+    .order('display_order', { ascending: true }).then(handle)
+
+// อัปโหลดรูปเข้า bucket ก่อน แล้วค่อยสร้าง record — ลำดับนี้สำคัญ
+// ถ้าสร้าง record ก่อนแล้วอัปโหลดพลาด จะเหลือแถวที่ชี้ไปยังรูปที่ไม่มีอยู่จริง แล้วหน้าลูกค้าจะขึ้นรูปแตก
+export async function uploadCatalogImage(catalogId, file, { displayOrder, uploadedBy }) {
+  if (!CATALOG_IMAGE_TYPES.includes(file.type)) throw new Error(`${file.name}: รองรับเฉพาะ JPG, PNG, WebP`)
+  if (file.size > MAX_CATALOG_IMAGE_SIZE) throw new Error(`${file.name}: ไฟล์ใหญ่เกิน 10MB`)
+
+  // Supabase Storage ปฏิเสธ key ที่มีอักขระไทย/เว้นวรรค ("Invalid key") ต้องเหลือแต่ ASCII
+  const safeName = file.name.replace(/[^\w.-]/g, '_').slice(-80)
+  const path = `${catalogId}/${Date.now()}-${safeName}`
+  const { error: upErr } = await supabase.storage.from(CATALOG_IMAGES_BUCKET).upload(path, file, {
+    contentType: file.type, upsert: false,
+  })
+  if (upErr) throw upErr
+
+  const image_url = supabase.storage.from(CATALOG_IMAGES_BUCKET).getPublicUrl(path).data.publicUrl
+  try {
+    const rows = await supabase.from('catalog_images').insert({
+      catalog_id: catalogId, image_name: file.name.slice(0, 200), image_url, storage_path: path,
+      display_order: displayOrder, uploaded_by: uploadedBy || null,
+    }).select().then(handle)
+    return rows[0]
+  } catch (e) {
+    // เขียนแถวไม่สำเร็จ = เก็บกวาดไฟล์ที่เพิ่งอัปทิ้ง ไม่ปล่อยให้เป็นไฟล์กำพร้าใน bucket
+    await supabase.storage.from(CATALOG_IMAGES_BUCKET).remove([path]).then(() => {}, () => {})
+    throw e
+  }
+}
+
+export const updateCatalogImage = (id, patch) =>
+  supabase.from('catalog_images').update(patch).eq('id', id).select().then(handle).then(r => r[0])
+
+// soft delete ตามบรีฟ — รูปหายจากหน้าลูกค้าทันที แต่ไฟล์กับประวัติยังอยู่
+// ถ้าเป็นรูปปกอยู่ ต้องปลดปกด้วย ไม่งั้น catalogs.cover_image_url จะชี้ไปยังรูปที่ถูกลบแล้ว
+export async function softDeleteCatalogImage(image) {
+  await supabase.from('catalog_images')
+    .update({ is_deleted: true, is_cover: false }).eq('id', image.id).then(handle)
+  if (image.is_cover) {
+    await supabase.from('catalogs').update({ cover_image_url: null }).eq('id', image.catalog_id).then(handle)
+  }
+}
+
+export const setCatalogCover = (imageId) =>
+  supabase.rpc('catalog_set_cover', { p_image_id: imageId }).then(handle)
+
+// เขียนลำดับใหม่ทั้งชุด (ส่ง id เรียงตามที่อยากให้แสดง) — atomic และซ่อมลำดับที่เลขซ้ำ/มีช่องว่างให้เอง
+export const reorderCatalogImages = (catalogId, orderedIds) =>
+  supabase.rpc('catalog_reorder_images', { p_catalog: catalogId, p_ids: orderedIds }).then(handle)
+
+// ===== หน้าแคตตาล็อกสาธารณะ (ไม่ login) =====
+// อ่านผ่าน Netlify Function เพราะ RLS ไม่เปิดให้ anon เลย (นโยบายเดียวกับฟอร์มลีดสาธารณะ)
+export async function fetchPublicCatalog(slug) {
+  const res = await fetch(`/.netlify/functions/catalog-public?slug=${encodeURIComponent(slug)}`)
+  if (!res.ok) throw new Error('โหลดแคตตาล็อกไม่สำเร็จ')
+  return res.json()
+}
+
+// ยิงทิ้ง ไม่ await ไม่เช็คผล — ถ้า log ล้มเหลว หน้าลูกค้าต้องยังเปิดได้ตามปกติ
+export function logCatalogView(slug, source) {
+  try {
+    fetch('/.netlify/functions/catalog-view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, source, referrer: document.referrer || '' }),
+      keepalive: true,
+    }).catch(() => {})
+  } catch { /* ไม่ต้องทำอะไร */ }
+}

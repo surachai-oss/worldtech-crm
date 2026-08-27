@@ -19,6 +19,8 @@ import FinanceReview from './components/FinanceReview'
 import AccountingDocuments from './components/AccountingDocuments'
 import PriceCheck from './components/PriceCheck'
 import CostMaster from './components/CostMaster'
+import Catalogs from './components/Catalogs'
+import CatalogBuilder from './components/CatalogBuilder'
 import NotificationBell from './components/NotificationBell'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal, LeadModal } from './components/Modals'
@@ -30,7 +32,8 @@ const TITLES = {
   dashboard: 'แดชบอร์ด', companies: 'บริษัทลูกค้า', 'company-detail': 'รายละเอียดบริษัท',
   deals: 'ดีลการขาย', tasks: 'งานติดตาม', quotations: 'ใบเสนอราคา', orders: 'ออเดอร์',
   users: 'ผู้ใช้งาน', products: 'สินค้า', leads: 'ผู้ติดต่อ',
-  'finance-review': 'ตรวจสอบยอดโอน', 'accounting-documents': 'เอกสารบัญชี'
+  'finance-review': 'ตรวจสอบยอดโอน', 'accounting-documents': 'เอกสารบัญชี',
+  catalogs: 'แคตตาล็อกออนไลน์', 'catalog-builder': 'แคตตาล็อกออนไลน์'
 }
 
 function AppInner({ session }) {
@@ -43,6 +46,7 @@ function AppInner({ session }) {
   const [reloadKey, setReloadKey] = useState(0)
   const [view, setView] = useState('dashboard')
   const [currentCompanyId, setCurrentCompanyId] = useState(null)
+  const [currentCatalogId, setCurrentCatalogId] = useState(null)
   const [modal, setModal] = useState(null) // { type, payload }
   const [searchQ, setSearchQ] = useState('')
   const [showResults, setShowResults] = useState(false)
@@ -82,6 +86,8 @@ function AppInner({ session }) {
     setView(v)
     if (v === 'company-detail') setCurrentCompanyId(companyId)
   }
+
+  const openCatalog = (id) => { setCurrentCatalogId(id); setView('catalog-builder') }
 
   const currentUser = { id: session.user.id, name: session.user.user_metadata?.name || session.user.email?.split('@')[0], email: session.user.email }
 
@@ -428,6 +434,10 @@ function AppInner({ session }) {
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'products' && <Products perm={perm} />}
+          {view === 'catalogs' && <Catalogs perm={perm} currentUser={currentUser} onOpen={openCatalog} />}
+          {view === 'catalog-builder' && currentCatalogId && (
+            <CatalogBuilder catalogId={currentCatalogId} perm={perm} currentUser={currentUser} onBack={() => nav('catalogs')} />
+          )}
           {view === 'price-check' && !isFinance && <PriceCheck perm={perm} />}
           {view === 'cost-master' && (isFinance || isAdmin) && <CostMaster currentUserName={currentUser.name} />}
           {view === 'finance-review' && (isFinance || isAdmin) && (

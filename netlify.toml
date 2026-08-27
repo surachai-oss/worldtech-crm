@@ -2,6 +2,13 @@
   command = "npm run build"
   publish = "dist"
   functions = "netlify/functions"
+  edge_functions = "netlify/edge-functions"
+
+# ใส่ Open Graph meta ต่อแคตตาล็อกก่อนส่ง HTML ออกไป — ตัวอ่านลิงก์ของ LINE/Facebook ไม่รัน JS
+# ต้องมาก่อน redirect ด้านล่าง เพราะ edge function ทำงานกับ URL ต้นทาง ส่วน redirect เป็นคนเสิร์ฟ index.html ให้
+[[edge_functions]]
+  function = "catalog-og"
+  path = "/catalog/*"
 
 [[redirects]]
   from = "/*"
