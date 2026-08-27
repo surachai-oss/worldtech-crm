@@ -42,7 +42,8 @@ const blobToFile = (blob, name) => new File([blob], name, { type: 'image/jpeg' }
 export async function pdfToImageFiles(file, onProgress) {
   const pdfjs = await loadPdfjs()
   const buf = await file.arrayBuffer()
-  const doc = await pdfjs.getDocument({ data: buf }).promise
+  const task = pdfjs.getDocument({ data: buf })
+  const doc = await task.promise
 
   const total = Math.min(doc.numPages, MAX_PAGES)
   const baseName = file.name.replace(/\.pdf$/i, '')
@@ -68,7 +69,14 @@ export async function pdfToImageFiles(file, onProgress) {
     onProgress?.(n, total)
   }
 
-  await doc.destroy().catch(() => {})
+  // pdfjs v6 เอา doc.destroy() ออกแล้ว เหลือ doc.cleanup() ส่วน destroy() ย้ายไปอยู่ที่ loading task
+  // เช็คก่อนเรียกทุกตัว และครอบ try ไว้ — การคืนหน่วยความจำพลาดไม่ควรทิ้งรูปที่แปลงเสร็จแล้วทั้งหมด
+  // (บั๊กเดิมคือ doc.destroy() โยน TypeError ออกมาก่อนที่ .catch() จะได้ทำงาน)
+  try {
+    if (typeof task?.destroy === 'function') await task.destroy()
+    else if (typeof doc?.cleanup === 'function') await doc.cleanup()
+  } catch { /* ปล่อยผ่าน */ }
+
   if (!out.length) throw new Error(`${file.name}: แปลงไฟล์ PDF ไม่สำเร็จ`)
   return { files: out, skipped: Math.max(0, doc.numPages - total) }
 }

@@ -29,17 +29,15 @@ const LAYOUT_CSS = `
 .cb-img.hidden{background:#fafbfc;opacity:.62}
 .cb-thumb{width:96px;height:96px;object-fit:contain;background:var(--gray-bg);border-radius:6px;border:1px solid var(--border)}
 .cb-img-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.cb-preview-frame{border:1px solid var(--border);border-radius:12px;overflow:hidden;height:560px;background:#f5f7fa}
+.cb-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.cb-preview-frame{border:1px solid var(--border);border-radius:12px;overflow:hidden;height:480px;background:#f5f7fa}
 .cb-drop{border:2px dashed var(--border);border-radius:10px;padding:22px 14px;text-align:center;color:var(--text-light);font-size:13px;cursor:pointer}
 .cb-drop.over{border-color:var(--yellow);background:#fffdf3;color:var(--text)}
-/* พาเนลปุ่มติดต่อวางต่อจากพาเนลรูปในคอลัมน์กลาง — เฉพาะตอนที่มี 3 คอลัมน์จริงเท่านั้น
-   จอแคบ grid เหลือคอลัมน์เดียว ถ้าฟิก grid-column ไว้จะไปสร้างคอลัมน์ผีขึ้นมา */
-@media (min-width:1100px){ .cb-panel.cb-mid{grid-column:2 / 3} }
 `
 
-function Panel({ title, right, children, style, className = '' }) {
+function Panel({ title, right, children, style }) {
   return (
-    <div className={`cb-panel ${className}`.trim()} style={style}>
+    <div className="cb-panel" style={style}>
       <div className="cb-panel-h"><span>{title}</span>{right}</div>
       <div className="cb-panel-b">{children}</div>
     </div>
@@ -317,7 +315,10 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
           )) : <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ยังไม่มีคนเปิดดู')}</div>}
         </Panel>
 
-        {/* ===== กลาง: จัดการรูป ===== */}
+        {/* ===== กลาง: จัดการรูป + ปุ่มติดต่อ ซ้อนกันในคอลัมน์เดียว =====
+             ต้องห่อเป็นกล่องเดียว ไม่ใช่วาง grid-column เอง — พอวางเองแล้ว auto-placement
+             จะดันพาเนลพรีวิวหล่นไปแถวสอง กลายเป็นอยู่ล่างสุดแทนที่จะอยู่ขวาบน */}
+        <div className="cb-col">
         <Panel
           title={`${t('รูปในแคตตาล็อก')} (${images.length})`}
           right={canManage && (
@@ -384,11 +385,9 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
           ))}
         </Panel>
 
-        {/* ===== ปุ่มติดต่อ — อยู่คอลัมน์กลางต่อจากรูป เพราะเป็นของที่แก้บ่อยพอๆ กัน ===== */}
         {canManage && (
           <Panel
             title={t('ปุ่มติดต่อ')}
-            className="cb-mid"
             right={btnState.usingShared
               ? <button className="btn btn-outline btn-xs" onClick={useOwnButtons}>{t('ตั้งปุ่มเฉพาะแคตตาล็อกนี้')}</button>
               : <button className="btn btn-outline btn-xs" onClick={backToShared}>{t('กลับไปใช้ปุ่มชุดกลาง')}</button>}
@@ -404,9 +403,10 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
             />
           </Panel>
         )}
+        </div>
 
         {/* ===== ขวา: พรีวิวมือถือ ===== */}
-        <Panel title={t('พรีวิวบนมือถือ')} style={{ position: 'sticky', top: 0 }}>
+        <Panel title={t('พรีวิวบนมือถือ')}>
           <div style={{ fontSize: 11, color: 'var(--text-light)', marginBottom: 8 }}>
             {t('นี่คือสิ่งที่ลูกค้าจะเห็น — อัปเดตตามที่แก้ทันที (ยังไม่ต้องบันทึกก็เห็น)')}
           </div>
