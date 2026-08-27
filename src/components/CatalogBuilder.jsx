@@ -196,6 +196,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   }
 
   const visible = images.filter(i => i.is_visible)
+  const totalViews = months.reduce((n, m) => n + m.views, 0)
   const previewCatalog = { name: cat.catalog_name, description: cat.description || '' }
   const previewImages = visible.map(i => ({ url: i.image_url, caption: i.caption || '' }))
 
@@ -210,7 +211,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
             {cat.catalog_name} <StatusBadge status={cat.status} t={t} />
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-light)', marginTop: 2 }}>
-            /catalog/{cat.catalog_slug} · {t('รูปที่แสดง')} {visible.length}/{images.length} · {t('เปิดดู')} {views.total}
+            /catalog/{cat.catalog_slug} · {t('รูปที่แสดง')} {visible.length}/{images.length} · {t('เปิดดู')} {totalViews} ({t('12 เดือนล่าสุด')})
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>

@@ -869,6 +869,7 @@ export const EN_DICT = {
   'รูป': 'Images',
   'ยอดเปิดดูรายเดือน': 'Views by month',
   'ยังไม่มีคนเปิดดู': 'No views yet',
+  '12 เดือนล่าสุด': 'last 12 months',
   'ส่งลิงก์นี้ทาง LINE, Facebook, อีเมล หรือช่องทางไหนก็ได้ ทุกครั้งที่ลูกค้าเปิดจะถูกนับยอดให้อัตโนมัติ': 'Send this link over LINE, Facebook, email or anywhere else — every open is counted automatically',
   'รายงานยอดเปิดดู': 'View report',
   'รายงานยอดเปิดดูแคตตาล็อก': 'Catalog view report',
