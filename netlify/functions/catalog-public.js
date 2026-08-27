@@ -38,17 +38,6 @@ export default async (req) => {
     .eq('is_deleted', false)
     .order('display_order', { ascending: true })
 
-  // ปุ่มติดต่อ: ใช้ชุดของแคตตาล็อกนี้ถ้ามี ไม่มีก็ตกไปใช้ชุดกลาง (catalog_id เป็น null)
-  // ตรรกะเดียวกับ resolveCatalogButtons ฝั่งหลังบ้าน พรีวิวจึงตรงกับของจริง
-  const btnCols = 'id, label, kind, url, image_url, bg_color, text_color, display_order, is_visible'
-  let { data: btns } = await admin.from('catalog_buttons').select(btnCols)
-    .eq('catalog_id', cat.id).eq('is_visible', true).order('display_order', { ascending: true })
-  if (!btns?.length) {
-    const shared = await admin.from('catalog_buttons').select(btnCols)
-      .is('catalog_id', null).eq('is_visible', true).order('display_order', { ascending: true })
-    btns = shared.data || []
-  }
-
   return json({
     state: 'ok',
     catalog: {
@@ -59,10 +48,6 @@ export default async (req) => {
       updated_at: cat.updated_at,
     },
     images: (imgs || []).map(i => ({ url: i.image_url, caption: i.caption || '' })),
-    buttons: btns.map(b => ({
-      id: b.id, label: b.label || '', kind: b.kind, url: b.url || '',
-      image_url: b.image_url || '', bg_color: b.bg_color, text_color: b.text_color,
-    })),
   })
 }
 

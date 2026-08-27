@@ -41,17 +41,6 @@ const CSS = `
 .wtc-bar-mid{flex:1;min-width:0;text-align:center}
 .wtc-cap{font-size:12px;line-height:1.5;color:var(--wtc-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wtc-count{font-size:12px;color:var(--wtc-muted);font-variant-numeric:tabular-nums}
-.wtc-cta{flex:none;background:#fff;display:flex;gap:8px;padding:0 10px 8px;overflow-x:auto;scrollbar-width:none}
-.wtc-cta::-webkit-scrollbar{display:none}
-.wtc-cta a,.wtc-cta button{flex:1 1 0;min-width:120px;display:flex;align-items:center;justify-content:center;gap:7px;
-  min-height:44px;padding:0 14px;border-radius:9px;font-size:14px;font-weight:600;text-decoration:none;
-  font-family:inherit;white-space:nowrap;border:1.5px solid transparent;cursor:pointer}
-.wtc-cta img{height:24px;width:24px;object-fit:cover;border-radius:5px;flex:none}
-.wtc-lb{position:fixed;inset:0;background:rgba(10,18,32,.86);display:flex;align-items:center;justify-content:center;
-  padding:24px;z-index:50}
-.wtc-lb img{max-width:100%;max-height:100%;border-radius:12px;background:#fff}
-.wtc-lb-x{position:absolute;top:14px;right:16px;width:40px;height:40px;border-radius:50%;border:none;
-  background:rgba(255,255,255,.9);color:#15233b;font-size:22px;line-height:1}
 .wtc-foot{flex:none;text-align:center;font-size:10px;color:var(--wtc-muted);padding:0 8px 7px;background:#fff}
 .wtc-foot b{font-weight:700;letter-spacing:.8px;color:var(--wtc-ink)}
 
@@ -63,43 +52,6 @@ const CSS = `
 .wtc-footer-s{font-size:11px;color:var(--wtc-muted);margin-top:4px}
 @media (min-width:721px){ .wtc-title{font-size:19px} .wtc-page{padding:20px 24px 8px} }
 `
-
-// ปลายทางของปุ่มติดต่อ — ชนิดปุ่มมาจากข้อมูล ไม่ได้ฝังไว้ในโค้ดว่าต้องเป็นช่องทางไหน
-export function buttonHref(b) {
-  const v = String(b?.url || '').trim()
-  if (b?.kind === 'phone') return v ? `tel:${v.replace(/[^\d+]/g, '')}` : ''
-  if (b?.kind === 'email') return v ? `mailto:${v}` : ''
-  if (!v) return ''
-  // คนกรอกมักวาง "line.me/..." มาเฉยๆ ไม่มี https:// — เติมให้ ไม่งั้นเบราว์เซอร์จะคิดว่าเป็น path ในเว็บเรา
-  return /^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`
-}
-
-function ContactButtons({ buttons, onImage }) {
-  if (!buttons?.length) return null
-  return (
-    <div className="wtc-cta">
-      {buttons.map(b => {
-        const style = {
-          background: b.bg_color, color: b.text_color,
-          borderColor: String(b.bg_color || '').toUpperCase() === '#FFFFFF' ? b.text_color : b.bg_color,
-        }
-        const inner = (
-          <>
-            {b.kind === 'image' && b.image_url && <img src={b.image_url} alt="" />}
-            {b.label}
-          </>
-        )
-        const href = buttonHref(b)
-        // รูปที่ไม่ได้ใส่ลิงก์ = กดแล้วขยายดู (ใช้กับ QR code ที่ต้องให้ลูกค้าสแกน)
-        if (b.kind === 'image' && !href) {
-          return <button key={b.id} style={style} onClick={() => onImage(b.image_url)}>{inner}</button>
-        }
-        if (!href) return <button key={b.id} style={style} disabled>{inner}</button>
-        return <a key={b.id} href={href} style={style} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer">{inner}</a>
-      })}
-    </div>
-  )
-}
 
 export function CatalogStateMessage({ title, detail }) {
   return (
@@ -118,12 +70,10 @@ export function CatalogStateMessage({ title, detail }) {
   )
 }
 
-export default function CatalogGalleryView({ catalog, images, buttons = [], logoSrc = '/worldtech-logo.png', mobile = false }) {
+export default function CatalogGalleryView({ catalog, images, logoSrc = '/worldtech-logo.png', mobile = false }) {
   const viewerRef = useRef(null)
   const [page, setPage] = useState(0)
-  const [lightbox, setLightbox] = useState('')
   const total = images.length
-  const cta = buttons.filter(b => b.is_visible !== false && (b.label || b.image_url))
 
   // อ่านหน้าปัจจุบันจากตำแหน่ง scroll จริง ไม่ได้เก็บ state คู่ขนาน
   // เพราะผู้ใช้เลื่อนเองด้วยนิ้วได้ตลอด ถ้าเก็บแยกจะเพี้ยนจากของจริงทันที
@@ -178,10 +128,8 @@ export default function CatalogGalleryView({ catalog, images, buttons = [], logo
               <div className="wtc-state-s">ทีมงานกำลังจัดเตรียมอยู่ ติดต่อทีมขายเพื่อสอบถามข้อมูลเพิ่มเติมได้เลย</div>
             </div>
           </div>
-          <ContactButtons buttons={cta} onImage={setLightbox} />
           <div className="wtc-foot"><b>WORLDTECH</b> · Official product catalog by Worldtech</div>
         </div>
-        {lightbox && <Lightbox src={lightbox} onClose={() => setLightbox('')} />}
       </div>
     )
   }
@@ -213,19 +161,9 @@ export default function CatalogGalleryView({ catalog, images, buttons = [], logo
           </div>
           <button className="wtc-nav" onClick={() => goTo(page + 1)} disabled={page >= total - 1} aria-label="หน้าถัดไป">›</button>
         </div>
-        <ContactButtons buttons={cta} onImage={setLightbox} />
         <div className="wtc-foot"><b>WORLDTECH</b> · Official product catalog by Worldtech</div>
       </div>
-      {lightbox && <Lightbox src={lightbox} onClose={() => setLightbox('')} />}
     </div>
   )
 }
 
-function Lightbox({ src, onClose }) {
-  return (
-    <div className="wtc-lb" onClick={onClose}>
-      <button className="wtc-lb-x" onClick={onClose} aria-label="ปิด">×</button>
-      <img src={src} alt="" onClick={e => e.stopPropagation()} />
-    </div>
-  )
-}

@@ -3,9 +3,7 @@ import {
   fetchCatalog, updateCatalog, listCatalogImages, uploadCatalogImage, updateCatalogImage,
   softDeleteCatalogImage, setCatalogCover, reorderCatalogImages, fetchCatalogMonthlyViews,
   isValidSlug, catalogPublicUrl, CATALOG_STATUS, CATALOG_ACCEPT, MAX_CATALOG_IMAGE_SIZE, MAX_CATALOG_PDF_SIZE, isPdf,
-  resolveCatalogButtons, listCatalogButtons, addCatalogButton, deleteCatalogButton,
 } from '../lib/api'
-import CatalogButtonsEditor from './CatalogButtonsEditor'
 import { pdfToImageFiles } from '../lib/pdfToImages'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
@@ -52,8 +50,6 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const [cat, setCat] = useState(null)
   const [images, setImages] = useState([])
   const [months, setMonths] = useState([])
-  // ปุ่มติดต่อที่หน้าลูกค้าจะเห็นจริง (ของแคตตาล็อกนี้ ถ้าไม่มีก็ชุดกลาง) — ใช้ทั้งพรีวิวและบอกสถานะ
-  const [btnState, setBtnState] = useState({ buttons: [], usingShared: true })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -66,11 +62,10 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const load = async () => {
     setLoading(true)
     try {
-      const [c, imgs, mv, bs] = await Promise.all([
+      const [c, imgs, mv] = await Promise.all([
         fetchCatalog(catalogId), listCatalogImages(catalogId), fetchCatalogMonthlyViews(catalogId, 12),
-        resolveCatalogButtons(catalogId),
       ])
-      setCat(c); setImages(imgs); setMonths(mv); setBtnState(bs); setDirty(false)
+      setCat(c); setImages(imgs); setMonths(mv); setDirty(false)
     } catch (e) { toast('โหลดแคตตาล็อกไม่สำเร็จ: ' + e.message, 'error') }
     finally { setLoading(false) }
   }
@@ -197,29 +192,6 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
     catch (e) { toast('จัดลำดับไม่สำเร็จ: ' + e.message, 'error'); load() }
   }
 
-  // "ตั้งปุ่มเอง" = คัดลอกชุดกลางมาเป็นของแคตตาล็อกนี้ ให้เริ่มจากของที่มีอยู่แล้ว ไม่ใช่หน้าว่าง
-  const useOwnButtons = async () => {
-    try {
-      const shared = await listCatalogButtons(null)
-      for (const [i, b] of shared.entries()) {
-        await addCatalogButton(catalogId, {
-          label: b.label, kind: b.kind, url: b.url, image_url: b.image_url,
-          bg_color: b.bg_color, text_color: b.text_color, is_visible: b.is_visible, display_order: i,
-        })
-      }
-      if (!shared.length) await addCatalogButton(catalogId, { label: '', kind: 'link', display_order: 0 })
-      setBtnState(await resolveCatalogButtons(catalogId))
-    } catch (e) { toast('ตั้งปุ่มเองไม่สำเร็จ: ' + e.message, 'error') }
-  }
-
-  const backToShared = async () => {
-    if (!(await confirm('กลับไปใช้ปุ่มชุดกลาง? ปุ่มที่ตั้งไว้เฉพาะแคตตาล็อกนี้จะถูกลบ'))) return
-    try {
-      for (const b of await listCatalogButtons(catalogId)) await deleteCatalogButton(b)
-      setBtnState(await resolveCatalogButtons(catalogId))
-    } catch (e) { toast('เปลี่ยนไม่สำเร็จ: ' + e.message, 'error') }
-  }
-
   if (loading || !cat) {
     return <div className="scroll-view"><div className="empty-state">{t('กำลังโหลด...')}</div></div>
   }
@@ -231,7 +203,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
 
   // ใช้ "scroll-view" ไม่ใช่ "list-view" — App.css มีกฎ .content-area:has(>.list-view){overflow:hidden}
   // ที่ตั้งใจให้หน้าแบบตารางเลื่อนข้างในตารางเอง หน้านี้ไม่มีตาราง ถ้าใช้ list-view เนื้อหาที่เกินจอ
-  // จะถูกตัดทิ้งโดยที่เลื่อนลงไปดูไม่ได้เลย (พาเนลปุ่มติดต่อหายไปทั้งพาเนล)
+  // จะถูกตัดทิ้งโดยที่เลื่อนลงไปดูไม่ได้เลย
   return (
     <div className="scroll-view">
       <style>{LAYOUT_CSS}</style>
@@ -266,7 +238,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
               <button className="modal-close" onClick={() => setShowFull(false)}>×</button>
             </div>
             <div className="modal-body" style={{ padding: 0, maxHeight: '78vh', overflowY: 'auto' }}>
-              <CatalogGalleryView catalog={previewCatalog} images={previewImages} buttons={btnState.buttons} />
+              <CatalogGalleryView catalog={previewCatalog} images={previewImages} />
             </div>
           </div>
         </div>
@@ -318,9 +290,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
           )) : <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ยังไม่มีคนเปิดดู')}</div>}
         </Panel>
 
-        {/* ===== กลาง: จัดการรูป + ปุ่มติดต่อ ซ้อนกันในคอลัมน์เดียว =====
-             ต้องห่อเป็นกล่องเดียว ไม่ใช่วาง grid-column เอง — พอวางเองแล้ว auto-placement
-             จะดันพาเนลพรีวิวหล่นไปแถวสอง กลายเป็นอยู่ล่างสุดแทนที่จะอยู่ขวาบน */}
+        {/* ===== กลาง: จัดการรูป ===== */}
         <div className="cb-col">
         <Panel
           title={`${t('รูปในแคตตาล็อก')} (${images.length})`}
@@ -388,24 +358,6 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
           ))}
         </Panel>
 
-        {canManage && (
-          <Panel
-            title={t('ปุ่มติดต่อ')}
-            right={btnState.usingShared
-              ? <button className="btn btn-outline btn-xs" onClick={useOwnButtons}>{t('ตั้งปุ่มเฉพาะแคตตาล็อกนี้')}</button>
-              : <button className="btn btn-outline btn-xs" onClick={backToShared}>{t('กลับไปใช้ปุ่มชุดกลาง')}</button>}
-          >
-            <div style={{ fontSize: 11, color: 'var(--text-light)', marginBottom: 10, lineHeight: 1.7 }}>
-              {btnState.usingShared
-                ? t('ตอนนี้ใช้ "ปุ่มชุดกลาง" ที่ใช้ร่วมกับแคตตาล็อกอื่น — แก้ที่นี่จะเปลี่ยนทุกแคตตาล็อกที่ใช้ชุดกลาง')
-                : t('แคตตาล็อกนี้ใช้ปุ่มของตัวเอง ไม่เกี่ยวกับชุดกลางแล้ว')}
-            </div>
-            <CatalogButtonsEditor
-              catalogId={btnState.usingShared ? null : catalogId}
-              onChanged={(rows) => setBtnState(s => ({ ...s, buttons: rows }))}
-            />
-          </Panel>
-        )}
         </div>
 
         {/* ===== ขวา: พรีวิวมือถือ ===== */}
@@ -414,7 +366,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
             {t('นี่คือสิ่งที่ลูกค้าจะเห็น — อัปเดตตามที่แก้ทันที (ยังไม่ต้องบันทึกก็เห็น)')}
           </div>
           <div className="cb-preview-frame">
-            <CatalogGalleryView catalog={previewCatalog} images={previewImages} buttons={btnState.buttons} mobile />
+            <CatalogGalleryView catalog={previewCatalog} images={previewImages} mobile />
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
             <button className="btn btn-outline btn-sm" style={{ flex: 1 }} onClick={() => setShowFull(true)}>{t('ดูเต็มหน้าจอ')}</button>
