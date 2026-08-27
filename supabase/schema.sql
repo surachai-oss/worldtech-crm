@@ -2570,3 +2570,58 @@ returns table (catalog_id uuid, catalog_name text, month text, views bigint) as 
 $$ language sql stable set search_path = public;
 
 grant execute on function catalog_view_report(date, date) to authenticated;
+
+-- ===== ปุ่มติดต่อของแคตตาล็อก =====
+-- ตั้งใจไม่ฟิกว่าต้องเป็น LINE/เบอร์/อีเมล — ทีมออกแบบปุ่มเองได้ทั้งข้อความ ปลายทาง สี และรูป
+-- วันที่เปลี่ยนช่องทาง (ย้าย LINE OA, เปลี่ยนเบอร์, เพิ่ม TikTok) จะได้แก้ในหน้าจอ ไม่ต้องแก้โค้ด
+--
+-- catalog_id เป็น null ได้ = "ชุดกลาง" ใช้กับทุกแคตตาล็อกที่ไม่ได้ตั้งปุ่มของตัวเอง
+-- แคตตาล็อกไหนตั้งปุ่มเอง จะใช้ชุดของตัวเองแทนชุดกลางทั้งชุด (ไม่ผสมกัน เพราะผสมแล้วเดายาก)
+create table if not exists catalog_buttons (
+  id            uuid primary key default gen_random_uuid(),
+  catalog_id    uuid references catalogs(id) on delete cascade,
+  label         text not null,
+  kind          text not null default 'link',   -- link | phone | email | image
+  url           text,                            -- link: URL / phone: เบอร์ / email: อีเมล / image: ลิงก์ตอนกด (ไม่ใส่ก็ได้)
+  image_url     text,                            -- kind = image เช่น QR code ของ LINE
+  image_path    text,
+  bg_color      text not null default '#1B76FF',
+  text_color    text not null default '#FFFFFF',
+  display_order integer not null default 0,
+  is_visible    boolean not null default true,
+  created_at    timestamptz default now(),
+  updated_at    timestamptz default now()
+);
+create index if not exists catalog_buttons_catalog_idx on catalog_buttons(catalog_id, display_order);
+
+do $$ begin
+  alter table catalog_buttons add constraint catalog_buttons_kind_valid
+    check (kind in ('link', 'phone', 'email', 'image'));
+exception when duplicate_object then null; end $$;
+
+drop trigger if exists trg_catalog_buttons_updated on catalog_buttons;
+create trigger trg_catalog_buttons_updated before update on catalog_buttons
+  for each row execute function set_updated_at();
+
+alter table catalog_buttons enable row level security;
+
+drop policy if exists "catalog_buttons read" on catalog_buttons;
+create policy "catalog_buttons read" on catalog_buttons for select using (auth.role() = 'authenticated');
+
+drop policy if exists "catalog_buttons write" on catalog_buttons;
+create policy "catalog_buttons write" on catalog_buttons for all
+  using (catalog_can_manage()) with check (catalog_can_manage());
+
+-- เขียนลำดับปุ่มใหม่ทั้งชุด — เหมือน catalog_reorder_images แต่รับชุดกลาง (catalog_id เป็น null) ได้ด้วย
+create or replace function catalog_reorder_buttons(p_ids uuid[]) returns void as $$
+begin
+  if not catalog_can_manage() then raise exception 'ไม่มีสิทธิ์แก้ไขแคตตาล็อก'; end if;
+
+  update catalog_buttons b
+     set display_order = pos.ord
+    from (select unnest(p_ids) as id, generate_subscripts(p_ids, 1) as ord) pos
+   where b.id = pos.id;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+grant execute on function catalog_reorder_buttons(uuid[]) to authenticated;

@@ -3,7 +3,9 @@ import {
   fetchCatalog, updateCatalog, listCatalogImages, uploadCatalogImage, updateCatalogImage,
   softDeleteCatalogImage, setCatalogCover, reorderCatalogImages, fetchCatalogMonthlyViews,
   isValidSlug, catalogPublicUrl, CATALOG_STATUS, CATALOG_ACCEPT, MAX_CATALOG_IMAGE_SIZE, MAX_CATALOG_PDF_SIZE, isPdf,
+  resolveCatalogButtons, listCatalogButtons, addCatalogButton, deleteCatalogButton,
 } from '../lib/api'
+import CatalogButtonsEditor from './CatalogButtonsEditor'
 import { pdfToImageFiles } from '../lib/pdfToImages'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
@@ -30,11 +32,14 @@ const LAYOUT_CSS = `
 .cb-preview-frame{border:1px solid var(--border);border-radius:12px;overflow:hidden;height:560px;background:#f5f7fa}
 .cb-drop{border:2px dashed var(--border);border-radius:10px;padding:22px 14px;text-align:center;color:var(--text-light);font-size:13px;cursor:pointer}
 .cb-drop.over{border-color:var(--yellow);background:#fffdf3;color:var(--text)}
+/* พาเนลปุ่มติดต่อวางต่อจากพาเนลรูปในคอลัมน์กลาง — เฉพาะตอนที่มี 3 คอลัมน์จริงเท่านั้น
+   จอแคบ grid เหลือคอลัมน์เดียว ถ้าฟิก grid-column ไว้จะไปสร้างคอลัมน์ผีขึ้นมา */
+@media (min-width:1100px){ .cb-panel.cb-mid{grid-column:2 / 3} }
 `
 
-function Panel({ title, right, children, style }) {
+function Panel({ title, right, children, style, className = '' }) {
   return (
-    <div className="cb-panel" style={style}>
+    <div className={`cb-panel ${className}`.trim()} style={style}>
       <div className="cb-panel-h"><span>{title}</span>{right}</div>
       <div className="cb-panel-b">{children}</div>
     </div>
@@ -49,6 +54,8 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const [cat, setCat] = useState(null)
   const [images, setImages] = useState([])
   const [months, setMonths] = useState([])
+  // ปุ่มติดต่อที่หน้าลูกค้าจะเห็นจริง (ของแคตตาล็อกนี้ ถ้าไม่มีก็ชุดกลาง) — ใช้ทั้งพรีวิวและบอกสถานะ
+  const [btnState, setBtnState] = useState({ buttons: [], usingShared: true })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -61,10 +68,11 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
   const load = async () => {
     setLoading(true)
     try {
-      const [c, imgs, mv] = await Promise.all([
+      const [c, imgs, mv, bs] = await Promise.all([
         fetchCatalog(catalogId), listCatalogImages(catalogId), fetchCatalogMonthlyViews(catalogId, 12),
+        resolveCatalogButtons(catalogId),
       ])
-      setCat(c); setImages(imgs); setMonths(mv); setDirty(false)
+      setCat(c); setImages(imgs); setMonths(mv); setBtnState(bs); setDirty(false)
     } catch (e) { toast('โหลดแคตตาล็อกไม่สำเร็จ: ' + e.message, 'error') }
     finally { setLoading(false) }
   }
@@ -191,6 +199,29 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
     catch (e) { toast('จัดลำดับไม่สำเร็จ: ' + e.message, 'error'); load() }
   }
 
+  // "ตั้งปุ่มเอง" = คัดลอกชุดกลางมาเป็นของแคตตาล็อกนี้ ให้เริ่มจากของที่มีอยู่แล้ว ไม่ใช่หน้าว่าง
+  const useOwnButtons = async () => {
+    try {
+      const shared = await listCatalogButtons(null)
+      for (const [i, b] of shared.entries()) {
+        await addCatalogButton(catalogId, {
+          label: b.label, kind: b.kind, url: b.url, image_url: b.image_url,
+          bg_color: b.bg_color, text_color: b.text_color, is_visible: b.is_visible, display_order: i,
+        })
+      }
+      if (!shared.length) await addCatalogButton(catalogId, { label: '', kind: 'link', display_order: 0 })
+      setBtnState(await resolveCatalogButtons(catalogId))
+    } catch (e) { toast('ตั้งปุ่มเองไม่สำเร็จ: ' + e.message, 'error') }
+  }
+
+  const backToShared = async () => {
+    if (!(await confirm('กลับไปใช้ปุ่มชุดกลาง? ปุ่มที่ตั้งไว้เฉพาะแคตตาล็อกนี้จะถูกลบ'))) return
+    try {
+      for (const b of await listCatalogButtons(catalogId)) await deleteCatalogButton(b)
+      setBtnState(await resolveCatalogButtons(catalogId))
+    } catch (e) { toast('เปลี่ยนไม่สำเร็จ: ' + e.message, 'error') }
+  }
+
   if (loading || !cat) {
     return <div className="list-view"><div className="empty-state">{t('กำลังโหลด...')}</div></div>
   }
@@ -234,7 +265,7 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
               <button className="modal-close" onClick={() => setShowFull(false)}>×</button>
             </div>
             <div className="modal-body" style={{ padding: 0, maxHeight: '78vh', overflowY: 'auto' }}>
-              <CatalogGalleryView catalog={previewCatalog} images={previewImages} />
+              <CatalogGalleryView catalog={previewCatalog} images={previewImages} buttons={btnState.buttons} />
             </div>
           </div>
         </div>
@@ -353,13 +384,34 @@ export default function CatalogBuilder({ catalogId, perm, currentUser, onBack })
           ))}
         </Panel>
 
+        {/* ===== ปุ่มติดต่อ — อยู่คอลัมน์กลางต่อจากรูป เพราะเป็นของที่แก้บ่อยพอๆ กัน ===== */}
+        {canManage && (
+          <Panel
+            title={t('ปุ่มติดต่อ')}
+            className="cb-mid"
+            right={btnState.usingShared
+              ? <button className="btn btn-outline btn-xs" onClick={useOwnButtons}>{t('ตั้งปุ่มเฉพาะแคตตาล็อกนี้')}</button>
+              : <button className="btn btn-outline btn-xs" onClick={backToShared}>{t('กลับไปใช้ปุ่มชุดกลาง')}</button>}
+          >
+            <div style={{ fontSize: 11, color: 'var(--text-light)', marginBottom: 10, lineHeight: 1.7 }}>
+              {btnState.usingShared
+                ? t('ตอนนี้ใช้ "ปุ่มชุดกลาง" ที่ใช้ร่วมกับแคตตาล็อกอื่น — แก้ที่นี่จะเปลี่ยนทุกแคตตาล็อกที่ใช้ชุดกลาง')
+                : t('แคตตาล็อกนี้ใช้ปุ่มของตัวเอง ไม่เกี่ยวกับชุดกลางแล้ว')}
+            </div>
+            <CatalogButtonsEditor
+              catalogId={btnState.usingShared ? null : catalogId}
+              onChanged={(rows) => setBtnState(s => ({ ...s, buttons: rows }))}
+            />
+          </Panel>
+        )}
+
         {/* ===== ขวา: พรีวิวมือถือ ===== */}
         <Panel title={t('พรีวิวบนมือถือ')} style={{ position: 'sticky', top: 0 }}>
           <div style={{ fontSize: 11, color: 'var(--text-light)', marginBottom: 8 }}>
             {t('นี่คือสิ่งที่ลูกค้าจะเห็น — อัปเดตตามที่แก้ทันที (ยังไม่ต้องบันทึกก็เห็น)')}
           </div>
           <div className="cb-preview-frame">
-            <CatalogGalleryView catalog={previewCatalog} images={previewImages} mobile />
+            <CatalogGalleryView catalog={previewCatalog} images={previewImages} buttons={btnState.buttons} mobile />
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
             <button className="btn btn-outline btn-sm" style={{ flex: 1 }} onClick={() => setShowFull(true)}>{t('ดูเต็มหน้าจอ')}</button>

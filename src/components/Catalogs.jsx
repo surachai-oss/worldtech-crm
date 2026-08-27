@@ -7,6 +7,7 @@ import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import CatalogLinkModal from './CatalogLinkModal'
 import CatalogViewReport from './CatalogViewReport'
+import CatalogButtonsEditor from './CatalogButtonsEditor'
 
 // รายการแคตตาล็อกทั้งหมด — ทุกคนใน CRM เห็นทุกอัน เพราะเป็นสื่อการตลาดร่วม ยิ่งใช้ซ้ำยิ่งดี
 // ฝ่ายบัญชีเห็นแต่แก้ไม่ได้ (บังคับที่ RLS ฝั่งนี้แค่ซ่อนปุ่ม)
@@ -105,6 +106,7 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
   const [showNew, setShowNew] = useState(false)
   const [linkFor, setLinkFor] = useState(null)
   const [showReport, setShowReport] = useState(false)
+  const [showButtons, setShowButtons] = useState(false)
   const canManage = !perm?.isFinance
 
   const load = async () => {
@@ -156,6 +158,7 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-outline" onClick={() => setShowReport(true)}>{t('รายงานยอดเปิดดู')}</button>
+          {canManage && <button className="btn btn-outline" onClick={() => setShowButtons(true)}>{t('ปุ่มติดต่อกลาง')}</button>}
           {canManage && <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ {t('สร้างแคตตาล็อก')}</button>}
         </div>
       </div>
@@ -163,6 +166,25 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
       {showNew && <NewCatalogModal existingSlugs={rows.map(r => r.catalog_slug)} onClose={() => setShowNew(false)} onSave={onCreate} />}
       {linkFor && <CatalogLinkModal catalog={linkFor} onClose={() => setLinkFor(null)} />}
       {showReport && <CatalogViewReport onClose={() => setShowReport(false)} />}
+      {showButtons && (
+        <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) setShowButtons(false) }}>
+          <div className="modal" style={{ maxWidth: 700, width: '95vw' }}>
+            <div className="modal-header">
+              <div className="modal-title">{t('ปุ่มติดต่อกลาง')}</div>
+              <button className="modal-close" onClick={() => setShowButtons(false)}>×</button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '76vh', overflowY: 'auto' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 12, lineHeight: 1.7 }}>
+                {t('ปุ่มชุดนี้จะขึ้นในทุกแคตตาล็อกที่ไม่ได้ตั้งปุ่มของตัวเอง — เปลี่ยนที่นี่ที่เดียว มีผลทุกลิงก์ที่ส่งไปแล้วทันที')}
+              </div>
+              <CatalogButtonsEditor catalogId={null} />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowButtons(false)}>{t('ปิด')}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="card list-card">
         <div className="table-wrap">

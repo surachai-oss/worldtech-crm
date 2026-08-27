@@ -56,5 +56,5 @@ export default function PublicCatalogPage() {
       detail="ระบบขัดข้องชั่วคราว ลองรีเฟรชอีกครั้ง หรือติดต่อทีมขายที่ส่งลิงก์ให้คุณ" />
   }
 
-  return <CatalogGalleryView catalog={data.catalog} images={data.images} />
+  return <CatalogGalleryView catalog={data.catalog} images={data.images} buttons={data.buttons || []} />
 }
