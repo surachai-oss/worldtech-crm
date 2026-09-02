@@ -1810,6 +1810,9 @@ create index if not exists idx_product_cost_history_product on product_cost_hist
 create index if not exists idx_product_cost_history_changed_at on product_cost_history (changed_at desc);
 
 -- บันทึกอัตโนมัติทุกครั้งที่ต้นทุนถูกเพิ่ม/แก้ไข ไม่ว่าจะแก้จากฟอร์มหรือนำเข้าไฟล์ (ดักที่ระดับตาราง เลี่ยงไม่ได้)
+-- ใช้ array_append ไม่ใช่ตัวดำเนินการ || เพราะ "array || 'ข้อความ'" กำกวมสำหรับ Postgres
+-- มันเลือกตีความเป็น array || array แล้วพยายามอ่านข้อความนั้นเป็น array literal จึงพังด้วย
+-- "malformed array literal" — เจอตอนนำเข้าไฟล์ต้นทุนที่ไปทับของเดิม (เส้นทาง UPDATE)
 create or replace function log_product_cost_change() returns trigger as $$
 declare
   v_p       products%rowtype;
@@ -1817,16 +1820,16 @@ declare
   v_changed text[] := '{}';
 begin
   if TG_OP = 'UPDATE' then
-    if new.cost_price               is distinct from old.cost_price               then v_changed := v_changed || 'ต้นทุน/ชิ้น'; end if;
-    if new.normal_selling_price     is distinct from old.normal_selling_price     then v_changed := v_changed || 'ราคาขายปกติ'; end if;
-    if new.target_margin_percent    is distinct from old.target_margin_percent    then v_changed := v_changed || 'Margin เป้าหมาย'; end if;
-    if new.minimum_margin_percent   is distinct from old.minimum_margin_percent   then v_changed := v_changed || 'Margin ขั้นต่ำ'; end if;
-    if new.floor_price              is distinct from old.floor_price              then v_changed := v_changed || 'Floor Price'; end if;
-    if new.shipping_buffer_percent  is distinct from old.shipping_buffer_percent  then v_changed := v_changed || 'Shipping Buffer'; end if;
-    if new.provision_buffer_percent is distinct from old.provision_buffer_percent then v_changed := v_changed || 'Provision Buffer'; end if;
-    if new.default_shipping_cost    is distinct from old.default_shipping_cost    then v_changed := v_changed || 'ค่าขนส่งมาตรฐาน'; end if;
-    if new.status                   is distinct from old.status                   then v_changed := v_changed || 'สถานะ'; end if;
-    if new.finance_remark           is distinct from old.finance_remark           then v_changed := v_changed || 'หมายเหตุจากบัญชี'; end if;
+    if new.cost_price               is distinct from old.cost_price               then v_changed := array_append(v_changed, 'ต้นทุน/ชิ้น'); end if;
+    if new.normal_selling_price     is distinct from old.normal_selling_price     then v_changed := array_append(v_changed, 'ราคาขายปกติ'); end if;
+    if new.target_margin_percent    is distinct from old.target_margin_percent    then v_changed := array_append(v_changed, 'Margin เป้าหมาย'); end if;
+    if new.minimum_margin_percent   is distinct from old.minimum_margin_percent   then v_changed := array_append(v_changed, 'Margin ขั้นต่ำ'); end if;
+    if new.floor_price              is distinct from old.floor_price              then v_changed := array_append(v_changed, 'Floor Price'); end if;
+    if new.shipping_buffer_percent  is distinct from old.shipping_buffer_percent  then v_changed := array_append(v_changed, 'Shipping Buffer'); end if;
+    if new.provision_buffer_percent is distinct from old.provision_buffer_percent then v_changed := array_append(v_changed, 'Provision Buffer'); end if;
+    if new.default_shipping_cost    is distinct from old.default_shipping_cost    then v_changed := array_append(v_changed, 'ค่าขนส่งมาตรฐาน'); end if;
+    if new.status                   is distinct from old.status                   then v_changed := array_append(v_changed, 'สถานะ'); end if;
+    if new.finance_remark           is distinct from old.finance_remark           then v_changed := array_append(v_changed, 'หมายเหตุจากบัญชี'); end if;
     -- กดบันทึกโดยไม่ได้แก้อะไรเลย ไม่ต้องเก็บเป็นประวัติ กันรายการรกจนหาของจริงไม่เจอ
     if array_length(v_changed, 1) is null then return new; end if;
   end if;
@@ -2087,6 +2090,7 @@ $$ language plpgsql;
 
 -- บันทึกทุกการแก้ไขออเดอร์ลง audit_logs อัตโนมัติ — ดักที่ระดับตาราง แอปจะลืมเขียนไม่ได้
 -- (การยกเลิกมี log ของตัวเองอยู่แล้ว จึงข้ามกรณีที่สถานะเปลี่ยน)
+-- ใช้ array_append ด้วยเหตุผลเดียวกับ log_product_cost_change (ดูคำอธิบายที่นั่น)
 create or replace function log_order_edit() returns trigger as $$
 declare
   v_name    text;
@@ -2095,18 +2099,18 @@ begin
   if new.status is distinct from old.status then return new; end if;
 
   if new.value is distinct from old.value then
-    v_changed := v_changed || ('ยอดรวม ' || coalesce(old.value, 0)::text || ' → ' || coalesce(new.value, 0)::text);
+    v_changed := array_append(v_changed, ('ยอดรวม ' || coalesce(old.value, 0)::text || ' → ' || coalesce(new.value, 0)::text));
   end if;
-  if new.shipping_address is distinct from old.shipping_address then v_changed := v_changed || 'ที่อยู่จัดส่ง'; end if;
-  if new.shipping_contact_name is distinct from old.shipping_contact_name then v_changed := v_changed || 'ชื่อผู้รับ'; end if;
-  if new.shipping_contact_phone is distinct from old.shipping_contact_phone then v_changed := v_changed || 'เบอร์ผู้รับ'; end if;
-  if new.remark is distinct from old.remark then v_changed := v_changed || 'หมายเหตุ'; end if;
+  if new.shipping_address is distinct from old.shipping_address then v_changed := array_append(v_changed, 'ที่อยู่จัดส่ง'); end if;
+  if new.shipping_contact_name is distinct from old.shipping_contact_name then v_changed := array_append(v_changed, 'ชื่อผู้รับ'); end if;
+  if new.shipping_contact_phone is distinct from old.shipping_contact_phone then v_changed := array_append(v_changed, 'เบอร์ผู้รับ'); end if;
+  if new.remark is distinct from old.remark then v_changed := array_append(v_changed, 'หมายเหตุ'); end if;
   if new.discount_type is distinct from old.discount_type or new.discount_value is distinct from old.discount_value then
-    v_changed := v_changed || 'ส่วนลดท้ายบิล';
+    v_changed := array_append(v_changed, 'ส่วนลดท้ายบิล');
   end if;
   if new.company_tax_id is distinct from old.company_tax_id or new.company_address is distinct from old.company_address
      or new.company_phone is distinct from old.company_phone or new.company_email is distinct from old.company_email then
-    v_changed := v_changed || 'ข้อมูลบริษัทในออเดอร์';
+    v_changed := array_append(v_changed, 'ข้อมูลบริษัทในออเดอร์');
   end if;
 
   if array_length(v_changed, 1) is null then return new; end if;
