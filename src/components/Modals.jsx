@@ -478,16 +478,20 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
   const { t, lang } = useLanguage()
   // หมายเหตุตั้งต้นและเบอร์เซลล์ตั้งต้นมาจาก "ตั้งค่าเอกสาร" — แอดมินแก้ได้เองโดยไม่ต้อง deploy
   const tplQuot = useMemo(() => mergeDocumentTemplate(settings).quotation, [settings])
+  // ใบเก่าที่เปิดไว้ก่อนมีช่องนี้อาจไม่มีชื่อผู้เสนอราคาเก็บไว้ — เติมชื่อคนที่กำลังแก้ให้ ดีกว่าปล่อยเส้นลงชื่อว่างเปล่า
+  // แต่ถ้ามีชื่ออยู่แล้วต้องไม่ทับ เพราะนั่นคือคนที่ออกเอกสารฉบับนั้นจริง
+  const lockedProposer = initial?.proposer_name || currentUserName || ''
   const [f, setF] = useState(() => {
     const base = {
-      company_id: defaultCompanyId || '', subject: '', status: 'Draft', sale_phone: tplQuot.defaultSalePhone, proposer_name: currentUserName || '',
+      company_id: defaultCompanyId || '', subject: '', status: 'Draft', sale_phone: tplQuot.defaultSalePhone, proposer_name: lockedProposer,
       quot_date: new Date().toISOString().split('T')[0], expire_date: '', note: tplQuot.defaultNote, deal_id: null,
       credit_term: '', payment_due_date: '', payment_status: 'ยังไม่ชำระ', discount_type: '', discount_value: 0
     }
     if (!initial) return base
     // items เป็นแค่ค่าตั้งต้นสำหรับ seed ไม่ใช่คอลัมน์ในตาราง quotations, company/product เป็น relation ที่ join มาตอน select (ไม่ใช่คอลัมน์จริง) — ต้องตัดออกก่อนเก็บใน f ไม่งั้น update จะพังเพราะ Supabase หาคอลัมน์ชื่อนี้ไม่เจอ
     const { items: _seedItems, company: _company, product: _product, ...rest } = initial
-    return { ...base, ...rest }
+    // บังคับ proposer_name ทับหลัง spread — ถ้าใบเก่าเก็บค่าว่างไว้ rest จะทับค่าที่เติมให้ใน base จนกลายเป็นว่างอีก
+    return { ...base, ...rest, proposer_name: lockedProposer }
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
   // สลับใบเสนอราคาแบบธรรมดา/เครดิต — เป็น state แยกจาก f.credit_term เพื่อให้กดปุ่ม "เครดิต" แล้วเห็นช่องกรอกได้ทันทีก่อนเลือกจำนวนวัน
@@ -650,8 +654,15 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
       </div>
       <div className="form-row">
         <Field label={t('เบอร์ติดต่อเซลล์')}><input className="form-control" value={f.sale_phone || ''} onChange={set('sale_phone')} placeholder="08x-xxx-xxxx" /></Field>
-        <Field label={t('ชื่อผู้เสนอราคา')}>
-          <input className="form-control" value={f.proposer_name || ''} onChange={set('proposer_name')} placeholder={t('ชื่อผู้ออกใบเสนอราคา — พิมพ์ไว้เหนือช่องลงชื่อตอนพิมพ์ ไม่ต้องเซ็นสด')} />
+        {/* ผู้เสนอราคาล็อกไว้กับคนที่เปิดใบนี้ แก้ไม่ได้ — ใบเสนอราคาเป็นเอกสารที่ผูกกับผู้รับผิดชอบ
+            ถ้าพิมพ์ชื่อคนอื่นได้ ชื่อเหนือเส้นลงชื่อจะไม่ตรงกับคนที่ออกเอกสารจริง */}
+        <Field label={t('ผู้เสนอราคา')}>
+          <div className="form-control" style={{ background: 'var(--gray-bg)', color: f.proposer_name ? 'inherit' : 'var(--text-light)' }}>
+            {f.proposer_name || t('— ไม่มีข้อมูลผู้เปิดใบนี้ —')}
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--text-light)', marginTop: 4 }}>
+            {t('ระบบใส่ชื่อผู้เปิดใบเสนอราคาให้อัตโนมัติ และแก้ไขไม่ได้')}
+          </div>
         </Field>
       </div>
       <Field label={t('หมายเหตุ')}><textarea className="form-control" rows={6} value={f.note || ''} onChange={set('note')} /></Field>

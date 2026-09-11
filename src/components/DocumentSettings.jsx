@@ -73,7 +73,7 @@ function Field({ label, hint, children }) {
   )
 }
 
-export default function DocumentSettings({ settings = {}, isAdmin, onSaved }) {
+export default function DocumentSettings({ settings = {}, isAdmin, onSaved, onBack }) {
   const { toast } = useUi()
   const [tpl, setTpl] = useState(() => mergeDocumentTemplate(settings))
   const [saving, setSaving] = useState(false)
@@ -158,6 +158,8 @@ export default function DocumentSettings({ settings = {}, isAdmin, onSaved }) {
 
       <div className="section-header">
         <div>
+          {/* หน้านี้ไม่มีรายการในเมนูด้านซ้าย เข้ามาจากปุ่มในหน้าใบเสนอราคา จึงต้องมีทางกลับในตัวเอง */}
+          {onBack && <button className="btn btn-outline btn-xs" onClick={onBack} style={{ marginBottom: 6 }}>← กลับไปใบเสนอราคา</button>}
           <div className="section-title">ตั้งค่าเอกสาร</div>
           <div className="ds-hint" style={{ marginTop: 2 }}>
             หัวกระดาษ โลโก้ เงื่อนไข และหมายเหตุตั้งต้นของใบเสนอราคา — แก้ที่นี่แล้วมีผลกับเอกสารที่พิมพ์ครั้งต่อไปทันที

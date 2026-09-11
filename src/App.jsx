@@ -184,7 +184,8 @@ function AppInner({ session }) {
         const items = rows.map(r => ({ product_id: r.product_id || '', description: r.description || '', quantity: r.quantity, unit_price: r.unit_price }))
         setModal({ type: 'quotation', payload: { initial: {
           company_id: quot.company_id, subject: quot.subject, note: quot.note, sale_phone: quot.sale_phone,
-          proposer_name: quot.proposer_name, credit_term: quot.credit_term || '', items
+          // ไม่ก็อป proposer_name — ใบใหม่เป็นของคนที่กดคัดลอก ชื่อเหนือเส้นลงชื่อต้องเป็นคนนั้น
+          credit_term: quot.credit_term || '', items
         } } })
         toast('คัดลอกข้อมูลแล้ว ตรวจสอบก่อนบันทึก', 'success')
       } catch (e) { toast('คัดลอกใบเสนอราคาไม่สำเร็จ: ' + e.message, 'error') }
@@ -439,7 +440,7 @@ function AppInner({ session }) {
             <Orders reloadKey={reloadKey} companies={data.companies} perm={perm} currentUser={currentUser} settings={settings} onAdd={actions.addOrder} onCancel={actions.cancelOrder} onChanged={reload} />
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
-          {view === 'document-settings' && isAdmin && <DocumentSettings settings={settings} isAdmin={isAdmin} onSaved={reloadSettings} />}
+          {view === 'document-settings' && isAdmin && <DocumentSettings settings={settings} isAdmin={isAdmin} onSaved={reloadSettings} onBack={() => nav('quotations')} />}
           {view === 'products' && <Products perm={perm} />}
           {view === 'catalogs' && <Catalogs perm={perm} currentUser={currentUser} onOpen={openCatalog} />}
           {view === 'catalog-builder' && currentCatalogId && (
