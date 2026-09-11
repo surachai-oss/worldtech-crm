@@ -1,5 +1,5 @@
 import { supabase } from '../supabaseClient'
-import { TEMPLATE_SETTING_KEY, LEGACY_COMPANY_KEYS } from './documentTemplate'
+import { TEMPLATE_SETTING_KEY, LEGACY_COMPANY_KEYS, documentLogoPath } from './documentTemplate'
 import { normalizeLeadSource, LEAD_SOURCE_UNKNOWN, LEAD_SOURCE_INVALID } from './leadOptions'
 import { toLocalDateStr } from './format'
 import { BACKCOVER_SETTING_KEY, mergeBackCover, parseBackCover } from './catalogBackCover'
@@ -1765,20 +1765,42 @@ export async function submitCatalogLead({ name, phone, interest, catalogName, ca
 // เก็บเป็น JSON ก้อนเดียวคีย์ DOCUMENT_TEMPLATE ในตาราง settings (RLS: อ่านได้ทุกคนที่ล็อกอิน เขียนได้เฉพาะ admin)
 // ค่าอื่นในเอกสารที่มาจากข้อมูลจริง (สินค้า ราคา ภาษี) ไม่ได้เก็บที่นี่ ยังคำนวณจากตารางเดิมเหมือนเดิม
 
-export async function saveDocumentTemplate(tpl) {
-  // เขียนคีย์ COMPANY_* แบบเก่ากลับไปด้วย ตอนนี้ไม่มีโค้ดในรีโปอ่านคีย์พวกนี้แล้ว (ทุกที่อ่านผ่าน mergeDocumentTemplate)
-  // แต่ mergeDocumentTemplate ยังใช้คีย์เก่าเป็นค่าถอยกลับ ถ้า DOCUMENT_TEMPLATE เสียหายหรือถูกลบ ระบบจะยังได้ข้อมูลบริษัทล่าสุด ไม่ใช่ของเมื่อปีที่แล้ว
-  const rows = [
-    { key: TEMPLATE_SETTING_KEY, value: JSON.stringify(tpl) },
-    ...Object.entries(LEGACY_COMPANY_KEYS).map(([field, key]) => ({ key, value: tpl.company?.[field] ?? '' })),
-  ]
-  const { error } = await supabase.from('settings').upsert(rows, { onConflict: 'key' })
-  if (error) throw error
-  return rows
+export const TEMPLATE_CONFLICT = 'TEMPLATE_CONFLICT'
+
+// previousRaw = ค่า DOCUMENT_TEMPLATE ที่หน้าจอโหลดมาตอนเปิด (null ถ้ายังไม่เคยบันทึก)
+// ใช้ทำ compare-and-swap: อัปเดตเฉพาะตอนที่ค่าในฐานข้อมูลยังเป็นก้อนเดิมที่เราเห็น
+// ถ้าแอดมินอีกคนบันทึกแซงไปก่อน แถวจะไม่ match แล้วได้ 0 rows — โยน TEMPLATE_CONFLICT ให้หน้าจอบอกผู้ใช้
+// แทนที่จะทับงานของคนอื่นเงียบๆ (ก่อนหน้านี้ใช้ upsert ตรงๆ คนบันทึกทีหลังชนะเสมอโดยไม่มีใครรู้)
+export async function saveDocumentTemplate(tpl, previousRaw = null) {
+  const value = JSON.stringify(tpl)
+
+  if (previousRaw == null) {
+    const { error } = await supabase.from('settings').insert({ key: TEMPLATE_SETTING_KEY, value })
+    // 23505 = ชนคีย์ซ้ำ แปลว่ามีคนบันทึกก้อนแรกไปแล้วระหว่างที่เราเปิดหน้าค้างไว้
+    if (error) throw (error.code === '23505' ? new Error(TEMPLATE_CONFLICT) : error)
+  } else {
+    const { data, error } = await supabase.from('settings').update({ value })
+      .eq('key', TEMPLATE_SETTING_KEY).eq('value', previousRaw).select('key')
+    if (error) throw error
+    if (!data || data.length === 0) throw new Error(TEMPLATE_CONFLICT)
+  }
+
+  // คีย์ COMPANY_* แบบเก่าเป็นแค่ค่าถอยกลับ ไม่ต้อง compare-and-swap — เขียนทับได้เลย
+  const legacy = Object.entries(LEGACY_COMPANY_KEYS).map(([field, key]) => ({ key, value: tpl.company?.[field] ?? '' }))
+  const { error: legacyError } = await supabase.from('settings').upsert(legacy, { onConflict: 'key' })
+  if (legacyError) throw legacyError
+  return value
 }
 
-// โลโก้บนหัวเอกสาร — เก็บใน bucket เดียวกับรูปแคตตาล็อก (public อยู่แล้ว) เพราะหน้าต่างพิมพ์
-// และ html2canvas ต้องโหลดรูปได้โดยไม่มี token ถ้าใช้ signed URL รูปจะหายเมื่อลิงก์หมดอายุ
+// ลบโลโก้เก่าที่ไม่มีใครอ้างถึงแล้ว เรียกหลังบันทึกสำเร็จหรือตอนอัปโหลดทับของที่ยังไม่ได้บันทึก
+// ล้มเหลวไม่เป็นไร ไฟล์ค้างใน storage ไม่กระทบการใช้งาน จึงไม่โยน error ออกไปกวนผู้ใช้
+export async function deleteDocumentLogo(url) {
+  const path = documentLogoPath(url, CATALOG_IMAGES_BUCKET)
+  if (!path) return false
+  const { error } = await supabase.storage.from(CATALOG_IMAGES_BUCKET).remove([path])
+  return !error
+}
+
 export async function uploadDocumentLogo(file) {
   if (file.size > MAX_CATALOG_IMAGE_SIZE) throw new Error('ไฟล์ใหญ่เกิน 10MB')
   const safeName = file.name.replace(/[^\w.-]/g, '_').slice(-80)

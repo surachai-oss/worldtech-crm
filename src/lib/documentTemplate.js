@@ -111,3 +111,16 @@ export function templateLogoUrl(tpl, origin = '') {
   if (/^https?:\/\//i.test(url)) return url
   return origin ? `${origin}${url.startsWith('/') ? '' : '/'}${url}` : url
 }
+
+// แปลง public URL ของโลโก้กลับเป็น path ใน storage — คืน null ถ้าไม่ใช่ไฟล์ที่หน้าตั้งค่าเอกสารอัปโหลดไว้
+// จำกัดเฉพาะโฟลเดอร์ document/ เพราะ bucket เดียวกันนี้เก็บรูปแคตตาล็อกด้วย เผลอลบข้ามกันไม่ได้
+export function documentLogoPath(url, bucket) {
+  if (typeof url !== 'string' || !bucket) return null
+  const marker = `/${bucket}/`
+  const i = url.indexOf(marker)
+  if (i === -1) return null
+  const path = url.slice(i + marker.length).split('?')[0]
+  // กัน path traversal จาก URL ที่ประดิษฐ์ขึ้นมา แม้จะต้องเป็นแอดมินถึงเรียกได้ก็ตาม
+  if (path.includes('..')) return null
+  return path.startsWith('document/') && path.length > 'document/'.length ? path : null
+}
