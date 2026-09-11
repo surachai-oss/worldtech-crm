@@ -141,7 +141,7 @@ function DocRequestForm({ order, existing, currentUser, isAdditional = false, on
           <div className="card-body" style={{ fontSize: 12.5, lineHeight: 1.7 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <b style={{ color: 'var(--navy)' }}>{t('พรีวิวคำขอ (ให้ลูกค้าเช็คข้อมูล)')}</b>
-              <button type="button" className="btn btn-outline btn-xs" onClick={() => printAccountingDocRequest(order, f)}>{t('ดาวน์โหลด / พิมพ์')}</button>
+              <button type="button" className="btn btn-outline btn-xs" onClick={() => printAccountingDocRequest(order, f, settings)}>{t('ดาวน์โหลด / พิมพ์')}</button>
             </div>
             <div>{t('ออเดอร์')}: <b>{order.order_no}</b> · {t('ลูกค้า')}: {order.customer_name || '-'}</div>
             <div>{t('ประเภทเอกสาร')}: {f.document_type || '-'} · {t('วิธีส่ง')}: {f.delivery_method || '-'}</div>
@@ -228,7 +228,7 @@ function DocRequestCard({ req, onEdit, onRequestMore }) {
 
 // ป็อปอัปหลักเปิดจากหน้า "ออเดอร์" — เซลล์ขอ/แก้ไขคำขอเอกสารบัญชี + ดู/ดาวน์โหลดเอกสารที่บัญชีออกให้ (แก้ไขไฟล์ไม่ได้)
 // ป็อปอัปเดียวจบ: เลือก "ต้องการ/ไม่ต้องการ" ด้านบน ถ้าต้องการฟอร์มจะกางออกในหน้าเดียวกัน
-export default function AccountingDocModal({ order, currentUser, onClose }) {
+export default function AccountingDocModal({ order, currentUser, settings = {}, onClose }) {
   const { toast } = useUi()
   const { t, lang } = useLanguage()
   const [requests, setRequests] = useState(null)

@@ -130,7 +130,7 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
         </div>
       </div>
       {detail && <OrderDetailModal order={detail.order} items={detail.items} onClose={() => setDetail(null)} onCancel={onCancel} />}
-      {docModalOrder && <AccountingDocModal order={docModalOrder} currentUser={currentUser} onClose={() => setDocModalOrder(null)} />}
+      {docModalOrder && <AccountingDocModal order={docModalOrder} currentUser={currentUser} settings={settings} onClose={() => setDocModalOrder(null)} />}
       {editOrder && (
         <OrderEditModal order={editOrder} currentUserName={currentUser?.name}
           onClose={() => setEditOrder(null)} onSaved={() => { setLocalBump(b => b + 1); onChanged?.() }} />

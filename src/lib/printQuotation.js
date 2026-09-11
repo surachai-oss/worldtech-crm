@@ -87,7 +87,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
         .topinfo { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:8px; }
         .company-block { display:flex; gap:8px; align-items:center; flex:1; min-width:0; }
         .company-block > div { min-width:0; }
-        .logo { height:40px; flex-shrink:0; }
+        .logo { height:40px; max-width:150px; object-fit:contain; flex-shrink:0; }
         .company-name { font-weight:700; font-size:15px; }
         .meta { font-size:12px; color:#4a5568; margin-top:2px; line-height:1.35; }
         .doc-meta { text-align:right; font-size:13px; flex-shrink:0; white-space:nowrap; }

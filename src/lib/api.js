@@ -1766,8 +1766,8 @@ export async function submitCatalogLead({ name, phone, interest, catalogName, ca
 // ค่าอื่นในเอกสารที่มาจากข้อมูลจริง (สินค้า ราคา ภาษี) ไม่ได้เก็บที่นี่ ยังคำนวณจากตารางเดิมเหมือนเดิม
 
 export async function saveDocumentTemplate(tpl) {
-  // เขียนคีย์ COMPANY_* แบบเก่ากลับไปด้วย เพราะยังมีโค้ด/รายงานเก่าที่อ่านคีย์เหล่านั้นอยู่
-  // ถ้าไม่เขียนคู่กัน แอดมินจะแก้ที่อยู่บริษัทแล้วเห็นค่าเก่าโผล่ในบางที่ ตามหาสาเหตุยาก
+  // เขียนคีย์ COMPANY_* แบบเก่ากลับไปด้วย ตอนนี้ไม่มีโค้ดในรีโปอ่านคีย์พวกนี้แล้ว (ทุกที่อ่านผ่าน mergeDocumentTemplate)
+  // แต่ mergeDocumentTemplate ยังใช้คีย์เก่าเป็นค่าถอยกลับ ถ้า DOCUMENT_TEMPLATE เสียหายหรือถูกลบ ระบบจะยังได้ข้อมูลบริษัทล่าสุด ไม่ใช่ของเมื่อปีที่แล้ว
   const rows = [
     { key: TEMPLATE_SETTING_KEY, value: JSON.stringify(tpl) },
     ...Object.entries(LEGACY_COMPANY_KEYS).map(([field, key]) => ({ key, value: tpl.company?.[field] ?? '' })),

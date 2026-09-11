@@ -1,4 +1,5 @@
 import { fmtDate } from './format'
+import { mergeDocumentTemplate, templateLogoUrl } from './documentTemplate'
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
@@ -6,7 +7,9 @@ function escapeHtml(s) {
 
 // เอกสาร preview คำขอเอกสารบัญชี — ให้เซลล์แคป/บันทึกเป็น PDF ส่งให้ลูกค้าเช็คข้อมูล (โดยเฉพาะข้อมูลใบกำกับภาษี) ก่อนกดส่งคำขอจริง
 // f = ค่าจากฟอร์ม (document_type/delivery_method/priority + ข้อมูลภาษี/อีเมล/ที่อยู่ตัวจริง), order = ออเดอร์ต้นทาง
-export function buildAccountingDocRequestHtml(order, f, logoUrl = '/worldtech-logo.png') {
+// settings = ตาราง settings ทั้งก้อน ใช้ดึงโลโก้จาก "ตั้งค่าเอกสาร" ให้ตรงกับใบเสนอราคา/ใบอนุมัติยอดโอน
+export function buildAccountingDocRequestHtml(order, f, settings = {}, logoUrl = '') {
+  const logo = logoUrl || templateLogoUrl(mergeDocumentTemplate(settings))
   const needsTax = f.document_type === 'ใบกำกับภาษี + ใบเสร็จรับเงิน'
   const needsEmail = f.delivery_method === 'ส่งสำเนาทางอีเมล' || f.delivery_method === 'ส่งทั้งอีเมลและตัวจริง'
   const needsOriginal = f.delivery_method === 'ส่งตัวจริง' || f.delivery_method === 'ส่งทั้งอีเมลและตัวจริง'
@@ -27,7 +30,7 @@ export function buildAccountingDocRequestHtml(order, f, logoUrl = '/worldtech-lo
         .banner .th { font-weight:700; font-size:16px; }
         .banner .en { font-size:11px; letter-spacing:1px; opacity:.85; }
         .head { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
-        .logo { height:40px; }
+        .logo { height:40px; max-width:150px; object-fit:contain; }
         .company { font-weight:700; font-size:15px; }
         .sub { font-size:12px; color:#718096; }
         .section-label { font-weight:700; color:#1b315e; margin:16px 0 6px; border-bottom:2px solid #1b315e; padding-bottom:3px; }
@@ -44,7 +47,7 @@ export function buildAccountingDocRequestHtml(order, f, logoUrl = '/worldtech-lo
         <div class="en">ACCOUNTING DOCUMENT REQUEST — DRAFT FOR CONFIRMATION</div>
       </div>
       <div class="head">
-        <img class="logo" src="${logoUrl}" onerror="this.style.display='none'" />
+        <img class="logo" src="${logo}" onerror="this.style.display='none'" />
         <div>
           <div class="company">${escapeHtml(order.customer_name || '-')}</div>
           <div class="sub">เลขที่ออเดอร์ ${escapeHtml(order.order_no || '-')} · วันที่ ${fmtDate(new Date().toISOString())}</div>
@@ -85,9 +88,11 @@ export function buildAccountingDocRequestHtml(order, f, logoUrl = '/worldtech-lo
   `
 }
 
-export function printAccountingDocRequest(order, f) {
+export function printAccountingDocRequest(order, f, settings = {}) {
   const w = window.open('', '_blank', 'width=800,height=1000')
   if (!w) { alert('เบราว์เซอร์บล็อกป๊อปอัป กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้'); return }
-  w.document.write(buildAccountingDocRequestHtml(order, f))
+  // ส่ง origin เข้าไปด้วย เพราะหน้าต่างที่เปิดใหม่เป็น about:blank — path แบบ /worldtech-logo.png อาจอ้างอิงไม่ถูก
+  const logoUrl = templateLogoUrl(mergeDocumentTemplate(settings), window.location.origin)
+  w.document.write(buildAccountingDocRequestHtml(order, f, settings, logoUrl))
   w.document.close()
 }

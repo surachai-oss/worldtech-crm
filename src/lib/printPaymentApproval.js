@@ -55,7 +55,7 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
         .banner .en { font-size:11px; letter-spacing:1px; opacity:.85; }
         .topinfo { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:18px; }
         .company-block { display:flex; gap:10px; align-items:center; flex:1; min-width:0; }
-        .logo { height:44px; flex-shrink:0; }
+        .logo { height:44px; max-width:150px; object-fit:contain; flex-shrink:0; }
         .company-name { font-weight:700; font-size:14px; }
         .meta { font-size:11.5px; color:#4a5568; margin-top:2px; line-height:1.5; }
         .doc-meta { text-align:right; font-size:12px; flex-shrink:0; white-space:nowrap; }
