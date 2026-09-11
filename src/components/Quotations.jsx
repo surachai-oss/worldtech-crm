@@ -10,7 +10,7 @@ import EditableSelect from './EditableSelect'
 import SignedQuotationControl from './SignedQuotationControl'
 import Pagination from './Pagination'
 
-export default function Quotations({ perm, reloadKey, settings, deals, onAdd, onEdit, onCopy, onStatusChange, onDelete, onCreateDeal }) {
+export default function Quotations({ perm, reloadKey, settings, deals, isAdmin, onNav, onAdd, onEdit, onCopy, onStatusChange, onDelete, onCreateDeal }) {
   const { toast } = useUi()
   const { t, lang } = useLanguage()
   const { list } = usePicklists()
@@ -52,7 +52,11 @@ export default function Quotations({ perm, reloadKey, settings, deals, onAdd, on
     <div className="list-view">
       <div className="section-header">
         <div className="section-title">{t('ใบเสนอราคา')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} {t('รายการ')} · {fmtCurrency(total)})</span></div>
-        <button className="btn btn-primary" onClick={onAdd}>{t('+ สร้างใบเสนอราคา')}</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {/* ปุ่มลัดไปหน้าตั้งค่าเทมเพลตเอกสาร (หัวกระดาษ/โลโก้/เงื่อนไข) — เมนูหลักอยู่ใต้ "ผู้ดูแลระบบ" */}
+          {isAdmin && <button className="btn btn-outline" onClick={() => onNav?.('document-settings')}>{t('ตั้งค่าเอกสาร')}</button>}
+          <button className="btn btn-primary" onClick={onAdd}>{t('+ สร้างใบเสนอราคา')}</button>
+        </div>
       </div>
 
       <div className="kpi-grid" style={{ gridTemplateColumns: `repeat(${list('quot_statuses').length}, 1fr)`, marginBottom: 14 }}>

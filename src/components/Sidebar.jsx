@@ -10,6 +10,9 @@ const NAV = [
 ]
 const ADMIN_SECTION = { section: 'ผู้ดูแลระบบ', items: [
   { id: 'users', label: 'ผู้ใช้งาน' },
+  // เทมเพลตเอกสารเป็นค่าตั้งค่าระดับบริษัท ไม่ใช่งานประจำวันของเซลล์ จึงอยู่กลุ่มผู้ดูแลระบบ
+  // (หน้า "ใบเสนอราคา" มีปุ่มลัดมาที่นี่ให้แอดมินอีกทาง)
+  { id: 'document-settings', label: 'ตั้งค่าเอกสาร' },
 ] }
 
 export default function Sidebar({ activeView, onNav, user, isAdmin, isFinance, onLogout }) {

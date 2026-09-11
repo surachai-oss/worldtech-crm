@@ -1,6 +1,7 @@
 import html2canvas from 'html2canvas'
 import { fmtCurrency, fmtDate } from './format'
 import { listPaymentItems, getPaymentSlipUrl, PAYMENT_METHOD_OTHER } from './api'
+import { mergeDocumentTemplate, templateLogoUrl } from './documentTemplate'
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
@@ -21,10 +22,11 @@ function slipKind(path) {
 // slip: { url, kind } จาก getPaymentSlipUrl + slipKind — หรือ null ถ้าไม่มีสลิปแนบ/โหลดไม่สำเร็จ
 // autoPrint: false ใช้ตอนแปลงเป็นรูปภาพ (downloadPaymentApprovalImage) — ไม่ต้องมีปุ่ม/สคริปต์เปิด print dialog ของเบราว์เซอร์
 // order: เอกสารออเดอร์ที่ผูกกับคำขอนี้ (ต้องส่งเข้ามาจากหน้าที่มี order อยู่แล้ว) — ใช้ดึงชื่อเซลล์ผู้เปิดออเดอร์มาโชว์ กันหาไม่เจอเวลาเอกสารผิดพลาด
-export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl = '/worldtech-logo.png', slip = null, order = null, { autoPrint = true } = {}) {
-  const name = settings.COMPANY_NAME || 'Worldtech Co., Ltd.'
-  const address = settings.COMPANY_ADDRESS || ''
-  const taxId = settings.COMPANY_TAX_ID || ''
+export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl = '', slip = null, order = null, { autoPrint = true } = {}) {
+  // หัวกระดาษใช้ข้อมูลบริษัทและโลโก้ชุดเดียวกับใบเสนอราคา — แก้ที่หน้า "ตั้งค่าเอกสาร" ครั้งเดียวเปลี่ยนทั้งสองใบ
+  const tpl = mergeDocumentTemplate(settings)
+  const { name, address, taxId } = tpl.company
+  const logo = logoUrl || templateLogoUrl(tpl)
 
   const total = Number(pr.total_amount) || 0
   const exVat = round2(total / 1.07)
@@ -80,11 +82,11 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
 
       <div class="topinfo">
         <div class="company-block">
-          <img class="logo" src="${logoUrl}" onerror="this.style.display='none'" />
+          <img class="logo" src="${logo}" onerror="this.style.display='none'" />
           <div>
             <div class="company-name">${escapeHtml(name)}</div>
             <div class="meta">${escapeHtml(address).replace(/\n/g, '<br/>')}</div>
-            ${taxId ? `<div class="meta">เลขประจำตัวผู้เสียภาษี : ${escapeHtml(taxId)}</div>` : ''}
+            ${taxId ? `<div class="meta">${escapeHtml(tpl.quotation.taxIdLabel)} : ${escapeHtml(taxId)}</div>` : ''}
           </div>
         </div>
         <div class="doc-meta">
@@ -185,7 +187,7 @@ export async function printPaymentApproval(pr, settings = {}, order = null) {
       try { slip = { url: await getPaymentSlipUrl(pr.slip_file_url), kind: slipKind(pr.slip_file_url) } }
       catch { /* ข้ามส่วนสลิปไป */ }
     }
-    const logoUrl = `${window.location.origin}/worldtech-logo.png`
+    const logoUrl = templateLogoUrl(mergeDocumentTemplate(settings), window.location.origin)
     const html = buildPaymentApprovalHtml(pr, settings, items, logoUrl, slip, order)
     w.document.open()
     w.document.write(html)
@@ -207,7 +209,7 @@ export async function downloadPaymentApprovalImage(pr, settings = {}, order = nu
     try { slip = { url: await getPaymentSlipUrl(pr.slip_file_url), kind: slipKind(pr.slip_file_url) } }
     catch { /* ข้ามส่วนสลิปไป */ }
   }
-  const logoUrl = `${window.location.origin}/worldtech-logo.png`
+  const logoUrl = templateLogoUrl(mergeDocumentTemplate(settings), window.location.origin)
   const html = buildPaymentApprovalHtml(pr, settings, items, logoUrl, slip, order, { autoPrint: false })
   const parsed = new DOMParser().parseFromString(html, 'text/html')
 

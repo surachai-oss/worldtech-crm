@@ -24,6 +24,7 @@ import CatalogBuilder from './components/CatalogBuilder'
 import NotificationBell from './components/NotificationBell'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal, LeadModal } from './components/Modals'
+import DocumentSettings from './components/DocumentSettings'
 import OrderModal from './components/OrderModal'
 import { renderQuotationPdfBlob, loadQuotationPdfItems } from './lib/printQuotation'
 import './App.css'
@@ -64,13 +65,18 @@ function AppInner({ session }) {
     }
   }
 
+  // แยกออกมาเพื่อให้หน้า "ตั้งค่าเอกสาร" เรียกซ้ำได้หลังบันทึก — ใบเสนอราคาที่พิมพ์ต่อจากนั้นจะใช้เทมเพลตใหม่ทันที
+  const reloadSettings = async () => {
+    const { data: s } = await supabase.from('settings').select('*')
+    const map = {}
+      ; (s || []).forEach(r => { map[r.key] = r.value })
+    setSettings(map)
+  }
+
   useEffect(() => {
     (async () => {
       await reload()
-      const { data: s } = await supabase.from('settings').select('*')
-      const map = {}
-        ; (s || []).forEach(r => { map[r.key] = r.value })
-      setSettings(map)
+      await reloadSettings()
       try {
         const p = await api.getMyProfile(session.user.id)
         setProfile(p)
@@ -427,12 +433,13 @@ function AppInner({ session }) {
             <Tasks perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addTask(null)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />
           )}
           {view === 'quotations' && (
-            <Quotations perm={perm} reloadKey={reloadKey} settings={settings} deals={data.deals} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onCopy={actions.copyQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onCreateDeal={actions.createDealFromQuotation} />
+            <Quotations perm={perm} reloadKey={reloadKey} settings={settings} deals={data.deals} isAdmin={isAdmin} onNav={nav} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onCopy={actions.copyQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onCreateDeal={actions.createDealFromQuotation} />
           )}
           {view === 'orders' && (
             <Orders reloadKey={reloadKey} companies={data.companies} perm={perm} currentUser={currentUser} settings={settings} onAdd={actions.addOrder} onCancel={actions.cancelOrder} onChanged={reload} />
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
+          {view === 'document-settings' && isAdmin && <DocumentSettings settings={settings} isAdmin={isAdmin} onSaved={reloadSettings} />}
           {view === 'products' && <Products perm={perm} />}
           {view === 'catalogs' && <Catalogs perm={perm} currentUser={currentUser} onOpen={openCatalog} />}
           {view === 'catalog-builder' && currentCatalogId && (
@@ -454,7 +461,7 @@ function AppInner({ session }) {
       {modal?.type === 'deal' && <DealModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} defaultStage={modal.payload?.defaultStage} isAdmin={isAdmin} onClose={closeModal} onSave={saveDeal} />}
       {modal?.type === 'activity' && <ActivityModal companies={data.companies} contacts={data.contacts} activities={data.activities} defaultCompanyId={modal.payload?.defaultCompanyId} lead={modal.payload?.lead} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveActivity} />}
       {modal?.type === 'task' && <TaskModal initial={modal.payload?.initial} companies={data.companies} quotations={data.quotations} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveTask} />}
-      {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
+      {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} settings={settings} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}
       {modal?.type === 'lead' && <LeadModal initial={modal.payload?.initial} isAdmin={isAdmin} onClose={closeModal} onSave={saveLead} />}
       {modal?.type === 'order' && <OrderModal companies={data.companies} quotations={data.quotations} currentUser={currentUser} onClose={closeModal} onSave={saveOrder} />}
     </div>

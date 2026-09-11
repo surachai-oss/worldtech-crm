@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient'
+import { TEMPLATE_SETTING_KEY, LEGACY_COMPANY_KEYS } from './documentTemplate'
 import { normalizeLeadSource, LEAD_SOURCE_UNKNOWN, LEAD_SOURCE_INVALID } from './leadOptions'
 import { toLocalDateStr } from './format'
 import { BACKCOVER_SETTING_KEY, mergeBackCover, parseBackCover } from './catalogBackCover'
@@ -1758,4 +1759,31 @@ export async function submitCatalogLead({ name, phone, interest, catalogName, ca
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.error || 'ส่งข้อมูลไม่สำเร็จ')
   return json
+}
+
+// ===== ตั้งค่าเอกสาร (เทมเพลตใบเสนอราคา / ใบอนุมัติชำระเงิน) =====
+// เก็บเป็น JSON ก้อนเดียวคีย์ DOCUMENT_TEMPLATE ในตาราง settings (RLS: อ่านได้ทุกคนที่ล็อกอิน เขียนได้เฉพาะ admin)
+// ค่าอื่นในเอกสารที่มาจากข้อมูลจริง (สินค้า ราคา ภาษี) ไม่ได้เก็บที่นี่ ยังคำนวณจากตารางเดิมเหมือนเดิม
+
+export async function saveDocumentTemplate(tpl) {
+  // เขียนคีย์ COMPANY_* แบบเก่ากลับไปด้วย เพราะยังมีโค้ด/รายงานเก่าที่อ่านคีย์เหล่านั้นอยู่
+  // ถ้าไม่เขียนคู่กัน แอดมินจะแก้ที่อยู่บริษัทแล้วเห็นค่าเก่าโผล่ในบางที่ ตามหาสาเหตุยาก
+  const rows = [
+    { key: TEMPLATE_SETTING_KEY, value: JSON.stringify(tpl) },
+    ...Object.entries(LEGACY_COMPANY_KEYS).map(([field, key]) => ({ key, value: tpl.company?.[field] ?? '' })),
+  ]
+  const { error } = await supabase.from('settings').upsert(rows, { onConflict: 'key' })
+  if (error) throw error
+  return rows
+}
+
+// โลโก้บนหัวเอกสาร — เก็บใน bucket เดียวกับรูปแคตตาล็อก (public อยู่แล้ว) เพราะหน้าต่างพิมพ์
+// และ html2canvas ต้องโหลดรูปได้โดยไม่มี token ถ้าใช้ signed URL รูปจะหายเมื่อลิงก์หมดอายุ
+export async function uploadDocumentLogo(file) {
+  if (file.size > MAX_CATALOG_IMAGE_SIZE) throw new Error('ไฟล์ใหญ่เกิน 10MB')
+  const safeName = file.name.replace(/[^\w.-]/g, '_').slice(-80)
+  const path = `document/${Date.now()}-${safeName}`
+  const { error } = await supabase.storage.from(CATALOG_IMAGES_BUCKET).upload(path, file, { contentType: file.type })
+  if (error) throw error
+  return supabase.storage.from(CATALOG_IMAGES_BUCKET).getPublicUrl(path).data.publicUrl
 }

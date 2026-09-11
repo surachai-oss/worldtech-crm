@@ -2,19 +2,11 @@ import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import { fmtCurrency, fmtDate } from './format'
 import { listQuotationItems, getProductImageUrl } from './api'
+import { mergeDocumentTemplate, templateLogoUrl } from './documentTemplate'
 
 const VAT_RATE = 0.07
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
-// เงื่อนไขการเสนอราคาและการสั่งซื้อ — ข้อความคงที่ พิมพ์ทุกใบเสนอราคาเหมือนกัน ไม่ใช่ค่าที่แก้ไขได้ต่อใบแบบหมายเหตุ
-const QUOTATION_TERMS = [
-  'สินค้าพร้อมส่งขึ้นอยู่กับสต็อก ณ วันที่ยืนยันคำสั่งซื้อ และอาจเปลี่ยนแปลงได้โดยไม่ต้องแจ้งล่วงหน้า',
-  'ผู้ซื้อต้องจัดเตรียมสถานที่ให้รถขนส่งเข้า–ออกได้สะดวก บริษัทฯ จัดส่งสินค้าและวางสินค้า ณ จุดรับสินค้าเท่านั้น',
-  'เมื่อพ้นกำหนดยืนราคา บริษัทฯ ขอสงวนสิทธิ์ในการปรับราคาโดยไม่ต้องแจ้งล่วงหน้า',
-  'คำสั่งซื้อสมบูรณ์เมื่อบริษัทฯ ได้รับเอกสารยืนยันการสั่งซื้อ และได้รับเงินมัดจำหรือชำระค่าสินค้าตามเงื่อนไขแล้ว',
-  'หากผู้ซื้อไม่รับสินค้าภายใน 30 วัน บริษัทฯ ขอสงวนสิทธิ์ในการเรียกเก็บค่าสินค้าทั้งจำนวน หรือริบเงินมัดจำเป็นค่าเสียหาย',
-  'คำสั่งซื้อที่ไม่รับสินค้าเกิน 45 วัน ถือว่ายกเลิกโดยอัตโนมัติ เว้นแต่มีข้อตกลงเป็นลายลักษณ์อักษรเป็นอย่างอื่น',
-]
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
@@ -24,13 +16,13 @@ function escapeHtml(s) {
 // รูปแบบอ้างอิงจากตัวอย่างใบเสนอราคาจริงของบริษัท — unit_price ที่กรอกถือว่ารวม VAT แล้ว เหมือนราคาต่อหน่วยในดีล
 // items รับเป็น array ที่ resolve รูปมาแล้ว [{ description, quantity, unit_price, imageUrl }] (ไม่ import api.js ตรงๆ ในฟังก์ชันนี้ เพื่อให้เทสได้โดยไม่ต้องพึ่ง supabase client)
 // autoPrint: false ใช้ตอนสร้าง HTML สำหรับแปลงเป็น PDF ไฟล์ (renderQuotationPdfBlob) — ไม่ต้องมีปุ่ม/สคริปต์เปิด print dialog ของเบราว์เซอร์
-export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/worldtech-logo.png', items = [], { autoPrint = true } = {}) {
-  const name = settings.COMPANY_NAME || 'Worldtech Co., Ltd.'
-  const address = settings.COMPANY_ADDRESS || ''
-  const phone = settings.COMPANY_PHONE || ''
-  const email = settings.COMPANY_EMAIL || ''
-  const line = settings.COMPANY_LINE || ''
-  const taxId = settings.COMPANY_TAX_ID || ''
+export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', items = [], { autoPrint = true } = {}) {
+  // ข้อความและข้อมูลบริษัททั้งหมดบนกระดาษมาจากเทมเพลตที่แอดมินแก้ได้เอง (ดู documentTemplate.js)
+  // ส่วนตารางสินค้า ราคา ส่วนลด และภาษี ยังคำนวณจากข้อมูลใบเสนอราคาจริงเหมือนเดิม ไม่ได้ผูกกับเทมเพลต
+  const tpl = mergeDocumentTemplate(settings)
+  const q = tpl.quotation
+  const { name, address, phone, email, line, taxId } = tpl.company
+  const logo = logoUrl || templateLogoUrl(tpl)
 
   // ใบเสนอราคาเก่าที่ไม่มีรายการสินค้าเลย (ก่อนมีระบบรายการหลายชิ้น) — ใช้ subject/value เดิมเป็นรายการเดียว
   const rows = items.length ? items : [{ description: quot.subject, quantity: 1, unit_price: Number(quot.value) || 0, imageUrl: null }]
@@ -49,10 +41,13 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
     company?.phone ? `โทร ${company.phone}` : '',
   ].filter(Boolean).map(escapeHtml).join('<br/>')
 
-  const termsHtml = `<div class="remark-label">เงื่อนไขการเสนอราคาและการสั่งซื้อ</div><div class="remark-body">${QUOTATION_TERMS.map(line => `*${escapeHtml(line)}`).join('<br/>')}</div>`
+  // ลบเงื่อนไขออกจนหมดในหน้าตั้งค่า = ไม่ต้องพิมพ์หัวข้อนี้เลย ไม่ใช่พิมพ์หัวข้อลอยๆ ไว้
+  const termsHtml = q.terms.length
+    ? `<div class="remark-label">${escapeHtml(q.termsTitle)}</div><div class="remark-body">${q.terms.map(t => `${escapeHtml(q.termsBullet)}${escapeHtml(t)}`).join('<br/>')}</div>`
+    : ''
 
   const noteHtml = quot.note
-    ? `<div class="remark-label">หมายเหตุ</div><div class="remark-body">${escapeHtml(quot.note).replace(/\n/g, '<br/>')}</div>`
+    ? `<div class="remark-label">${escapeHtml(q.noteTitle)}</div><div class="remark-body">${escapeHtml(quot.note).replace(/\n/g, '<br/>')}</div>`
     : ''
 
   const contactLines = [
@@ -121,15 +116,15 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
       </style>
     </head>
     <body>
-      <div class="banner"><div class="th">ใบเสนอราคา</div><div class="en">QUOTATION</div></div>
+      <div class="banner"><div class="th">${escapeHtml(q.titleTh)}</div><div class="en">${escapeHtml(q.titleEn)}</div></div>
 
       <div class="topinfo">
         <div class="company-block">
-          <img class="logo" src="${logoUrl}" onerror="this.style.display='none'" />
+          <img class="logo" src="${logo}" onerror="this.style.display='none'" />
           <div>
             <div class="company-name">${escapeHtml(name)}</div>
             <div class="meta">${escapeHtml(address).replace(/\n/g, '<br/>')}</div>
-            ${taxId ? `<div class="meta">เลขประจำตัวผู้เสียภาษี : ${escapeHtml(taxId)}</div>` : ''}
+            ${taxId ? `<div class="meta">${escapeHtml(q.taxIdLabel)} : ${escapeHtml(taxId)}</div>` : ''}
           </div>
         </div>
         <div class="doc-meta">
@@ -145,7 +140,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
       </div>
 
       <div class="customer-block">
-        <div class="section-label">ชื่อลูกค้า</div>
+        <div class="section-label">${escapeHtml(q.customerLabel)}</div>
         <div class="customer-info">
           ${escapeHtml(company ? company.name : '-')}<br/>
           ${customerLines}
@@ -184,18 +179,18 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '/wor
       ${noteHtml}
 
       <div class="contact-box">
-        <div style="font-weight:700; margin-bottom:2px">ติดต่อสอบถามข้อมูลเพิ่มเติมได้ที่</div>
+        <div style="font-weight:700; margin-bottom:2px">${escapeHtml(q.contactTitle)}</div>
         ${contactLines}
       </div>
 
       <div class="sign">
         <div class="sign-col">
           <div class="sign-name">${quot.proposer_name ? escapeHtml(quot.proposer_name) : '&nbsp;'}</div>
-          <div class="sign-label">ผู้เสนอราคา</div>
+          <div class="sign-label">${escapeHtml(q.signLeftLabel)}</div>
         </div>
         <div class="sign-col">
           <div class="sign-name">&nbsp;</div>
-          <div class="sign-label">ผู้อนุมัติ</div>
+          <div class="sign-label">${escapeHtml(q.signRightLabel)}</div>
         </div>
       </div>
 
@@ -220,7 +215,7 @@ function waitForImages(el) {
 // สร้างไฟล์ PDF จริงจากเทมเพลตเดียวกับที่ใช้พิมพ์ — เรนเดอร์ในกล่องที่ซ่อนไว้ในหน้าเดิม (ไม่ใช้ iframe เพราะ html2canvas จับภาพข้าม document แล้วได้ผลลัพธ์ผิด/ดำล้วน) แล้วถ่ายภาพด้วย html2canvas ต่อด้วย jsPDF แบ่งหน้า A4
 // ใช้ตอนอัปโหลดขึ้น Google Drive อัตโนมัติทุกครั้งที่บันทึก/แก้ไขใบเสนอราคา ไม่ต้องพึ่งผู้ใช้กด "บันทึกเป็น PDF" เอง
 export async function renderQuotationPdfBlob(quot, company, settings = {}, items = []) {
-  const logoUrl = `${window.location.origin}/worldtech-logo.png`
+  const logoUrl = templateLogoUrl(mergeDocumentTemplate(settings), window.location.origin)
   const html = buildQuotationHtml(quot, company, settings, logoUrl, items, { autoPrint: false })
   const parsed = new DOMParser().parseFromString(html, 'text/html')
 
@@ -291,7 +286,7 @@ export async function printQuotation(quot, company, settings = {}) {
 
   try {
     const items = await loadQuotationPdfItems(quot.id)
-    const logoUrl = `${window.location.origin}/worldtech-logo.png`
+    const logoUrl = templateLogoUrl(mergeDocumentTemplate(settings), window.location.origin)
     const html = buildQuotationHtml(quot, company, settings, logoUrl, items)
     w.document.open()
     w.document.write(html)

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { mergeDocumentTemplate } from '../lib/documentTemplate'
 import EditableSelect from './EditableSelect'
 import SearchableSelect from './SearchableSelect'
 import { useUi } from './UiContext'
@@ -469,21 +470,18 @@ export function TaskModal({ initial, companies, quotations = [], defaultCompanyI
   )
 }
 
-// เงื่อนไข/หมายเหตุมาตรฐานของบริษัท — เติมให้อัตโนมัติตอนสร้างใบเสนอราคาใหม่ เซลล์แก้ไขได้ตามเงื่อนไขที่ตกลงกับลูกค้าจริง
-const DEFAULT_QUOTATION_NOTE = `*ทางบริษัทไม่มีบริการติดตั้งสินค้าหลังการขาย
-*รับประกันเปลี่ยนเครื่องใหม่ภายใน 15 วัน (บริษัทรับผิดชอบในเรื่องค่าจัดส่งสินค้าเคลม)
-*รับประกันซ่อมฟรี 1 ปี (รวมค่าอะไหล่และค่าแรงช่าง) : เครื่องใช้ไฟฟ้าขนาดเล็ก เช่น TV, เครื่องชงกาแฟ, เตาอบไฟฟ้า และเครื่องเสียงติดรถยนต์
-*รับประกันซ่อมฟรี 3 ปี (รวมค่าอะไหล่และค่าแรงช่าง) : เครื่องใช้ไฟฟ้าขนาดใหญ่ เช่น ตู้เย็น, ตู้แช่, เครื่องซักผ้า`
 
 const EMPTY_QUOT_ITEM = { product_id: '', description: '', quantity: 1, unit_price: '' }
 
-export function QuotationModal({ initial, companies, defaultCompanyId, currentUserName, isAdmin, onClose, onSave }) {
+export function QuotationModal({ initial, companies, defaultCompanyId, currentUserName, isAdmin, settings = {}, onClose, onSave }) {
   const { toast } = useUi()
   const { t, lang } = useLanguage()
+  // หมายเหตุตั้งต้นและเบอร์เซลล์ตั้งต้นมาจาก "ตั้งค่าเอกสาร" — แอดมินแก้ได้เองโดยไม่ต้อง deploy
+  const tplQuot = useMemo(() => mergeDocumentTemplate(settings).quotation, [settings])
   const [f, setF] = useState(() => {
     const base = {
-      company_id: defaultCompanyId || '', subject: '', status: 'Draft', sale_phone: '0918086924', proposer_name: currentUserName || '',
-      quot_date: new Date().toISOString().split('T')[0], expire_date: '', note: DEFAULT_QUOTATION_NOTE, deal_id: null,
+      company_id: defaultCompanyId || '', subject: '', status: 'Draft', sale_phone: tplQuot.defaultSalePhone, proposer_name: currentUserName || '',
+      quot_date: new Date().toISOString().split('T')[0], expire_date: '', note: tplQuot.defaultNote, deal_id: null,
       credit_term: '', payment_due_date: '', payment_status: 'ยังไม่ชำระ', discount_type: '', discount_value: 0
     }
     if (!initial) return base
