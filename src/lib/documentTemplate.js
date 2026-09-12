@@ -21,9 +21,8 @@ export const LEGACY_COMPANY_KEYS = {
 
 export const DEFAULT_LOGO_URL = '/worldtech-logo.png'
 
-// สีหลัก = น้ำเงินกรมท่าที่ฝังอยู่ในเอกสารมาแต่เดิม, สีรอง = เหลืองแบรนด์เดียวกับในระบบ
+// สีเอกสาร = น้ำเงินกรมท่าที่ฝังอยู่ในเอกสารมาแต่เดิม ใช้กับแถบหัวเอกสาร หัวตาราง แถบยอดรวม และป้ายหัวข้อ
 export const DEFAULT_BRAND_COLOR = '#1b315e'
-export const DEFAULT_ACCENT_COLOR = '#febf10'
 
 export const TEMPLATE_DEFAULTS = {
   company: {
@@ -34,8 +33,7 @@ export const TEMPLATE_DEFAULTS = {
     line: '',
     taxId: '',
     logoUrl: '',      // ว่าง = ใช้โลโก้ที่ติดมากับระบบ (public/worldtech-logo.png)
-    brandColor: DEFAULT_BRAND_COLOR,   // แถบหัวเอกสาร หัวตาราง แถบยอดรวม ป้ายหัวข้อ
-    accentColor: DEFAULT_ACCENT_COLOR, // มุมกระดาษ เส้นใต้หัวข้อ ขอบกล่องติดต่อ
+    brandColor: DEFAULT_BRAND_COLOR,
     // สโลแกนใต้ชื่อบริษัทบนหัวเอกสาร — ว่างทั้งคู่ = ไม่พิมพ์บรรทัดนี้เลย
     taglineTh: '',
     taglineEn: '',
@@ -45,7 +43,6 @@ export const TEMPLATE_DEFAULTS = {
     titleEn: 'QUOTATION',
     taxIdLabel: 'เลขประจำตัวผู้เสียภาษี',
     customerLabel: 'ชื่อลูกค้า',
-    itemsTitle: 'รายการสินค้า',
     termsTitle: 'เงื่อนไขการเสนอราคาและการสั่งซื้อ',
     termsBullet: '*',
     terms: [
@@ -91,7 +88,6 @@ export function mergeDocumentTemplate(settings = {}) {
   const sc = (saved.company && typeof saved.company === 'object') ? saved.company : {}
   const company = {
     brandColor: normalizeHexColor(sc.brandColor, dc.brandColor),
-    accentColor: normalizeHexColor(sc.accentColor, dc.accentColor),
     taglineTh: str(sc.taglineTh, dc.taglineTh),
     taglineEn: str(sc.taglineEn, dc.taglineEn),
     name: str(sc.name, legacy.name ?? dc.name),
@@ -149,11 +145,8 @@ export function normalizeHexColor(v, fallback) {
   return fallback
 }
 
-export function brandColors(tpl) {
-  return {
-    brand: normalizeHexColor(tpl?.company?.brandColor, DEFAULT_BRAND_COLOR),
-    accent: normalizeHexColor(tpl?.company?.accentColor, DEFAULT_ACCENT_COLOR),
-  }
+export function brandColor(tpl) {
+  return normalizeHexColor(tpl?.company?.brandColor, DEFAULT_BRAND_COLOR)
 }
 
 // สโลแกนใต้ชื่อบริษัท ไทยและอังกฤษพิมพ์คู่กันเสมอ (ไม่ผูกกับปุ่มสลับภาษาของหน้าจอ)
@@ -170,7 +163,9 @@ export function taglineHtml(tpl, esc) {
 }
 
 // CSS ของสโลแกน — ใช้ร่วมกันทุกเอกสาร ส่งสีเข้ามาเพราะแต่ละใบแทรกสีลง stylesheet ตรงๆ
-export function taglineCss(brand) {
+// ไม่ได้กรอกสโลแกนก็ไม่ต้องใส่กฎพวกนี้ เอกสารจะได้เหมือนของเดิมทุกตัวอักษร
+export function taglineCss(brand, tpl) {
+  if (tpl && !taglineHtml(tpl, x => x)) return ''
   return `
         .tagline { font-size:10.5px; font-weight:600; color:${brand}; margin-top:1px; letter-spacing:.2px; }
         .tagline-en { font-weight:400; font-style:italic; opacity:.8; }

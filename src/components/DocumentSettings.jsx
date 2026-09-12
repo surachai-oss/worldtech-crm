@@ -18,8 +18,13 @@ import { useLanguage } from './LanguageContext'
 const CSS = `
 .ds-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
 @media(max-width:1100px){.ds-grid{grid-template-columns:1fr}}
-.ds-panel{background:var(--white);border:1px solid var(--border);border-radius:8px;margin-bottom:16px}
-.ds-panel-h{padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;font-size:13px}
+.ds-panel{background:var(--white);border:1px solid var(--border);border-left:4px solid var(--p);border-radius:8px;margin-bottom:16px}
+.ds-panel-h{padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;font-size:13px;
+            background:var(--gray-bg);
+            background:color-mix(in srgb, var(--p) 9%, transparent);color:var(--p);
+            display:flex;align-items:center;gap:8px;border-radius:0 8px 0 0}
+.ds-dot{width:9px;height:9px;border-radius:50%;background:var(--p);flex-shrink:0}
+.ds-panel-note{margin-left:auto;font-size:11px;font-weight:400;color:var(--text-light);white-space:nowrap}
 .ds-panel-b{padding:14px}
 .ds-hint{font-size:11.5px;color:var(--text-light);margin-top:4px;line-height:1.5}
 .ds-term{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px}
@@ -59,10 +64,24 @@ const SAMPLE_ITEMS = [
   { description: 'เครื่องซักผ้าฝาหน้า รุ่นตัวอย่าง', quantity: 1, unit_price: 12900, imageUrl: null },
 ]
 
-function Panel({ title, children }) {
+// แต่ละกลุ่มของฟอร์มมีสีประจำตัว เพื่อให้คนกรอกแยกออกว่ากำลังกรอกเรื่องอะไรอยู่
+// note = บอกสั้นๆ ว่าค่าในกลุ่มนี้ไปโผล่ตรงไหนของเอกสาร กันกรอกผิดช่อง
+const GROUP = {
+  brand:   '#8e44ad',   // แบรนด์
+  company: '#1b6ca8',   // ข้อมูลบริษัท
+  terms:   '#c0622d',   // เงื่อนไข
+  words:   '#2f855a',   // หัวข้อและคำบนกระดาษ
+  defaults:'#b7791f',   // ค่าตั้งต้นใบใหม่
+  preview: '#4a5568',   // ตัวอย่างเอกสาร
+}
+
+function Panel({ title, color, note, children }) {
   return (
-    <div className="ds-panel">
-      <div className="ds-panel-h">{title}</div>
+    <div className="ds-panel" style={{ '--p': color }}>
+      <div className="ds-panel-h">
+        <span className="ds-dot" />{title}
+        {note && <span className="ds-panel-note">{note}</span>}
+      </div>
       <div className="ds-panel-b">{children}</div>
     </div>
   )
@@ -277,13 +296,9 @@ export default function DocumentSettings({ settings = {}, isAdmin, onSaved, onBa
         <div className="ds-grid">
           {/* ===== ซ้าย: ตัวแก้ไข ===== */}
           <div>
-            <Panel title={t('สีและสโลแกนของแบรนด์')}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <ColorField label={t('สีหลัก')} hint={t('แถบหัวเอกสาร หัวตาราง แถบยอดรวม และชื่อหัวข้อแต่ละส่วน')}
-                  value={tpl.company.brandColor} onChange={v => setCompany('brandColor', v)} />
-                <ColorField label={t('สีรอง')} hint={t('มุมกระดาษ เลขลำดับหัวข้อ เส้นใต้หัวข้อ และขอบกล่องติดต่อ')}
-                  value={tpl.company.accentColor} onChange={v => setCompany('accentColor', v)} />
-              </div>
+            <Panel title={t('แบรนด์')} color={GROUP.brand} note={t('หัวเอกสารทุกใบ')}>
+              <ColorField label={t('สีเอกสาร')} hint={t('แถบหัวเอกสาร หัวตาราง แถบยอดรวม และป้ายหัวข้อ — สีนี้ใช้กับเอกสารที่พิมพ์ออกไป ไม่เกี่ยวกับสีบนหน้าจอนี้')}
+                value={tpl.company.brandColor} onChange={v => setCompany('brandColor', v)} />
               <Field label={t('สโลแกน (ไทย)')}>
                 <input className="form-control" value={tpl.company.taglineTh} onChange={e => setCompany('taglineTh', e.target.value)} />
               </Field>
@@ -292,7 +307,7 @@ export default function DocumentSettings({ settings = {}, isAdmin, onSaved, onBa
               </Field>
             </Panel>
 
-            <Panel title={t('ข้อมูลบริษัทบนหัวเอกสาร')}>
+            <Panel title={t('ข้อมูลบริษัท', 'Company details')} color={GROUP.company} note={t('มุมบนซ้ายของเอกสาร')}>
               <Field label={t('โลโก้')} hint={t('แนะนำไฟล์ PNG พื้นหลังโปร่ง สูงประมาณ 120 พิกเซลขึ้นไป ระบบย่อให้พอดีหัวกระดาษเอง')}>
                 <div className="ds-logo-row">
                   <div className="ds-logo-box"><img src={logoSrc} alt="" onError={e => { e.currentTarget.style.visibility = 'hidden' }} /></div>
@@ -328,7 +343,7 @@ export default function DocumentSettings({ settings = {}, isAdmin, onSaved, onBa
               </Field>
             </Panel>
 
-            <Panel title={t('เงื่อนไขการเสนอราคาและการสั่งซื้อ')}>
+            <Panel title={t('เงื่อนไขการเสนอราคาและการสั่งซื้อ')} color={GROUP.terms} note={t('ใต้ตารางสินค้า')}>
               <Field label={t('หัวข้อส่วนเงื่อนไข')}>
                 <input className="form-control" value={tpl.quotation.termsTitle} onChange={e => setQuot('termsTitle', e.target.value)} />
               </Field>
@@ -360,7 +375,7 @@ export default function DocumentSettings({ settings = {}, isAdmin, onSaved, onBa
               </div>
             </Panel>
 
-            <Panel title={t('หัวข้อและคำบนกระดาษ')}>
+            <Panel title={t('หัวข้อและคำบนกระดาษ')} color={GROUP.words} note={t('ป้ายกำกับแต่ละส่วน')}>
               <Field label={t('ชื่อเอกสาร (ไทย)')}>
                 <input className="form-control" value={tpl.quotation.titleTh} onChange={e => setQuot('titleTh', e.target.value)} />
               </Field>
@@ -372,9 +387,6 @@ export default function DocumentSettings({ settings = {}, isAdmin, onSaved, onBa
               </Field>
               <Field label={t('หัวข้อส่วนลูกค้า')}>
                 <input className="form-control" value={tpl.quotation.customerLabel} onChange={e => setQuot('customerLabel', e.target.value)} />
-              </Field>
-              <Field label={t('หัวข้อส่วนรายการสินค้า')} hint={t('หัวข้อทั้ง 5 ส่วนถูกใส่เลขลำดับให้อัตโนมัติ เรียงตามลำดับที่พิมพ์จริงบนกระดาษ')}>
-                <input className="form-control" value={tpl.quotation.itemsTitle} onChange={e => setQuot('itemsTitle', e.target.value)} />
               </Field>
               <Field label={t('หัวข้อส่วนหมายเหตุ')}>
                 <input className="form-control" value={tpl.quotation.noteTitle} onChange={e => setQuot('noteTitle', e.target.value)} />
@@ -395,7 +407,7 @@ export default function DocumentSettings({ settings = {}, isAdmin, onSaved, onBa
 
           {/* ===== ขวา: ค่าตั้งต้น และตัวอย่าง ===== */}
           <div>
-            <Panel title={t('ค่าตั้งต้นของใบเสนอราคาใหม่')}>
+            <Panel title={t('ค่าตั้งต้นของใบเสนอราคาใหม่')} color={GROUP.defaults} note={t('เติมให้ตอนสร้างใบใหม่')}>
               <Field label={t('หมายเหตุตั้งต้น')} hint={t('เติมให้อัตโนมัติในช่องหมายเหตุตอนสร้างใบใหม่ เซลล์ยังแก้เป็นรายใบได้ตามปกติ และใบที่ออกไปแล้วไม่ถูกกระทบ')}>
                 <textarea className="form-control" rows={6} value={tpl.quotation.defaultNote} onChange={e => setQuot('defaultNote', e.target.value)} />
               </Field>
@@ -405,7 +417,7 @@ export default function DocumentSettings({ settings = {}, isAdmin, onSaved, onBa
             </Panel>
 
             <div className="ds-preview-wrap">
-              <Panel title={t('ตัวอย่างเอกสาร (ข้อมูลสินค้าและราคาเป็นตัวอย่างสมมติ)')}>
+              <Panel title={t('ตัวอย่างเอกสาร')} color={GROUP.preview} note={t('สินค้าและราคาเป็นตัวอย่างสมมติ')}>
                 <iframe className="ds-preview" title={t('ตัวอย่างใบเสนอราคา')} srcDoc={previewHtml} />
               </Panel>
             </div>

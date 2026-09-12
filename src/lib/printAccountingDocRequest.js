@@ -1,5 +1,5 @@
 import { fmtDate } from './format'
-import { mergeDocumentTemplate, templateLogoUrl, brandColors, taglineHtml, taglineCss } from './documentTemplate'
+import { mergeDocumentTemplate, templateLogoUrl, brandColor, taglineHtml, taglineCss } from './documentTemplate'
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
@@ -11,8 +11,7 @@ function escapeHtml(s) {
 export function buildAccountingDocRequestHtml(order, f, settings = {}, logoUrl = '') {
   const tpl = mergeDocumentTemplate(settings)
   const logo = logoUrl || templateLogoUrl(tpl)
-  const { brand, accent } = brandColors(tpl)
-  // หัวกระดาษใบนี้โชว์ "ชื่อลูกค้า" ไม่ใช่ชื่อบริษัทเรา สโลแกนจึงไปอยู่ใต้แถบหัวเอกสารแทน
+  const brand = brandColor(tpl)
   const tagline = taglineHtml(tpl, escapeHtml)
   const needsTax = f.document_type === 'ใบกำกับภาษี + ใบเสร็จรับเงิน'
   const needsEmail = f.delivery_method === 'ส่งสำเนาทางอีเมล' || f.delivery_method === 'ส่งทั้งอีเมลและตัวจริง'
@@ -30,7 +29,7 @@ export function buildAccountingDocRequestHtml(order, f, settings = {}, logoUrl =
       <style>
         @page { size: A4; margin: 16mm; }
         body { font-family: 'Sarabun', 'Tahoma', sans-serif; color:#2d3748; font-size: 14px; margin:0; }
-        .banner { background:linear-gradient(100deg, ${brand} 0%, ${brand} 82%, ${accent} 82%, ${accent} 100%); color:#fff; text-align:center; padding:10px; border-radius:4px; margin-bottom:18px; }
+        .banner { background:${brand}; color:#fff; text-align:center; padding:10px; border-radius:4px; margin-bottom:18px; }
         .banner .th { font-weight:700; font-size:16px; }
         .banner .en { font-size:11px; letter-spacing:1px; opacity:.85; }
         .head { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
@@ -43,7 +42,7 @@ export function buildAccountingDocRequestHtml(order, f, settings = {}, logoUrl =
         .row .v { font-weight:600; }
         .note { margin-top:16px; font-size:12px; color:#718096; }
         .no-print { margin-top:24px; text-align:center; }
-        .tagline-top { text-align:center; margin:-10px 0 14px; }${taglineCss(brand)}
+        .tagline-top { text-align:center; margin:-10px 0 14px; }${taglineCss(brand, tpl)}
       </style>
     </head>
     <body>

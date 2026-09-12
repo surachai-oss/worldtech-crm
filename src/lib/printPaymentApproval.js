@@ -1,7 +1,7 @@
 import html2canvas from 'html2canvas'
 import { fmtCurrency, fmtDate } from './format'
 import { listPaymentItems, getPaymentSlipUrl, PAYMENT_METHOD_OTHER } from './api'
-import { mergeDocumentTemplate, templateLogoUrl, brandColors, taglineHtml, taglineCss } from './documentTemplate'
+import { mergeDocumentTemplate, templateLogoUrl, brandColor, taglineHtml, taglineCss } from './documentTemplate'
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
@@ -27,7 +27,7 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
   const tpl = mergeDocumentTemplate(settings)
   const { name, address, taxId } = tpl.company
   const logo = logoUrl || templateLogoUrl(tpl)
-  const { brand, accent } = brandColors(tpl)
+  const brand = brandColor(tpl)
   const tagline = taglineHtml(tpl, escapeHtml)
 
   const total = Number(pr.total_amount) || 0
@@ -52,7 +52,7 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
       <style>
         @page { size: A4; margin: 14mm; }
         body { font-family: 'Sarabun', 'Tahoma', sans-serif; color:#2d3748; font-size: 13px; margin:0; }
-        .banner { background:linear-gradient(100deg, ${brand} 0%, ${brand} 82%, ${accent} 82%, ${accent} 100%); color:#fff; text-align:center; padding:10px; border-radius:4px; margin-bottom:18px; }
+        .banner { background:${brand}; color:#fff; text-align:center; padding:10px; border-radius:4px; margin-bottom:18px; }
         .banner .th { font-weight:700; font-size:16px; }
         .banner .en { font-size:11px; letter-spacing:1px; opacity:.85; }
         .topinfo { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:18px; }
@@ -76,8 +76,7 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
         .sign-col { width:45%; text-align:center; }
         .sign-name { min-height:16px; font-weight:600; margin-bottom:4px; }
         .sign-label { border-top:1px solid #999; padding-top:6px; }
-${taglineCss(brand)}
-        @media print { .no-print { display:none; } }
+        @media print { .no-print { display:none; } }${taglineCss(brand, tpl)}
       </style>
     </head>
     <body>
@@ -87,8 +86,7 @@ ${taglineCss(brand)}
         <div class="company-block">
           <img class="logo" src="${logo}" onerror="this.style.display='none'" />
           <div>
-            <div class="company-name">${escapeHtml(name)}</div>
-            ${tagline}
+            <div class="company-name">${escapeHtml(name)}</div>${tagline}
             <div class="meta">${escapeHtml(address).replace(/\n/g, '<br/>')}</div>
             ${taxId ? `<div class="meta">${escapeHtml(tpl.quotation.taxIdLabel)} : ${escapeHtml(taxId)}</div>` : ''}
           </div>
