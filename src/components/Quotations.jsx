@@ -119,7 +119,7 @@ export default function Quotations({ perm, reloadKey, settings, deals, isAdmin, 
                           <EditableSelect listKey="quot_statuses" value={qt.status} onChange={v => onStatusChange(qt.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
                         )}
                         {canManageChild(qt.company, perm) && <button className="btn btn-outline btn-xs" onClick={() => onEdit(qt)}>{t('แก้ไข')}</button>}
-                        {canManageChild(qt.company, perm) && <button className="btn btn-outline btn-xs" onClick={() => onCopy(qt)} title={t('คัดลอกเป็นใบเสนอราคาใหม่')}>{t('คัดลอก')}</button>}
+                        {canManageChild(qt.company, perm) && <button className="btn btn-outline btn-xs" onClick={() => onCopy(qt)} title={t('คัดลอกเป็นใบเสนอราคาใหม่')}>{t('คัดลอก', 'Duplicate')}</button>}
                         <button className="btn btn-secondary btn-xs" onClick={() => doPrint(qt)}>PDF</button>
                         <SignedQuotationControl quotation={qt} manageable={canManageChild(qt.company, perm)} onChanged={() => setLocalBump(b => b + 1)} />
                         {adminOnlyDelete(perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(qt.id)}>{t('ลบ')}</button>}

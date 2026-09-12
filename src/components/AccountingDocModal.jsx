@@ -143,7 +143,7 @@ function DocRequestForm({ order, existing, currentUser, isAdditional = false, on
               <b style={{ color: 'var(--navy)' }}>{t('พรีวิวคำขอ (ให้ลูกค้าเช็คข้อมูล)')}</b>
               <button type="button" className="btn btn-outline btn-xs" onClick={() => printAccountingDocRequest(order, f, settings)}>{t('ดาวน์โหลด / พิมพ์')}</button>
             </div>
-            <div>{t('ออเดอร์')}: <b>{order.order_no}</b> · {t('ลูกค้า')}: {order.customer_name || '-'}</div>
+            <div>{t('ออเดอร์', 'Order')}: <b>{order.order_no}</b> · {t('ลูกค้า')}: {order.customer_name || '-'}</div>
             <div>{t('ประเภทเอกสาร')}: {f.document_type || '-'} · {t('วิธีส่ง')}: {f.delivery_method || '-'}</div>
             {NEEDS_TAX(f.document_type) && <div style={{ marginTop: 4 }}>{t('ออกในนาม')}: <b>{f.tax_name || '-'}</b> · {t('เลขผู้เสียภาษี')}: {f.tax_id || '-'} · {f.branch_type}{f.branch_type === 'สาขา' && f.branch_no ? ` ${f.branch_no}` : ''}<br />{t('ที่อยู่')}: {f.tax_address || '-'}</div>}
             {NEEDS_EMAIL(f.delivery_method) && <div>{t('อีเมล')}: {f.email_to || '-'}</div>}

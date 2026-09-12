@@ -10,7 +10,7 @@ import SignedQuotationControl from './SignedQuotationControl'
 
 const TABS = [
   ['info', 'ข้อมูลบริษัท'], ['contacts', 'ผู้ติดต่อ'], ['deals', 'ดีล (stat)'],
-  ['activities', 'กิจกรรม'], ['tasks', 'งาน'], ['quotations', 'ใบเสนอราคา'], ['attachments', 'เอกสารแนบ']
+  ['activities', 'กิจกรรม'], ['tasks', 'งาน', 'Tasks'], ['quotations', 'ใบเสนอราคา'], ['attachments', 'เอกสารแนบ']
 ]
 
 export default function CompanyDetail({ company, contacts, deals, activities, tasks, quotations, settings, perm, currentUserName, onBack, actions }) {
@@ -57,9 +57,10 @@ export default function CompanyDetail({ company, contacts, deals, activities, ta
       </div>
 
       <div className="detail-tabs">
-        {TABS.map(([id, label]) => (
+        {/* en = คำแปลเฉพาะจุด สำหรับแท็บที่คำไทยซ้ำกับที่อื่นแต่คนละความหมาย */}
+        {TABS.map(([id, label, en]) => (
           <div key={id} className={`detail-tab${tab === id ? ' active' : ''}`} onClick={() => setTab(id)}>
-            {t(label)}{counts[id] !== undefined ? ` (${counts[id]})` : ''}
+            {t(label, en)}{counts[id] !== undefined ? ` (${counts[id]})` : ''}
           </div>
         ))}
       </div>
@@ -262,7 +263,7 @@ function QuotationsTab({ quotations, deals, company, perm, settings, onAdd, onEd
                       <EditableSelect listKey="quot_statuses" value={q.status} onChange={v => onStatusChange(q.id, v)} isAdmin={perm.isAdmin} style={{ display: 'inline-flex', width: 160 }} />
                     )}
                     {manageable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(q)}>{t('แก้ไข')}</button>}
-                    {manageable && <button className="btn btn-outline btn-xs" onClick={() => onCopy(q)} title={t('คัดลอกเป็นใบเสนอราคาใหม่')}>{t('คัดลอก')}</button>}
+                    {manageable && <button className="btn btn-outline btn-xs" onClick={() => onCopy(q)} title={t('คัดลอกเป็นใบเสนอราคาใหม่')}>{t('คัดลอก', 'Duplicate')}</button>}
                     <button className="btn btn-secondary btn-xs" onClick={() => printQuotation(q, company, settings)}>PDF</button>
                     <SignedQuotationControl quotation={q} manageable={manageable} onChanged={onRefresh} />
                     {adminOnlyDelete(perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(q.id)}>{t('ลบ')}</button>}

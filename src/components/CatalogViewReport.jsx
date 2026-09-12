@@ -112,7 +112,7 @@ export default function CatalogViewReport({ onClose }) {
               <input className="form-control" type="date" value={from} max={to} onChange={e => setFrom(e.target.value)} />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">{t('ถึง')}</label>
+              <label className="form-label">{t('ถึง', 'To')}</label>
               <input className="form-control" type="date" value={to} min={from} onChange={e => setTo(e.target.value)} />
             </div>
             <button className="btn btn-outline" disabled={exporting || !rows.length} onClick={doExport}>

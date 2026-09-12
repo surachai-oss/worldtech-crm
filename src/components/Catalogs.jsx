@@ -217,7 +217,7 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
                     </td>
                     <td className="td-actions">
                       <button className="btn btn-outline btn-xs" onClick={() => onOpen(c.id)}>{t(canManage ? 'แก้ไข' : 'ดู')}</button>
-                      {canManage && <button className="btn btn-outline btn-xs" onClick={() => onCopy(c)}>{t('คัดลอก')}</button>}
+                      {canManage && <button className="btn btn-outline btn-xs" onClick={() => onCopy(c)}>{t('คัดลอก', 'Duplicate')}</button>}
                       <button className="btn btn-outline btn-xs" onClick={() => setLinkFor(c)}>{t('คัดลอกลิงก์')}</button>
                       {canManage && (
                         <button className={`btn btn-xs ${c.status === 'published' ? 'btn-secondary' : 'btn-success'}`} onClick={() => togglePublish(c)}>

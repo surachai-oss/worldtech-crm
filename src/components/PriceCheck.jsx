@@ -376,7 +376,7 @@ export default function PriceCheck({ perm }) {
               }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--navy)', marginBottom: 8 }}>
                   {t('ตัวเลือกที่')} {i + 1}
-                  {i > 0 && <span style={{ fontWeight: 400, color: 'var(--text-light)' }}> ({t('ไม่บังคับ')})</span>}
+                  {i > 0 && <span style={{ fontWeight: 400, color: 'var(--text-light)' }}> ({t('ไม่บังคับ', 'optional')})</span>}
                 </div>
                 <div className="form-group" style={{ marginBottom: 8 }}>
                   <label className="form-label">{t('จำนวน')}</label>

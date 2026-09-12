@@ -171,7 +171,7 @@ export default function OrderMarginReport() {
           <div className="kpi-card navy">
             <div className="kpi-label">{t('ยอดขายรวม')}</div>
             <div className="kpi-value">{fmtCurrency(totals.sales)}</div>
-            <div className="kpi-sub">{totals.orders} {t('ออเดอร์')}</div>
+            <div className="kpi-sub">{totals.orders} {t('ออเดอร์', 'orders')}</div>
           </div>
           <div className="kpi-card green">
             <div className="kpi-label">{t('กำไรขั้นต้น')}</div>
@@ -203,7 +203,7 @@ export default function OrderMarginReport() {
                   {view === 'order' && <th>{t('ลูกค้า')}</th>}
                   {view === 'order' && <th>{t('วันที่')}</th>}
                   {view === 'order' && <th>{t('ต้นทุนที่คิด')}</th>}
-                  {view !== 'order' && <th>{t('ออเดอร์')}</th>}
+                  {view !== 'order' && <th>{t('ออเดอร์', 'Order')}</th>}
                   <th>{t('จำนวน')}</th>
                   <th>{t('ยอดขาย')}</th>
                   <th>{t('ต้นทุน')}</th>
