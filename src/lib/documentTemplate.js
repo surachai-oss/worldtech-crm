@@ -34,7 +34,7 @@ export const TEMPLATE_DEFAULTS = {
     taxId: '',
     logoUrl: '',      // ว่าง = ใช้โลโก้ที่ติดมากับระบบ (public/worldtech-logo.png)
     brandColor: DEFAULT_BRAND_COLOR,
-    // สโลแกนใต้ชื่อบริษัทบนหัวเอกสาร — ว่างทั้งคู่ = ไม่พิมพ์บรรทัดนี้เลย
+    // สโลแกนปิดท้ายกระดาษ (ใต้ช่องลงชื่อ) — ว่างทั้งคู่ = ไม่พิมพ์บรรทัดนี้เลย
     taglineTh: '',
     taglineEn: '',
   },
@@ -149,7 +149,7 @@ export function brandColor(tpl) {
   return normalizeHexColor(tpl?.company?.brandColor, DEFAULT_BRAND_COLOR)
 }
 
-// สโลแกนใต้ชื่อบริษัท ไทยและอังกฤษพิมพ์คู่กันเสมอ (ไม่ผูกกับปุ่มสลับภาษาของหน้าจอ)
+// สโลแกนปิดท้ายกระดาษ ไทยและอังกฤษพิมพ์คู่กันเสมอ (ไม่ผูกกับปุ่มสลับภาษาของหน้าจอ)
 // เพราะเอกสารใบเดียวถูกส่งให้ทั้งลูกค้าไทยและต่างชาติ — กรอกภาษาเดียวก็พิมพ์ภาษาเดียว
 // esc = ฟังก์ชัน escape ของไฟล์ที่เรียก ส่งเข้ามาเพื่อไม่ให้ต้องมี escapeHtml ซ้ำอีกชุดในนี้
 export function taglineHtml(tpl, esc) {
@@ -167,7 +167,8 @@ export function taglineHtml(tpl, esc) {
 export function taglineCss(brand, tpl) {
   if (tpl && !taglineHtml(tpl, x => x)) return ''
   return `
-        .tagline { font-size:10.5px; font-weight:600; color:${brand}; margin-top:1px; letter-spacing:.2px; }
+        .tagline { margin-top:18px; padding-top:8px; border-top:1px solid ${brand}33; text-align:center;
+                   font-size:10.5px; font-weight:600; color:${brand}; letter-spacing:.2px; }
         .tagline-en { font-weight:400; font-style:italic; opacity:.8; }
         .tagline-sep { opacity:.45; margin:0 5px; font-weight:400; }`
 }

@@ -296,13 +296,13 @@ export default function DocumentSettings({ settings = {}, isAdmin, onSaved, onBa
         <div className="ds-grid">
           {/* ===== ซ้าย: ตัวแก้ไข ===== */}
           <div>
-            <Panel title={t('แบรนด์')} color={GROUP.brand} note={t('หัวเอกสารทุกใบ')}>
+            <Panel title={t('แบรนด์')} color={GROUP.brand} note={t('สีทั้งใบ + ท้ายกระดาษ')}>
               <ColorField label={t('สีเอกสาร')} hint={t('แถบหัวเอกสาร หัวตาราง แถบยอดรวม และป้ายหัวข้อ — สีนี้ใช้กับเอกสารที่พิมพ์ออกไป ไม่เกี่ยวกับสีบนหน้าจอนี้')}
                 value={tpl.company.brandColor} onChange={v => setCompany('brandColor', v)} />
               <Field label={t('สโลแกน (ไทย)')}>
                 <input className="form-control" value={tpl.company.taglineTh} onChange={e => setCompany('taglineTh', e.target.value)} />
               </Field>
-              <Field label={t('สโลแกน (อังกฤษ)')} hint={t('พิมพ์ใต้ชื่อบริษัทบนหัวเอกสาร ทั้งสองภาษาพร้อมกันเสมอ ไม่ขึ้นกับปุ่มสลับภาษาของหน้าจอ เพราะเอกสารใบเดียวส่งให้ได้ทั้งลูกค้าไทยและต่างชาติ — เว้นว่างทั้งคู่คือไม่พิมพ์บรรทัดนี้')}>
+              <Field label={t('สโลแกน (อังกฤษ)')} hint={t('พิมพ์ปิดท้ายกระดาษ ใต้ช่องลงชื่อ ทั้งสองภาษาพร้อมกันเสมอ ไม่ขึ้นกับปุ่มสลับภาษาของหน้าจอ เพราะเอกสารใบเดียวส่งให้ได้ทั้งลูกค้าไทยและต่างชาติ — เว้นว่างทั้งคู่คือไม่พิมพ์บรรทัดนี้')}>
                 <input className="form-control" value={tpl.company.taglineEn} onChange={e => setCompany('taglineEn', e.target.value)} />
               </Field>
             </Panel>

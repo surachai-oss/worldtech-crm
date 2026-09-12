@@ -41,8 +41,7 @@ export function buildAccountingDocRequestHtml(order, f, settings = {}, logoUrl =
         .row .k { width:180px; color:#718096; flex-shrink:0; }
         .row .v { font-weight:600; }
         .note { margin-top:16px; font-size:12px; color:#718096; }
-        .no-print { margin-top:24px; text-align:center; }
-        .tagline-top { text-align:center; margin:-10px 0 14px; }${taglineCss(brand, tpl)}
+        .no-print { margin-top:24px; text-align:center; }${taglineCss(brand, tpl)}
       </style>
     </head>
     <body>
@@ -50,7 +49,6 @@ export function buildAccountingDocRequestHtml(order, f, settings = {}, logoUrl =
         <div class="th">คำขอออกเอกสาร (ตรวจสอบข้อมูลก่อนออกเอกสารจริง)</div>
         <div class="en">ACCOUNTING DOCUMENT REQUEST — DRAFT FOR CONFIRMATION</div>
       </div>
-      ${tagline ? `<div class="tagline-top">${tagline}</div>` : ''}
       <div class="head">
         <img class="logo" src="${logo}" onerror="this.style.display='none'" />
         <div>
@@ -84,6 +82,7 @@ export function buildAccountingDocRequestHtml(order, f, settings = {}, logoUrl =
       ${f.sales_note ? `<div class="note"><b>หมายเหตุ:</b> ${escapeHtml(f.sales_note)}</div>` : ''}
       <div class="note">* กรุณาตรวจสอบความถูกต้องของข้อมูล โดยเฉพาะชื่อ/เลขผู้เสียภาษี/ที่อยู่ ก่อนยืนยันออกเอกสาร เพื่อป้องกันการแก้ไขภายหลัง</div>
 
+      ${tagline}
       <div class="no-print">
         <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer">พิมพ์ / บันทึกเป็น PDF</button>
       </div>

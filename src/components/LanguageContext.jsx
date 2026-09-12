@@ -919,7 +919,7 @@ export const EN_DICT = {
   // ===== Document settings (ตั้งค่าเอกสาร) =====
   'ตั้งค่าเอกสาร': 'Document Settings',
   'แถบหัวเอกสาร หัวตาราง แถบยอดรวม และป้ายหัวข้อ — สีนี้ใช้กับเอกสารที่พิมพ์ออกไป ไม่เกี่ยวกับสีบนหน้าจอนี้': 'The header bar, table header, total row and section labels. This colours the printed document, not this screen.',
-  'หัวเอกสารทุกใบ': 'On every document header',
+  'สีทั้งใบ + ท้ายกระดาษ': 'Document colour and footer',
   'มุมบนซ้ายของเอกสาร': 'Top-left of the document',
   'ใต้ตารางสินค้า': 'Below the items table',
   'ป้ายกำกับแต่ละส่วน': 'Section labels',
@@ -929,7 +929,7 @@ export const EN_DICT = {
   'สีเอกสาร': 'Document colour',
   'สโลแกน (ไทย)': 'Tagline (Thai)',
   'สโลแกน (อังกฤษ)': 'Tagline (English)',
-  'พิมพ์ใต้ชื่อบริษัทบนหัวเอกสาร ทั้งสองภาษาพร้อมกันเสมอ ไม่ขึ้นกับปุ่มสลับภาษาของหน้าจอ เพราะเอกสารใบเดียวส่งให้ได้ทั้งลูกค้าไทยและต่างชาติ — เว้นว่างทั้งคู่คือไม่พิมพ์บรรทัดนี้': 'Printed under the company name on every document, both languages together — it does not follow the interface language, because one document goes to Thai and international customers alike. Leave both empty to print no tagline.',
+  'พิมพ์ปิดท้ายกระดาษ ใต้ช่องลงชื่อ ทั้งสองภาษาพร้อมกันเสมอ ไม่ขึ้นกับปุ่มสลับภาษาของหน้าจอ เพราะเอกสารใบเดียวส่งให้ได้ทั้งลูกค้าไทยและต่างชาติ — เว้นว่างทั้งคู่คือไม่พิมพ์บรรทัดนี้': 'Printed at the foot of every document, below the signature lines, both languages together — it does not follow the interface language, because one document goes to Thai and international customers alike. Leave both empty to print no tagline.',
   'กลับไปใบเสนอราคา': 'Back to quotations',
   'หัวกระดาษ โลโก้ เงื่อนไข และหมายเหตุตั้งต้นของใบเสนอราคา — แก้ที่นี่แล้วมีผลกับเอกสารที่พิมพ์ครั้งต่อไปทันที ส่วนรายการสินค้าและราคายังดึงจากข้อมูลจริงเหมือนเดิม': 'The letterhead, logo, terms and default remark on your quotations. Changes here apply to the next document printed. Line items and prices still come from the quotation itself.',
   'บันทึกแล้ว': 'Saved',

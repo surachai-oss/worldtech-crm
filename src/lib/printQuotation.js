@@ -126,7 +126,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
         <div class="company-block">
           <img class="logo" src="${logo}" onerror="this.style.display='none'" />
           <div>
-            <div class="company-name">${escapeHtml(name)}</div>${tagline}
+            <div class="company-name">${escapeHtml(name)}</div>
             <div class="meta">${escapeHtml(address).replace(/\n/g, '<br/>')}</div>
             ${taxId ? `<div class="meta">${escapeHtml(q.taxIdLabel)} : ${escapeHtml(taxId)}</div>` : ''}
           </div>
@@ -198,7 +198,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
         </div>
       </div>
 
-      ${autoPrint ? `
+      ${tagline}${autoPrint ? `
       <div class="no-print" style="margin-top:24px;text-align:center">
         <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer">พิมพ์ / บันทึกเป็น PDF</button>
       </div>
