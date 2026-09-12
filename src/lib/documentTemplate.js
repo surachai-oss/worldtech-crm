@@ -43,6 +43,12 @@ export const TEMPLATE_DEFAULTS = {
     titleEn: 'QUOTATION',
     taxIdLabel: 'เลขประจำตัวผู้เสียภาษี',
     customerLabel: 'ชื่อลูกค้า',
+    // หัวคอลัมน์ตารางสินค้า — ข้อความบนหัวตารางเท่านั้น ตัวเลขในตารางยังมาจากข้อมูลจริงเหมือนเดิม
+    colQty: 'จำนวน',
+    colItem: 'รายการสินค้า',
+    colUnitPrice: 'ราคาต่อหน่วย',
+    colDiscount: 'ส่วนลด(บาท)',
+    colTotal: 'ยอดรวม',
     termsTitle: 'เงื่อนไขการเสนอราคาและการสั่งซื้อ',
     termsBullet: '*',
     terms: [

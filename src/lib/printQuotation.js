@@ -155,11 +155,11 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
       <table>
         <thead>
           <tr>
-            <th style="width:60px">จำนวน</th>
-            <th>รายการสินค้า</th>
-            <th class="num" style="width:120px">ราคาต่อหน่วย</th>
-            <th class="num" style="width:110px">ส่วนลด(บาท)</th>
-            <th class="num" style="width:120px">ยอดรวม</th>
+            <th style="width:60px">${escapeHtml(q.colQty)}</th>
+            <th>${escapeHtml(q.colItem)}</th>
+            <th class="num" style="width:120px">${escapeHtml(q.colUnitPrice)}</th>
+            <th class="num" style="width:110px">${escapeHtml(q.colDiscount)}</th>
+            <th class="num" style="width:120px">${escapeHtml(q.colTotal)}</th>
           </tr>
         </thead>
         <tbody>
