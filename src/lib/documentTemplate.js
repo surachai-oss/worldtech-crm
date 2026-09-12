@@ -21,6 +21,10 @@ export const LEGACY_COMPANY_KEYS = {
 
 export const DEFAULT_LOGO_URL = '/worldtech-logo.png'
 
+// สีหลัก = น้ำเงินกรมท่าที่ฝังอยู่ในเอกสารมาแต่เดิม, สีรอง = เหลืองแบรนด์เดียวกับในระบบ
+export const DEFAULT_BRAND_COLOR = '#1b315e'
+export const DEFAULT_ACCENT_COLOR = '#febf10'
+
 export const TEMPLATE_DEFAULTS = {
   company: {
     name: 'Worldtech Co., Ltd.',
@@ -30,12 +34,18 @@ export const TEMPLATE_DEFAULTS = {
     line: '',
     taxId: '',
     logoUrl: '',      // ว่าง = ใช้โลโก้ที่ติดมากับระบบ (public/worldtech-logo.png)
+    brandColor: DEFAULT_BRAND_COLOR,   // แถบหัวเอกสาร หัวตาราง แถบยอดรวม ป้ายหัวข้อ
+    accentColor: DEFAULT_ACCENT_COLOR, // มุมกระดาษ เส้นใต้หัวข้อ ขอบกล่องติดต่อ
+    // สโลแกนใต้ชื่อบริษัทบนหัวเอกสาร — ว่างทั้งคู่ = ไม่พิมพ์บรรทัดนี้เลย
+    taglineTh: '',
+    taglineEn: '',
   },
   quotation: {
     titleTh: 'ใบเสนอราคา',
     titleEn: 'QUOTATION',
     taxIdLabel: 'เลขประจำตัวผู้เสียภาษี',
     customerLabel: 'ชื่อลูกค้า',
+    itemsTitle: 'รายการสินค้า',
     termsTitle: 'เงื่อนไขการเสนอราคาและการสั่งซื้อ',
     termsBullet: '*',
     terms: [
@@ -80,6 +90,10 @@ export function mergeDocumentTemplate(settings = {}) {
   const dc = TEMPLATE_DEFAULTS.company
   const sc = (saved.company && typeof saved.company === 'object') ? saved.company : {}
   const company = {
+    brandColor: normalizeHexColor(sc.brandColor, dc.brandColor),
+    accentColor: normalizeHexColor(sc.accentColor, dc.accentColor),
+    taglineTh: str(sc.taglineTh, dc.taglineTh),
+    taglineEn: str(sc.taglineEn, dc.taglineEn),
     name: str(sc.name, legacy.name ?? dc.name),
     address: str(sc.address, legacy.address ?? dc.address),
     phone: str(sc.phone, legacy.phone ?? dc.phone),
@@ -123,4 +137,42 @@ export function documentLogoPath(url, bucket) {
   // กัน path traversal จาก URL ที่ประดิษฐ์ขึ้นมา แม้จะต้องเป็นแอดมินถึงเรียกได้ก็ตาม
   if (path.includes('..')) return null
   return path.startsWith('document/') && path.length > 'document/'.length ? path : null
+}
+
+// รับสีได้ทั้ง "1b315e", "#1b315e" และ "#abc" — ค่าที่อ่านไม่ออกถอยไปใช้สีตั้งต้น ไม่ปล่อยให้ CSS พัง
+// สำคัญเพราะสีถูกแทรกลงใน stylesheet ของเอกสารตรงๆ ค่าที่ไม่ใช่สีจะทำให้ทั้งกฎนั้นถูกทิ้ง
+export function normalizeHexColor(v, fallback) {
+  if (typeof v !== 'string') return fallback
+  const raw = v.trim().replace(/^#/, '')
+  if (/^[0-9a-f]{3}$/i.test(raw)) return '#' + raw.split('').map(c => c + c).join('').toLowerCase()
+  if (/^[0-9a-f]{6}$/i.test(raw)) return '#' + raw.toLowerCase()
+  return fallback
+}
+
+export function brandColors(tpl) {
+  return {
+    brand: normalizeHexColor(tpl?.company?.brandColor, DEFAULT_BRAND_COLOR),
+    accent: normalizeHexColor(tpl?.company?.accentColor, DEFAULT_ACCENT_COLOR),
+  }
+}
+
+// สโลแกนใต้ชื่อบริษัท ไทยและอังกฤษพิมพ์คู่กันเสมอ (ไม่ผูกกับปุ่มสลับภาษาของหน้าจอ)
+// เพราะเอกสารใบเดียวถูกส่งให้ทั้งลูกค้าไทยและต่างชาติ — กรอกภาษาเดียวก็พิมพ์ภาษาเดียว
+// esc = ฟังก์ชัน escape ของไฟล์ที่เรียก ส่งเข้ามาเพื่อไม่ให้ต้องมี escapeHtml ซ้ำอีกชุดในนี้
+export function taglineHtml(tpl, esc) {
+  const th = (tpl?.company?.taglineTh || '').trim()
+  const en = (tpl?.company?.taglineEn || '').trim()
+  if (!th && !en) return ''
+  const parts = []
+  if (th) parts.push(esc(th))
+  if (en) parts.push(`<span class="tagline-en">${esc(en)}</span>`)
+  return `<div class="tagline">${parts.join('<span class="tagline-sep">|</span>')}</div>`
+}
+
+// CSS ของสโลแกน — ใช้ร่วมกันทุกเอกสาร ส่งสีเข้ามาเพราะแต่ละใบแทรกสีลง stylesheet ตรงๆ
+export function taglineCss(brand) {
+  return `
+        .tagline { font-size:10.5px; font-weight:600; color:${brand}; margin-top:1px; letter-spacing:.2px; }
+        .tagline-en { font-weight:400; font-style:italic; opacity:.8; }
+        .tagline-sep { opacity:.45; margin:0 5px; font-weight:400; }`
 }

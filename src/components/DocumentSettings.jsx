@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { saveDocumentTemplate, uploadDocumentLogo, deleteDocumentLogo, TEMPLATE_CONFLICT } from '../lib/api'
-import { mergeDocumentTemplate, templateLogoUrl, TEMPLATE_DEFAULTS, DEFAULT_LOGO_URL, TEMPLATE_SETTING_KEY } from '../lib/documentTemplate'
+import { mergeDocumentTemplate, templateLogoUrl, TEMPLATE_DEFAULTS, DEFAULT_LOGO_URL, TEMPLATE_SETTING_KEY, normalizeHexColor } from '../lib/documentTemplate'
 import { buildQuotationHtml } from '../lib/printQuotation'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
@@ -35,6 +35,9 @@ const CSS = `
 .ds-preview-wrap{position:sticky;top:0}
 .ds-preview-wrap .ds-panel{margin-bottom:0}
 .ds-preview{width:100%;height:calc(100vh - 190px);min-height:420px;border:1px solid var(--border);border-radius:8px;background:var(--white)}
+.ds-color{display:flex;gap:8px;align-items:center}
+.ds-color input[type=color]{width:42px;height:34px;padding:2px;border:1px solid var(--border);border-radius:6px;background:var(--white);cursor:pointer;flex-shrink:0}
+.ds-color input[type=text]{max-width:130px;font-family:ui-monospace,Menlo,monospace}
 .ds-warn{border:1px solid var(--warning);background:#fffaf0;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;line-height:1.6}
 `
 
@@ -62,6 +65,36 @@ function Panel({ title, children }) {
       <div className="ds-panel-h">{title}</div>
       <div className="ds-panel-b">{children}</div>
     </div>
+  )
+}
+
+// ช่องเลือกสี — ปล่อยให้พิมพ์รหัสสีมั่วระหว่างทางได้ (เช่นเพิ่งพิมพ์ "#1b") จึงเก็บข้อความดิบไว้ใน state ของตัวเอง
+// แล้วค่อยส่งค่าที่อ่านออกจริงขึ้นไปเมื่อครบรูปแบบ ถ้าออกจากช่องแล้วยังอ่านไม่ออกให้ดีดกลับเป็นค่าล่าสุดที่ใช้ได้
+function ColorField({ label, hint, value, onChange }) {
+  const [raw, setRaw] = useState(value)
+  // จำค่าล่าสุดที่ตัวเองส่งขึ้นไป เพื่อแยกว่า value ที่เปลี่ยนมาจากการพิมพ์ของเราเอง
+  // หรือมาจากข้างนอก (เช่นกดทิ้งการแก้ไขแล้วดึงค่าเดิมกลับมา) — กรณีหลังเท่านั้นที่ต้องเขียนทับช่อง
+  const emitted = useRef(value)
+  useEffect(() => { if (value !== emitted.current) { emitted.current = value; setRaw(value) } }, [value])
+
+  const emit = (v) => { emitted.current = v; onChange(v) }
+  // ระหว่างพิมพ์ ส่งค่าขึ้นไปเฉพาะตอนครบ 6 หลักเท่านั้น ไม่ขยายรูปแบบย่อ 3 หลักให้กลางคัน
+  // ไม่งั้นพิมพ์ "0f5132" พอถึง "0f5" จะกลายเป็น "#00ff55" คาช่องไว้ แล้วพิมพ์ต่อไม่ได้
+  const type = (v) => {
+    setRaw(v)
+    if (/^#?[0-9a-f]{6}$/i.test(v.trim())) emit(normalizeHexColor(v, value))
+  }
+  // ออกจากช่องแล้วค่อยจัดรูปแบบให้เรียบร้อย รวมถึงขยาย 3 หลักเป็น 6 หลัก และดีดค่าที่อ่านไม่ออกกลับ
+  const done = () => { const n = normalizeHexColor(raw, value); setRaw(n); emit(n) }
+
+  return (
+    <Field label={label} hint={hint}>
+      <div className="ds-color">
+        <input type="color" value={value} onChange={e => { setRaw(e.target.value); emit(e.target.value) }} />
+        <input type="text" className="form-control" value={raw} spellCheck={false} placeholder="#1b315e"
+          onChange={e => type(e.target.value)} onBlur={done} />
+      </div>
+    </Field>
   )
 }
 
@@ -244,6 +277,21 @@ export default function DocumentSettings({ settings = {}, isAdmin, onSaved, onBa
         <div className="ds-grid">
           {/* ===== ซ้าย: ตัวแก้ไข ===== */}
           <div>
+            <Panel title={t('สีและสโลแกนของแบรนด์')}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <ColorField label={t('สีหลัก')} hint={t('แถบหัวเอกสาร หัวตาราง แถบยอดรวม และชื่อหัวข้อแต่ละส่วน')}
+                  value={tpl.company.brandColor} onChange={v => setCompany('brandColor', v)} />
+                <ColorField label={t('สีรอง')} hint={t('มุมกระดาษ เลขลำดับหัวข้อ เส้นใต้หัวข้อ และขอบกล่องติดต่อ')}
+                  value={tpl.company.accentColor} onChange={v => setCompany('accentColor', v)} />
+              </div>
+              <Field label={t('สโลแกน (ไทย)')}>
+                <input className="form-control" value={tpl.company.taglineTh} onChange={e => setCompany('taglineTh', e.target.value)} />
+              </Field>
+              <Field label={t('สโลแกน (อังกฤษ)')} hint={t('พิมพ์ใต้ชื่อบริษัทบนหัวเอกสาร ทั้งสองภาษาพร้อมกันเสมอ ไม่ขึ้นกับปุ่มสลับภาษาของหน้าจอ เพราะเอกสารใบเดียวส่งให้ได้ทั้งลูกค้าไทยและต่างชาติ — เว้นว่างทั้งคู่คือไม่พิมพ์บรรทัดนี้')}>
+                <input className="form-control" value={tpl.company.taglineEn} onChange={e => setCompany('taglineEn', e.target.value)} />
+              </Field>
+            </Panel>
+
             <Panel title={t('ข้อมูลบริษัทบนหัวเอกสาร')}>
               <Field label={t('โลโก้')} hint={t('แนะนำไฟล์ PNG พื้นหลังโปร่ง สูงประมาณ 120 พิกเซลขึ้นไป ระบบย่อให้พอดีหัวกระดาษเอง')}>
                 <div className="ds-logo-row">
@@ -281,7 +329,7 @@ export default function DocumentSettings({ settings = {}, isAdmin, onSaved, onBa
             </Panel>
 
             <Panel title={t('เงื่อนไขการเสนอราคาและการสั่งซื้อ')}>
-              <Field label={t('หัวข้อของกล่องเงื่อนไข')}>
+              <Field label={t('หัวข้อส่วนเงื่อนไข')}>
                 <input className="form-control" value={tpl.quotation.termsTitle} onChange={e => setQuot('termsTitle', e.target.value)} />
               </Field>
               <Field label={t('สัญลักษณ์นำหน้าแต่ละข้อ')} hint={t('เว้นว่างได้ถ้าไม่ต้องการสัญลักษณ์นำหน้า')}>
@@ -322,13 +370,16 @@ export default function DocumentSettings({ settings = {}, isAdmin, onSaved, onBa
               <Field label={t('คำนำหน้าเลขผู้เสียภาษี')}>
                 <input className="form-control" value={tpl.quotation.taxIdLabel} onChange={e => setQuot('taxIdLabel', e.target.value)} />
               </Field>
-              <Field label={t('หัวข้อกล่องลูกค้า')}>
+              <Field label={t('หัวข้อส่วนลูกค้า')}>
                 <input className="form-control" value={tpl.quotation.customerLabel} onChange={e => setQuot('customerLabel', e.target.value)} />
               </Field>
-              <Field label={t('หัวข้อกล่องหมายเหตุ')}>
+              <Field label={t('หัวข้อส่วนรายการสินค้า')} hint={t('หัวข้อทั้ง 5 ส่วนถูกใส่เลขลำดับให้อัตโนมัติ เรียงตามลำดับที่พิมพ์จริงบนกระดาษ')}>
+                <input className="form-control" value={tpl.quotation.itemsTitle} onChange={e => setQuot('itemsTitle', e.target.value)} />
+              </Field>
+              <Field label={t('หัวข้อส่วนหมายเหตุ')}>
                 <input className="form-control" value={tpl.quotation.noteTitle} onChange={e => setQuot('noteTitle', e.target.value)} />
               </Field>
-              <Field label={t('หัวข้อกล่องติดต่อ')}>
+              <Field label={t('หัวข้อส่วนติดต่อ')}>
                 <input className="form-control" value={tpl.quotation.contactTitle} onChange={e => setQuot('contactTitle', e.target.value)} />
               </Field>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

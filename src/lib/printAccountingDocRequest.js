@@ -1,5 +1,5 @@
 import { fmtDate } from './format'
-import { mergeDocumentTemplate, templateLogoUrl } from './documentTemplate'
+import { mergeDocumentTemplate, templateLogoUrl, brandColors, taglineHtml, taglineCss } from './documentTemplate'
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
@@ -9,7 +9,11 @@ function escapeHtml(s) {
 // f = ค่าจากฟอร์ม (document_type/delivery_method/priority + ข้อมูลภาษี/อีเมล/ที่อยู่ตัวจริง), order = ออเดอร์ต้นทาง
 // settings = ตาราง settings ทั้งก้อน ใช้ดึงโลโก้จาก "ตั้งค่าเอกสาร" ให้ตรงกับใบเสนอราคา/ใบอนุมัติยอดโอน
 export function buildAccountingDocRequestHtml(order, f, settings = {}, logoUrl = '') {
-  const logo = logoUrl || templateLogoUrl(mergeDocumentTemplate(settings))
+  const tpl = mergeDocumentTemplate(settings)
+  const logo = logoUrl || templateLogoUrl(tpl)
+  const { brand, accent } = brandColors(tpl)
+  // หัวกระดาษใบนี้โชว์ "ชื่อลูกค้า" ไม่ใช่ชื่อบริษัทเรา สโลแกนจึงไปอยู่ใต้แถบหัวเอกสารแทน
+  const tagline = taglineHtml(tpl, escapeHtml)
   const needsTax = f.document_type === 'ใบกำกับภาษี + ใบเสร็จรับเงิน'
   const needsEmail = f.delivery_method === 'ส่งสำเนาทางอีเมล' || f.delivery_method === 'ส่งทั้งอีเมลและตัวจริง'
   const needsOriginal = f.delivery_method === 'ส่งตัวจริง' || f.delivery_method === 'ส่งทั้งอีเมลและตัวจริง'
@@ -26,19 +30,20 @@ export function buildAccountingDocRequestHtml(order, f, settings = {}, logoUrl =
       <style>
         @page { size: A4; margin: 16mm; }
         body { font-family: 'Sarabun', 'Tahoma', sans-serif; color:#2d3748; font-size: 14px; margin:0; }
-        .banner { background:#1b315e; color:#fff; text-align:center; padding:10px; border-radius:4px; margin-bottom:18px; }
+        .banner { background:linear-gradient(100deg, ${brand} 0%, ${brand} 82%, ${accent} 82%, ${accent} 100%); color:#fff; text-align:center; padding:10px; border-radius:4px; margin-bottom:18px; }
         .banner .th { font-weight:700; font-size:16px; }
         .banner .en { font-size:11px; letter-spacing:1px; opacity:.85; }
         .head { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
         .logo { height:40px; max-width:150px; object-fit:contain; }
         .company { font-weight:700; font-size:15px; }
         .sub { font-size:12px; color:#718096; }
-        .section-label { font-weight:700; color:#1b315e; margin:16px 0 6px; border-bottom:2px solid #1b315e; padding-bottom:3px; }
+        .section-label { font-weight:700; color:${brand}; margin:16px 0 6px; border-bottom:2px solid ${brand}; padding-bottom:3px; }
         .row { display:flex; padding:5px 0; border-bottom:1px solid #edf0f4; }
         .row .k { width:180px; color:#718096; flex-shrink:0; }
         .row .v { font-weight:600; }
         .note { margin-top:16px; font-size:12px; color:#718096; }
         .no-print { margin-top:24px; text-align:center; }
+        .tagline-top { text-align:center; margin:-10px 0 14px; }${taglineCss(brand)}
       </style>
     </head>
     <body>
@@ -46,6 +51,7 @@ export function buildAccountingDocRequestHtml(order, f, settings = {}, logoUrl =
         <div class="th">คำขอออกเอกสาร (ตรวจสอบข้อมูลก่อนออกเอกสารจริง)</div>
         <div class="en">ACCOUNTING DOCUMENT REQUEST — DRAFT FOR CONFIRMATION</div>
       </div>
+      ${tagline ? `<div class="tagline-top">${tagline}</div>` : ''}
       <div class="head">
         <img class="logo" src="${logo}" onerror="this.style.display='none'" />
         <div>

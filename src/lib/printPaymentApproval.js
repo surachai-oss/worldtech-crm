@@ -1,7 +1,7 @@
 import html2canvas from 'html2canvas'
 import { fmtCurrency, fmtDate } from './format'
 import { listPaymentItems, getPaymentSlipUrl, PAYMENT_METHOD_OTHER } from './api'
-import { mergeDocumentTemplate, templateLogoUrl } from './documentTemplate'
+import { mergeDocumentTemplate, templateLogoUrl, brandColors, taglineHtml, taglineCss } from './documentTemplate'
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
@@ -27,6 +27,8 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
   const tpl = mergeDocumentTemplate(settings)
   const { name, address, taxId } = tpl.company
   const logo = logoUrl || templateLogoUrl(tpl)
+  const { brand, accent } = brandColors(tpl)
+  const tagline = taglineHtml(tpl, escapeHtml)
 
   const total = Number(pr.total_amount) || 0
   const exVat = round2(total / 1.07)
@@ -50,7 +52,7 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
       <style>
         @page { size: A4; margin: 14mm; }
         body { font-family: 'Sarabun', 'Tahoma', sans-serif; color:#2d3748; font-size: 13px; margin:0; }
-        .banner { background:#1b315e; color:#fff; text-align:center; padding:10px; border-radius:4px; margin-bottom:18px; }
+        .banner { background:linear-gradient(100deg, ${brand} 0%, ${brand} 82%, ${accent} 82%, ${accent} 100%); color:#fff; text-align:center; padding:10px; border-radius:4px; margin-bottom:18px; }
         .banner .th { font-weight:700; font-size:16px; }
         .banner .en { font-size:11px; letter-spacing:1px; opacity:.85; }
         .topinfo { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:18px; }
@@ -64,16 +66,17 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
         .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; font-size:12.5px; margin-bottom:16px; padding:12px 14px; background:#f4f6f9; border-radius:4px; }
         .info-grid .k { color:#718096; }
         table { width:100%; border-collapse:collapse; margin-bottom:12px; }
-        th { background:#1b315e; color:#fff; text-align:left; padding:8px 10px; font-size:12px; }
+        th { background:${brand}; color:#fff; text-align:left; padding:8px 10px; font-size:12px; }
         th.num, td.num { text-align:right; }
         td { padding:8px 10px; border-bottom:1px solid #e0e4ea; font-size:13px; }
         .totals-box { min-width:280px; font-size:12.5px; margin-left:auto; }
         .totals-box .row { display:flex; justify-content:space-between; padding:4px 10px; }
-        .totals-box .grand { background:#1b315e; color:#fff; font-weight:700; border-radius:2px; }
+        .totals-box .grand { background:${brand}; color:#fff; font-weight:700; border-radius:2px; }
         .sign { display:flex; justify-content:space-between; margin-top:50px; font-size:12px; }
         .sign-col { width:45%; text-align:center; }
         .sign-name { min-height:16px; font-weight:600; margin-bottom:4px; }
         .sign-label { border-top:1px solid #999; padding-top:6px; }
+${taglineCss(brand)}
         @media print { .no-print { display:none; } }
       </style>
     </head>
@@ -85,6 +88,7 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
           <img class="logo" src="${logo}" onerror="this.style.display='none'" />
           <div>
             <div class="company-name">${escapeHtml(name)}</div>
+            ${tagline}
             <div class="meta">${escapeHtml(address).replace(/\n/g, '<br/>')}</div>
             ${taxId ? `<div class="meta">${escapeHtml(tpl.quotation.taxIdLabel)} : ${escapeHtml(taxId)}</div>` : ''}
           </div>

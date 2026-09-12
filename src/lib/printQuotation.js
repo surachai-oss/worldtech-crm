@@ -2,7 +2,7 @@ import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import { fmtCurrency, fmtDate } from './format'
 import { listQuotationItems, getProductImageUrl } from './api'
-import { mergeDocumentTemplate, templateLogoUrl } from './documentTemplate'
+import { mergeDocumentTemplate, templateLogoUrl, brandColors, taglineHtml, taglineCss } from './documentTemplate'
 
 const VAT_RATE = 0.07
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
@@ -23,6 +23,10 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
   const q = tpl.quotation
   const { name, address, phone, email, line, taxId } = tpl.company
   const logo = logoUrl || templateLogoUrl(tpl)
+  // สีถูกแทรกลงใน stylesheet ของเอกสารตรงๆ ไม่ใช้ CSS variable เพราะ html2canvas (ตัวที่แปลงเป็น PDF)
+  // resolve var() ไม่ได้ครบ ถ้าใช้ตัวแปรจะได้ PDF ที่สีหายไปเฉยๆ โดยไม่มี error
+  const { brand, accent } = brandColors(tpl)
+  const tagline = taglineHtml(tpl, escapeHtml)
 
   // ใบเสนอราคาเก่าที่ไม่มีรายการสินค้าเลย (ก่อนมีระบบรายการหลายชิ้น) — ใช้ subject/value เดิมเป็นรายการเดียว
   const rows = items.length ? items : [{ description: quot.subject, quantity: 1, unit_price: Number(quot.value) || 0, imageUrl: null }]
@@ -42,13 +46,19 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
   ].filter(Boolean).map(escapeHtml).join('<br/>')
 
   // ลบเงื่อนไขออกจนหมดในหน้าตั้งค่า = ไม่ต้องพิมพ์หัวข้อนี้เลย ไม่ใช่พิมพ์หัวข้อลอยๆ ไว้
+  // หัวข้อทุกส่วนใช้รูปแบบเดียวกันและเรียงตามเนื้อหาจากบนลงล่าง: ลูกค้า → รายการสินค้า → เงื่อนไข → หมายเหตุ → ติดต่อ
+  // เดิมแต่ละส่วนใช้ป้ายคนละแบบ (ตัวหนาเปล่าๆ บ้าง ป้ายพื้นน้ำเงินบ้าง ตัวหนาในกล่องเทาบ้าง) อ่านแล้วไม่รู้ว่าอะไรเป็นหัวข้อของอะไร
+  const sec = (n, title) => `<div class="sec"><span class="sec-no">${n}</span>${escapeHtml(title)}</div>`
+
   const termsHtml = q.terms.length
-    ? `<div class="remark-label">${escapeHtml(q.termsTitle)}</div><div class="remark-body">${q.terms.map(t => `${escapeHtml(q.termsBullet)}${escapeHtml(t)}`).join('<br/>')}</div>`
+    ? `${sec(3, q.termsTitle)}<div class="sec-body">${q.terms.map(t => `${escapeHtml(q.termsBullet)}${escapeHtml(t)}`).join('<br/>')}</div>`
     : ''
 
+  // เงื่อนไขถูกลบหมดได้ หมายเหตุก็ว่างได้ เลขลำดับหัวข้อจึงต้องไล่ตามส่วนที่พิมพ์จริง ไม่ใช่ฝังเลขตายตัว
   const noteHtml = quot.note
-    ? `<div class="remark-label">${escapeHtml(q.noteTitle)}</div><div class="remark-body">${escapeHtml(quot.note).replace(/\n/g, '<br/>')}</div>`
+    ? `${sec(termsHtml ? 4 : 3, q.noteTitle)}<div class="sec-body">${escapeHtml(quot.note).replace(/\n/g, '<br/>')}</div>`
     : ''
+  const contactNo = 3 + (termsHtml ? 1 : 0) + (noteHtml ? 1 : 0)
 
   const contactLines = [
     line ? `Line@ : ${line}` : '',
@@ -81,7 +91,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
       <style>
         @page { size: A4; margin: 8mm; }
         body { font-family: 'Sarabun', 'Tahoma', sans-serif; color:#2d3748; font-size: 12px; margin:0; }
-        .banner { background:#1b315e; color:#fff; text-align:center; padding:5px 6px; border-radius:4px; margin-bottom:8px; }
+        .banner { background:linear-gradient(100deg, ${brand} 0%, ${brand} 82%, ${accent} 82%, ${accent} 100%); color:#fff; text-align:center; padding:5px 6px; border-radius:4px; margin-bottom:8px; }
         .banner .th { font-weight:700; font-size:16px; }
         .banner .en { font-size:11px; letter-spacing:1px; opacity:.85; }
         .topinfo { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:8px; }
@@ -93,25 +103,29 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
         .doc-meta { text-align:right; font-size:13px; flex-shrink:0; white-space:nowrap; }
         .doc-meta .label { font-weight:700; margin-top:6px; }
         .doc-meta .label:first-child { margin-top:0; }
-        .section-label { font-weight:700; margin-bottom:3px; font-size:13px; }
+        .sec { display:flex; align-items:center; gap:6px; font-weight:700; font-size:12.5px; color:${brand};
+                 border-bottom:2px solid ${accent}; padding-bottom:2px; margin:9px 0 4px; }
+        .sec-no { display:inline-block; min-width:15px; height:15px; line-height:15px; text-align:center;
+                  background:${accent}; color:${brand}; border-radius:2px; font-size:10px; }
+        .sec-body { font-size:11.5px; color:#4a5568; line-height:1.4; margin-bottom:6px; }
         .customer-block { margin-bottom:6px; }
         .customer-info { padding-left:16px; font-size:13.5px; line-height:1.45; }
         table { width:100%; border-collapse:collapse; margin-bottom:6px; }
-        th { background:#1b315e; color:#fff; text-align:left; padding:5px 8px; font-size:11px; }
+        th { background:${brand}; color:#fff; text-align:left; padding:5px 8px; font-size:11px; }
         th.num, td.num { text-align:right; }
         td { padding:4px 8px; border-bottom:1px solid #e0e4ea; font-size:11.5px; vertical-align:top; }
         .below-table { display:flex; justify-content:space-between; gap:16px; margin-bottom:8px; }
         .notes-left { color:#e53e3e; font-style:italic; font-size:12px; flex:1; }
         .totals-box { min-width:280px; font-size:12px; }
         .totals-box .row { display:flex; justify-content:space-between; padding:3px 10px; }
-        .totals-box .grand { background:#1b315e; color:#fff; font-weight:700; border-radius:2px; }
-        .remark-label { display:inline-block; background:#1b315e; color:#fff; font-size:11px; font-weight:700; padding:2px 10px; border-radius:2px; margin-bottom:4px; }
-        .remark-body { font-size:11.5px; color:#4a5568; line-height:1.4; margin-bottom:8px; }
-        .contact-box { background:#f4f6f9; padding:6px 12px; border-radius:4px; font-size:11.5px; line-height:1.4; }
+        .totals-box .grand { background:${brand}; color:#fff; font-weight:700; border-radius:2px; }
+        .foot-rule { height:3px; background:linear-gradient(90deg, ${brand} 0%, ${brand} 70%, ${accent} 70%, ${accent} 100%); border-radius:2px; margin-top:14px; }
+        .contact-box { background:#f4f6f9; border-left:3px solid ${accent}; padding:6px 12px; border-radius:0 4px 4px 0; font-size:11.5px; line-height:1.4; }
         .sign { display:flex; justify-content:space-between; margin-top:24px; font-size:12px; }
         .sign-col { width:45%; text-align:center; }
         .sign-name { min-height:16px; font-weight:600; margin-bottom:4px; }
         .sign-label { border-top:1px solid #999; padding-top:6px; }
+${taglineCss(brand)}
         @media print { .no-print { display:none; } }
       </style>
     </head>
@@ -123,6 +137,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
           <img class="logo" src="${logo}" onerror="this.style.display='none'" />
           <div>
             <div class="company-name">${escapeHtml(name)}</div>
+            ${tagline}
             <div class="meta">${escapeHtml(address).replace(/\n/g, '<br/>')}</div>
             ${taxId ? `<div class="meta">${escapeHtml(q.taxIdLabel)} : ${escapeHtml(taxId)}</div>` : ''}
           </div>
@@ -140,13 +155,14 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
       </div>
 
       <div class="customer-block">
-        <div class="section-label">${escapeHtml(q.customerLabel)}</div>
+        ${sec(1, q.customerLabel)}
         <div class="customer-info">
           ${escapeHtml(company ? company.name : '-')}<br/>
           ${customerLines}
         </div>
       </div>
 
+      ${sec(2, q.itemsTitle)}
       <table>
         <thead>
           <tr>
@@ -178,8 +194,8 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
 
       ${noteHtml}
 
+      ${sec(contactNo, q.contactTitle)}
       <div class="contact-box">
-        <div style="font-weight:700; margin-bottom:2px">${escapeHtml(q.contactTitle)}</div>
         ${contactLines}
       </div>
 
@@ -193,6 +209,8 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
           <div class="sign-label">${escapeHtml(q.signRightLabel)}</div>
         </div>
       </div>
+
+      <div class="foot-rule"></div>
 
       ${autoPrint ? `
       <div class="no-print" style="margin-top:24px;text-align:center">
