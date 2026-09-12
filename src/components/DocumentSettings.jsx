@@ -57,7 +57,7 @@ const CSS = `
 // สีประจำแต่ละส่วนของฟอร์ม — เป็นสีบนหน้าจอเท่านั้น ไม่เกี่ยวกับสีที่พิมพ์ลงเอกสาร
 const GROUP = {
   header: '#8e44ad', title: '#2b6cb0', company: '#1b6ca8', customer: '#0f766e',
-  items: '#2f855a', terms: '#c0622d', note: '#b7791f', contact: '#7c3aed',
+  terms: '#c0622d', note: '#b7791f', contact: '#7c3aed',
   sign: '#4a5568', tagline: '#be185d', preview: '#4a5568',
 }
 
@@ -337,18 +337,6 @@ export default function DocumentSettings({ settings = {}, isAdmin, onSaved, onBa
 
             <Panel title={t('ข้อมูลลูกค้า', 'Customer block')} color={GROUP.customer}>
               {qField('customerLabel', t('หัวข้อส่วนลูกค้า'))}
-            </Panel>
-
-            <Panel title={t('ข้อมูลสินค้า', 'Items table')} color={GROUP.items}>
-              <div className="ds-row-3">
-                {qField('colQty', t('คอลัมน์จำนวน'))}
-                {qField('colItem', t('คอลัมน์รายการ'))}
-                {qField('colUnitPrice', t('คอลัมน์ราคาต่อหน่วย'))}
-              </div>
-              <div className="ds-row">
-                {qField('colDiscount', t('คอลัมน์ส่วนลด'))}
-                {qField('colTotal', t('คอลัมน์ยอดรวม'))}
-              </div>
             </Panel>
 
             <Panel title={t('เงื่อนไข')} color={GROUP.terms}>
