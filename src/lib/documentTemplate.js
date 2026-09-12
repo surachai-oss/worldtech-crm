@@ -167,8 +167,18 @@ export function taglineHtml(tpl, esc) {
 export function taglineCss(brand, tpl) {
   if (tpl && !taglineHtml(tpl, x => x)) return ''
   return `
-        .tagline { margin-top:18px; padding-top:8px; border-top:1px solid ${brand}33; text-align:center;
+        .doc-page { display:flex; flex-direction:column; }
+        .tagline { margin-top:auto; padding-top:16px; text-align:center;
                    font-size:10.5px; font-weight:600; color:${brand}; letter-spacing:.2px; }
         .tagline-en { font-weight:400; font-style:italic; opacity:.8; }
         .tagline-sep { opacity:.45; margin:0 5px; font-weight:400; }`
+}
+
+// ครอบเนื้อหาทั้งหน้าด้วยกล่องสูงเท่าพื้นที่พิมพ์ แล้วดันสโลแกนลงล่างสุดด้วย margin-top:auto
+// ต้องกำหนดความสูงเป็นตัวเลข เพราะกล่องปกติสูงตามเนื้อหา ถ้าเอกสารสั้นสโลแกนจะลอยขึ้นมากลางหน้า
+// pageHeight ต่างกันแต่ละเส้นทาง เช่นใบเสนอราคา หน้าต่างพิมพ์เว้นขอบ 8mm แต่ตอนแปลงเป็น PDF เว้น 14mm
+// ไม่ได้กรอกสโลแกน = ไม่ครอบอะไรเลย เอกสารจะได้เหมือนเดิมทุกตัวอักษร
+export function pageWrap(tpl, pageHeight) {
+  if (!taglineHtml(tpl, x => x)) return { open: '', close: '' }
+  return { open: `<div class="doc-page" style="min-height:${pageHeight}">`, close: '</div>' }
 }

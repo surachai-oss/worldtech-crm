@@ -1,7 +1,7 @@
 import html2canvas from 'html2canvas'
 import { fmtCurrency, fmtDate } from './format'
 import { listPaymentItems, getPaymentSlipUrl, PAYMENT_METHOD_OTHER } from './api'
-import { mergeDocumentTemplate, templateLogoUrl, brandColor, taglineHtml, taglineCss } from './documentTemplate'
+import { mergeDocumentTemplate, templateLogoUrl, brandColor, taglineHtml, taglineCss, pageWrap } from './documentTemplate'
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
@@ -29,6 +29,8 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
   const logo = logoUrl || templateLogoUrl(tpl)
   const brand = brandColor(tpl)
   const tagline = taglineHtml(tpl, escapeHtml)
+  // ทั้งหน้าต่างพิมพ์และ container ตอนแปลงเป็นรูป เว้นขอบ 14mm เท่ากัน ความสูงหน้ากระดาษจึงค่าเดียว
+  const page = pageWrap(tpl, '269mm')
 
   const total = Number(pr.total_amount) || 0
   const exVat = round2(total / 1.07)
@@ -79,7 +81,7 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
         @media print { .no-print { display:none; } }${taglineCss(brand, tpl)}
       </style>
     </head>
-    <body>
+    <body>${page.open}
       <div class="banner"><div class="th">ใบอนุมัติตรวจสอบยอดโอน</div><div class="en">PAYMENT APPROVAL</div></div>
 
       <div class="topinfo">
@@ -157,7 +159,7 @@ export function buildPaymentApprovalHtml(pr, settings = {}, items = [], logoUrl 
         </div>
       </div>
 
-      ${tagline}${autoPrint ? `
+      ${tagline}${page.close}${autoPrint ? `
       <div class="no-print" style="margin-top:24px;text-align:center">
         <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer">พิมพ์ / บันทึกเป็น PDF</button>
       </div>

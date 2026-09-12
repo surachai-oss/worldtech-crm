@@ -2,7 +2,7 @@ import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import { fmtCurrency, fmtDate } from './format'
 import { listQuotationItems, getProductImageUrl } from './api'
-import { mergeDocumentTemplate, templateLogoUrl, brandColor, taglineHtml, taglineCss } from './documentTemplate'
+import { mergeDocumentTemplate, templateLogoUrl, brandColor, taglineHtml, taglineCss, pageWrap } from './documentTemplate'
 
 const VAT_RATE = 0.07
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
@@ -16,7 +16,7 @@ function escapeHtml(s) {
 // รูปแบบอ้างอิงจากตัวอย่างใบเสนอราคาจริงของบริษัท — unit_price ที่กรอกถือว่ารวม VAT แล้ว เหมือนราคาต่อหน่วยในดีล
 // items รับเป็น array ที่ resolve รูปมาแล้ว [{ description, quantity, unit_price, imageUrl }] (ไม่ import api.js ตรงๆ ในฟังก์ชันนี้ เพื่อให้เทสได้โดยไม่ต้องพึ่ง supabase client)
 // autoPrint: false ใช้ตอนสร้าง HTML สำหรับแปลงเป็น PDF ไฟล์ (renderQuotationPdfBlob) — ไม่ต้องมีปุ่ม/สคริปต์เปิด print dialog ของเบราว์เซอร์
-export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', items = [], { autoPrint = true } = {}) {
+export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', items = [], { autoPrint = true, pageHeight = '281mm' } = {}) {
   // ข้อความและข้อมูลบริษัททั้งหมดบนกระดาษมาจากเทมเพลตที่แอดมินแก้ได้เอง (ดู documentTemplate.js)
   // ส่วนตารางสินค้า ราคา ส่วนลด และภาษี ยังคำนวณจากข้อมูลใบเสนอราคาจริงเหมือนเดิม ไม่ได้ผูกกับเทมเพลต
   const tpl = mergeDocumentTemplate(settings)
@@ -27,6 +27,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
   // resolve var() ไม่ครบ จะได้ PDF ที่สีหายโดยไม่มี error ให้เห็น
   const brand = brandColor(tpl)
   const tagline = taglineHtml(tpl, escapeHtml)
+  const page = pageWrap(tpl, pageHeight)
 
   // ใบเสนอราคาเก่าที่ไม่มีรายการสินค้าเลย (ก่อนมีระบบรายการหลายชิ้น) — ใช้ subject/value เดิมเป็นรายการเดียว
   const rows = items.length ? items : [{ description: quot.subject, quantity: 1, unit_price: Number(quot.value) || 0, imageUrl: null }]
@@ -119,7 +120,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
         @media print { .no-print { display:none; } }${taglineCss(brand, tpl)}
       </style>
     </head>
-    <body>
+    <body>${page.open}
       <div class="banner"><div class="th">${escapeHtml(q.titleTh)}</div><div class="en">${escapeHtml(q.titleEn)}</div></div>
 
       <div class="topinfo">
@@ -198,7 +199,7 @@ export function buildQuotationHtml(quot, company, settings = {}, logoUrl = '', i
         </div>
       </div>
 
-      ${tagline}${autoPrint ? `
+      ${tagline}${page.close}${autoPrint ? `
       <div class="no-print" style="margin-top:24px;text-align:center">
         <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer">พิมพ์ / บันทึกเป็น PDF</button>
       </div>
@@ -220,7 +221,8 @@ function waitForImages(el) {
 // ใช้ตอนอัปโหลดขึ้น Google Drive อัตโนมัติทุกครั้งที่บันทึก/แก้ไขใบเสนอราคา ไม่ต้องพึ่งผู้ใช้กด "บันทึกเป็น PDF" เอง
 export async function renderQuotationPdfBlob(quot, company, settings = {}, items = []) {
   const logoUrl = templateLogoUrl(mergeDocumentTemplate(settings), window.location.origin)
-  const html = buildQuotationHtml(quot, company, settings, logoUrl, items, { autoPrint: false })
+  // container ของ html2canvas เว้นขอบ 14mm ไม่ใช่ 8mm เหมือนหน้าต่างพิมพ์ ความสูงหน้ากระดาษจึงต่างกัน
+  const html = buildQuotationHtml(quot, company, settings, logoUrl, items, { autoPrint: false, pageHeight: '269mm' })
   const parsed = new DOMParser().parseFromString(html, 'text/html')
 
   // ต้องอยู่ในตำแหน่งปกติของหน้า (เลื่อนออกนอกจอไกลเกินไปทำให้ html2canvas จับภาพผิด/ได้ภาพดำล้วน) และห้ามใช้ opacity/visibility ซ่อน

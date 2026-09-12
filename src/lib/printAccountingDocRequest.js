@@ -1,5 +1,5 @@
 import { fmtDate } from './format'
-import { mergeDocumentTemplate, templateLogoUrl, brandColor, taglineHtml, taglineCss } from './documentTemplate'
+import { mergeDocumentTemplate, templateLogoUrl, brandColor, taglineHtml, taglineCss, pageWrap } from './documentTemplate'
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
@@ -13,6 +13,7 @@ export function buildAccountingDocRequestHtml(order, f, settings = {}, logoUrl =
   const logo = logoUrl || templateLogoUrl(tpl)
   const brand = brandColor(tpl)
   const tagline = taglineHtml(tpl, escapeHtml)
+  const page = pageWrap(tpl, '265mm')   // เว้นขอบ 16mm
   const needsTax = f.document_type === 'ใบกำกับภาษี + ใบเสร็จรับเงิน'
   const needsEmail = f.delivery_method === 'ส่งสำเนาทางอีเมล' || f.delivery_method === 'ส่งทั้งอีเมลและตัวจริง'
   const needsOriginal = f.delivery_method === 'ส่งตัวจริง' || f.delivery_method === 'ส่งทั้งอีเมลและตัวจริง'
@@ -44,7 +45,7 @@ export function buildAccountingDocRequestHtml(order, f, settings = {}, logoUrl =
         .no-print { margin-top:24px; text-align:center; }${taglineCss(brand, tpl)}
       </style>
     </head>
-    <body>
+    <body>${page.open}
       <div class="banner">
         <div class="th">คำขอออกเอกสาร (ตรวจสอบข้อมูลก่อนออกเอกสารจริง)</div>
         <div class="en">ACCOUNTING DOCUMENT REQUEST — DRAFT FOR CONFIRMATION</div>
@@ -82,7 +83,7 @@ export function buildAccountingDocRequestHtml(order, f, settings = {}, logoUrl =
       ${f.sales_note ? `<div class="note"><b>หมายเหตุ:</b> ${escapeHtml(f.sales_note)}</div>` : ''}
       <div class="note">* กรุณาตรวจสอบความถูกต้องของข้อมูล โดยเฉพาะชื่อ/เลขผู้เสียภาษี/ที่อยู่ ก่อนยืนยันออกเอกสาร เพื่อป้องกันการแก้ไขภายหลัง</div>
 
-      ${tagline}
+      ${tagline}${page.close}
       <div class="no-print">
         <button onclick="window.print()" style="padding:10px 20px;font-size:14px;cursor:pointer">พิมพ์ / บันทึกเป็น PDF</button>
       </div>
