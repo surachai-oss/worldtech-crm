@@ -17,11 +17,123 @@ import PriceTierModal from './PriceTierModal'
 const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v))
 const pct = (n) => (n === null || n === undefined || n === '' ? '-' : `${Number(n).toFixed(2)}%`)
 
+// คำอธิบายรายคอลัมน์ — กดที่หัวตารางแล้วเด้งขึ้นมา
+// เขียนจากสูตรจริงใน margin_check_price (supabase/schema.sql) ไม่ใช่จากความจำ
+// เจตนา: คนที่เข้ามาใหม่ตั้งค่าเองได้โดยไม่ต้องไปไล่อ่าน SQL และคนเดิมที่ลืมแล้วกลับมาอ่านซ้ำได้
+// ถ้าแก้สูตรใน schema.sql ต้องมาแก้ตรงนี้ด้วย ไม่งั้นคำอธิบายจะพาคนเข้าใจผิด
+const COLUMN_HELP = {
+  cost: {
+    title: 'ต้นทุน/ชิ้น',
+    kind: 'กรอกเอง',
+    body: [
+      ['คืออะไร', 'ราคาทุนต่อชิ้นที่บัญชีกรอกไว้ ใช้เป็นฐานของการคำนวณทุกอย่างในหน้าเช็คราคา'],
+      ['สำคัญยังไง', 'สินค้าที่ยังไม่กรอกต้นทุน หน้าเช็คราคาจะคำนวณไม่ได้เลย และออเดอร์ที่เปิดไปจะไม่มีต้นทุนบันทึกไว้ ทำให้รายงานกำไรสูงกว่าความจริง'],
+      ['เก็บ ณ วันที่เปิดออเดอร์', 'ออเดอร์เก็บสำเนาต้นทุน ณ วันที่เปิดไว้ แก้ต้นทุนวันนี้จึงไม่ย้อนไปเปลี่ยนออเดอร์เก่า'],
+    ],
+  },
+  normal: {
+    title: 'ราคาขายปกติ',
+    kind: 'กรอกเอง',
+    body: [
+      ['คืออะไร', 'ราคาป้ายก่อนลด ใช้เป็นฐานคิด % ส่วนลด'],
+      ['ใช้ที่ไหน', 'ส่วนลดที่เสนอ = (1 − ราคาที่เสนอ ÷ ราคาขายปกติ) × 100 — ถ้าไม่กรอก ระบบจะเทียบส่วนลดไม่ได้ และขั้นบันไดตามจำนวนจะใช้ไม่ได้'],
+    ],
+  },
+  floor: {
+    title: 'Floor Price',
+    kind: 'กรอกเอง — ไม่ใช่ค่าที่ระบบคำนวณ',
+    body: [
+      ['คืออะไร', 'ราคาต่ำสุดต่อชิ้นที่ตั้งใจกำหนดเองว่า "ห้ามขายต่ำกว่านี้" เป็นกฎที่บัญชีตั้ง ไม่ได้มาจากสูตร'],
+      ['ใช้เมื่อไหร่', 'ใช้เฉพาะสินค้าที่ยังไม่ได้ตั้งขั้นบันไดตามจำนวน — ถ้าสินค้านั้นมีขั้นบันไดแล้ว ระบบจะไม่ใช้ Floor Price อีก เส้นห้ามขายจะกลายเป็น "ราคาเท่าทุนจริง" แทน'],
+      ['ราคาเท่าทุนจริง', 'ต้นทุนคงที่ ÷ (1 − Buffer รวม) ÷ จำนวน\nต้นทุนคงที่ = (ต้นทุน/ชิ้น × จำนวน) + ค่าขนส่ง'],
+      ['มีผลยังไง', 'เสนอต่ำกว่า Floor Price → ขึ้น "ไม่ควรขาย" และราคาที่ระบบแนะนำจะไม่ต่ำกว่า Floor Price เสมอ'],
+      ['ตั้งเท่าไหร่ดี', 'ต้องสูงกว่าต้นทุน/ชิ้น ถ้าตั้งต่ำกว่าต้นทุน ระบบจะเตือนตอนบันทึก'],
+    ],
+  },
+  margins: {
+    title: 'เป้าหมาย / ขั้นต่ำ',
+    kind: 'กรอกเอง — เป็น % ของยอดขาย ไม่ใช่ % ของต้นทุน',
+    body: [
+      ['คืออะไร', 'เกณฑ์ Margin สองเส้น ใช้ตัดสินว่าราคาที่เซลล์เสนอ "ผ่าน" หรือ "ต่ำกว่าเกณฑ์"'],
+      ['Margin คิดยังไง', 'Margin % = กำไร ÷ ยอดขาย × 100\nกำไร = ยอดขาย − ต้นทุนรวม\nต้นทุนรวม = (ต้นทุน/ชิ้น × จำนวน) + ค่าขนส่ง + (ยอดขาย × Buffer ขนส่ง%) + (ยอดขาย × Buffer เผื่อ%)'],
+      ['เส้นตัดสิน', 'Margin ที่ได้ ≥ เป้าหมาย → ผ่าน / ขายได้\n≥ ขั้นต่ำ แต่ยังไม่ถึงเป้าหมาย → ขายได้ แต่ Margin ต่ำ\nต่ำกว่าขั้นต่ำ → ต่ำกว่าเกณฑ์ (ยังมีกำไร แต่ควรคุยหัวหน้า)'],
+      ['แปลงกลับเป็นราคา', 'ราคาที่ได้ Margin ตามเกณฑ์ = ต้นทุนคงที่ ÷ (1 − Buffer รวม − เกณฑ์ ÷ 100) ÷ จำนวน\nระบบใช้สูตรนี้หา "ราคาต่ำสุดที่ควรเสนอ" แล้วปัดขึ้นเป็นจำนวนเต็มบาท'],
+      ['กรอกเป็นตัวเลขอะไร', 'กรอกเป็นเปอร์เซ็นต์เต็ม เช่น ต้องการ Margin 25% ให้กรอก 25 ไม่ใช่ 0.25'],
+      ['ถ้าตั้งขั้นบันไดไว้', 'ค่าในขั้นบันไดของจำนวนนั้นจะถูกใช้ก่อน ค่าตรงนี้เป็นค่าสำรองเมื่อไม่มีขั้นที่ตรงกับจำนวน'],
+    ],
+  },
+  buffer: {
+    title: 'Buffer (ขนส่ง / เผื่อ)',
+    kind: 'กรอกเอง — ว่างไว้ = ใช้ค่ากลาง',
+    body: [
+      ['คืออะไร', 'ค่าเผื่อสองตัวที่บวกเข้าไปในต้นทุนทุกครั้งที่คำนวณ คิดเป็น % ของยอดขาย ไม่ใช่ % ของต้นทุน'],
+      ['Buffer ขนส่ง', 'เผื่อค่าขนส่งที่จริงแพงกว่าที่ประเมิน'],
+      ['Buffer เผื่อ (Provision)', 'เผื่อความเสี่ยงอื่น เช่น ของเสีย เคลม ค่าธรรมเนียม'],
+      ['ว่างไว้จะเป็นยังไง', 'ใช้ค่ากลางที่ตั้งไว้ในหน้านี้ (ค่าตั้งต้นของระบบคือ 2% ทั้งสองตัว) กรอกเฉพาะสินค้าที่ต่างจากปกติเท่านั้น'],
+      ['มีผลยังไง', 'Buffer สูงขึ้น = ต้นทุนที่คำนวณสูงขึ้น = ราคาต่ำสุดที่ควรเสนอสูงขึ้นตาม'],
+    ],
+  },
+}
+
 const EMPTY = {
   cost_price: '', normal_selling_price: '', target_margin_percent: '', minimum_margin_percent: '',
   floor_price: '', shipping_buffer_percent: '', provision_buffer_percent: '',
   default_shipping_cost: '', special_discount_percent: '', status: 'Active', finance_remark: '',
   category: '', brand: ''
+}
+
+const HELP_CSS = `
+.cm-th-help{background:none;border:none;padding:0;font:inherit;color:inherit;cursor:help;display:inline-flex;align-items:center;gap:4px}
+.cm-th-help:hover{text-decoration:underline;text-underline-offset:3px}
+.cm-th-help .i{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border:1px solid currentColor;
+               border-radius:50%;font-size:9px;line-height:1;opacity:.75;flex-shrink:0}
+.cm-help-kind{display:inline-block;font-size:11px;font-weight:600;color:#c05621;background:#fffaf0;border:1px solid #f0c36d;
+              border-radius:20px;padding:2px 10px;margin-bottom:12px}
+.cm-help-row{margin-bottom:11px}
+.cm-help-row .k{font-size:11.5px;font-weight:600;color:var(--navy);margin-bottom:2px}
+.cm-help-row .v{font-size:12.5px;line-height:1.65;color:var(--text);white-space:pre-line}
+.cm-help-formula{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--gray-bg);border-radius:6px;padding:8px 10px}
+`
+
+// หัวตารางที่กดแล้วอธิบายว่าคอลัมน์นั้นคิดยังไง
+function HelpTh({ id, label, onOpen }) {
+  if (!id) return <th>{label}</th>
+  return (
+    <th>
+      <button type="button" className="cm-th-help" onClick={() => onOpen(id)}>
+        {label}<span className="i">?</span>
+      </button>
+    </th>
+  )
+}
+
+function HelpPopup({ help, onClose }) {
+  const { t } = useLanguage()
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  return (
+    <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="modal" style={{ maxWidth: 560 }}>
+        <div className="modal-header">
+          <div className="modal-title">{help.title}</div>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          <div className="cm-help-kind">{t(help.kind)}</div>
+          {help.body.map(([k, v], i) => (
+            <div className="cm-help-row" key={i}>
+              <div className="k">{t(k)}</div>
+              {/* บรรทัดที่เป็นสูตรมี ÷ หรือ × อยู่ ให้ใช้ฟอนต์ความกว้างคงที่ อ่านวงเล็บง่ายกว่า */}
+              <div className={`v${/[÷×−]/.test(v) ? ' cm-help-formula' : ''}`}>{t(v)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function CostModal({ product, onClose, onSave }) {
@@ -223,6 +335,7 @@ export default function CostMaster({ currentUserName }) {
   const [historyProduct, setHistoryProduct] = useState(null)
   const [tierProduct, setTierProduct] = useState(null)
   const [applyingTiers, setApplyingTiers] = useState(false)
+  const [help, setHelp] = useState(null)   // คอลัมน์ที่กดหัวตารางขอคำอธิบาย
 
   const load = async () => {
     setLoading(true)
@@ -299,6 +412,8 @@ export default function CostMaster({ currentUserName }) {
 
   return (
     <div className="list-view">
+      <style>{HELP_CSS}</style>
+      {help && <HelpPopup help={COLUMN_HELP[help]} onClose={() => setHelp(null)} />}
       <div className="section-header">
         <div className="section-title">
           {t('ต้นทุนสินค้า')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} {t('รายการ')})</span>
@@ -346,9 +461,13 @@ export default function CostMaster({ currentUserName }) {
             <table>
               <thead>
                 <tr>
-                  <th>{t('รหัสสินค้า')}</th><th>{t('ชื่อสินค้า')}</th><th>{t('ต้นทุน/ชิ้น')}</th>
-                  <th>{t('ราคาขายปกติ')}</th><th>Floor Price</th><th>{t('เป้าหมาย/ขั้นต่ำ')}</th>
-                  <th>Buffer</th><th>{t('สถานะ')}</th><th>{t('อัปเดตโดย')}</th><th></th>
+                  <th>{t('รหัสสินค้า')}</th><th>{t('ชื่อสินค้า')}</th>
+                  <HelpTh id="cost" label={t('ต้นทุน/ชิ้น')} onOpen={setHelp} />
+                  <HelpTh id="normal" label={t('ราคาขายปกติ')} onOpen={setHelp} />
+                  <HelpTh id="floor" label="Floor Price" onOpen={setHelp} />
+                  <HelpTh id="margins" label={t('เป้าหมาย/ขั้นต่ำ')} onOpen={setHelp} />
+                  <HelpTh id="buffer" label="Buffer" onOpen={setHelp} />
+                  <th>{t('สถานะ')}</th><th>{t('อัปเดตโดย')}</th><th></th>
                 </tr>
               </thead>
               <tbody>
