@@ -2196,6 +2196,7 @@ declare
   v_name text;
   v_no   text;
   v_old  numeric;
+  v_rows integer;
 begin
   if not (is_admin() or is_finance()) then
     raise exception 'ปรับสัดส่วนต้นทุนได้เฉพาะฝ่ายบัญชีและผู้ดูแลระบบ';
@@ -2213,6 +2214,14 @@ begin
   set cost_factor_percent = p_percent,
       unit_cost = round(coalesce(base_unit_cost, unit_cost) * p_percent / 100, 4)
   where order_id = p_order_id;
+  get diagnostics v_rows = row_count;
+
+  -- ออเดอร์ที่สินค้ายังไม่ได้กรอกต้นทุน (หรือเป็นรายการที่พิมพ์ชื่อเอง) จะไม่มีแถวใน order_item_costs เลย
+  -- ก่อนหน้านี้ update ไม่โดนสักแถวแล้วจบแบบสำเร็จ หน้าจอขึ้น "ปรับสัดส่วนต้นทุนแล้ว" ทั้งที่ไม่มีอะไรเปลี่ยน
+  -- แล้วรายงานก็ยังโชว์ 100% ต่อไป — ต้องฟ้องให้รู้ว่าทำไม ไม่ใช่เงียบ
+  if v_rows = 0 then
+    raise exception 'ออเดอร์ % ยังไม่มีต้นทุนบันทึกไว้ จึงปรับสัดส่วนไม่ได้ — กรุณากรอกต้นทุนสินค้าในหน้า "ต้นทุนสินค้า" ก่อน', v_no;
+  end if;
 
   select coalesce(full_name, email) into v_name from profiles where id = auth.uid();
   insert into audit_logs (entity_type, entity_id, action, actor_id, actor_name, detail)

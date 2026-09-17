@@ -918,6 +918,13 @@ export const EN_DICT = {
 
   // ===== Document settings (ตั้งค่าเอกสาร) =====
   'ตั้งค่าเอกสาร': 'Document Settings',
+  'ดูว่าคืออะไรบ้าง': 'See which ones',
+  'ไม่มีต้นทุน': 'No cost',
+  'บรรทัดที่ไม่มีต้นทุนบันทึกไว้': 'Lines with no cost recorded',
+  'บรรทัด': 'lines',
+  'กำไรของออเดอร์เหล่านี้จะแสดงสูงกว่าความจริง': 'Profit on these orders reads higher than it really is',
+  'พิมพ์ชื่อเอง ไม่ได้ผูกกับสินค้าในระบบ': 'Typed in by hand, not linked to a product',
+  'รายการที่มีรหัสสินค้า แก้ได้โดยกรอกต้นทุนในหน้า "ต้นทุนสินค้า" แล้วเปิดออเดอร์ใหม่ — ออเดอร์ที่เปิดไปแล้วเก็บต้นทุน ณ วันที่เปิดไว้ จึงไม่ย้อนกลับมาเอง': 'For lines with a product code, enter the cost under "Product costs" — it applies to orders opened from then on. Existing orders keep the cost recorded on the day they were opened.',
   'หัวกระดาษ': 'Page header',
   'หัวข้อ ใบเสนอราคา': 'Document title',
   'เงื่อนไข': 'Terms',
