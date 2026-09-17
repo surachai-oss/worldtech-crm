@@ -1348,7 +1348,9 @@ export const deletePriceCheck = (id) => supabase.from('price_checks').delete().e
 export async function fetchProductCosts() {
   const [products, costs, tiers] = await Promise.all([
     supabase.from('products').select('id,code,name,category,brand').order('code', { ascending: true }).then(handle),
-    supabase.from('product_costs').select('*').then(handle),
+    // อ่านจาก view ไม่ใช่ตารางตรงๆ เพื่อให้ได้ค่าเกณฑ์ที่ระบบคิดให้อัตโนมัติมาด้วย (auto_*)
+    // view เป็น security_invoker จึงยังบังคับ RLS ของ product_costs เหมือนเดิม
+    supabase.from('product_cost_auto').select('*').then(handle),
     supabase.from('product_price_tiers').select('*').order('min_qty', { ascending: true }).then(handle)
   ])
   const byId = new Map(costs.map(c => [c.product_id, c]))

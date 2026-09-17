@@ -1446,6 +1446,9 @@ declare
   v_margin        numeric;
   v_target        numeric;
   v_min           numeric;
+  v_auto_target   numeric;   -- เกณฑ์ที่คิดให้อัตโนมัติ ใช้เมื่อไม่ได้กรอกเอง
+  v_auto_min      numeric;
+  v_auto_floor    numeric;
   v_normal        numeric;
   v_ladder        boolean;
   v_tier_disc     numeric;   -- ส่วนลดที่ขั้นนี้ให้ได้
@@ -1509,8 +1512,18 @@ begin
     where product_id = p_product_id and min_qty > p_quantity
     order by min_qty asc limit 1;
 
-  v_target := coalesce(v_step.target_margin_percent,  v_c.target_margin_percent, 0);
-  v_min    := coalesce(v_step.minimum_margin_percent, v_c.minimum_margin_percent, 0);
+  -- เกณฑ์ที่คิดให้อัตโนมัติจากต้นทุน + ราคาขายปกติ (ดู view product_cost_auto)
+  -- ลำดับ: ค่าของขั้นบันได > ค่าที่กรอกเองต่อสินค้า > ค่าที่คิดให้อัตโนมัติ > 0
+  -- ขั้นบันไดมาตรฐานเก็บแต่ % ส่วนลด ไม่ได้เก็บ Margin ทั้งสองค่านี้จึงมักตกมาที่ค่าอัตโนมัติ
+  select auto_target_margin_percent, auto_minimum_margin_percent, auto_floor_price
+    into v_auto_target, v_auto_min, v_auto_floor
+    from product_cost_auto where product_id = p_product_id;
+
+  v_target := coalesce(v_step.target_margin_percent,  v_c.target_margin_percent,  v_auto_target, 0);
+  v_min    := coalesce(v_step.minimum_margin_percent, v_c.minimum_margin_percent, v_auto_min,    0);
+  -- เกณฑ์ติดลบแปลว่าขายเต็มเพดานส่วนลดแล้วขาดทุน ใช้ 0 แล้วปล่อยให้เส้นเท่าทุนเป็นตัวกั้นจริง
+  if v_target < 0 then v_target := 0; end if;
+  if v_min    < 0 then v_min    := 0; end if;
 
   -- ต้นทุนคงที่ของดีลนี้ (ยังไม่รวม buffer เพราะ buffer คิดจากยอดขายซึ่งยังไม่รู้)
   v_fixed := (v_c.cost_price * p_quantity) + v_ship;
@@ -1536,8 +1549,10 @@ begin
                       || '% · ต่ำกว่าราคาเท่าทุนถึงจะห้ามขาย';
     v_tier_label := 'ขั้น ' || v_step.min_qty || ' ชิ้นขึ้นไป';
   else
-    v_floor := coalesce(v_c.floor_price, 0);
-    v_floor_source := 'Floor Price ของสินค้า (ยังไม่ได้ตั้งขั้นบันไดตามจำนวน)';
+    v_floor := coalesce(v_c.floor_price, v_auto_floor, 0);
+    v_floor_source := case when v_c.floor_price is not null
+      then 'Floor Price ที่บัญชีตั้งเอง (ยังไม่ได้ตั้งขั้นบันไดตามจำนวน)'
+      else 'Floor Price คิดให้อัตโนมัติ = ราคาขายปกติหักเพดานส่วนลดพิเศษ (ยังไม่ได้ตั้งขั้นบันไดตามจำนวน)' end;
   end if;
 
   -- ===== ตัดสินสถานะ =====
@@ -2700,3 +2715,48 @@ delete from settings where key in (
 -- โลโก้ประจำแคตตาล็อก — ว่างไว้จะใช้โลโก้บริษัทที่มากับระบบ
 -- มีไว้เพื่อวันที่รีแบรนด์ จะได้เปลี่ยนโลโก้จากหน้าจอ ไม่ต้องแก้โค้ดและ deploy ใหม่
 alter table catalogs add column if not exists logo_url text;
+
+-- ============================================================================
+-- ===== เกณฑ์ Margin และ Floor Price ที่คิดให้อัตโนมัติจากต้นทุน + ราคาขายปกติ =====
+-- ============================================================================
+-- เดิมบัญชีต้องกรอก เป้าหมาย/ขั้นต่ำ/Floor Price เองทุกตัว ซึ่งลืมง่ายและกรอกผิดหน่วยได้
+-- (เจอของจริงกรอก 0.59 โดยตั้งใจให้เป็น 59% ระบบอ่านเป็น 0.59% แปลว่าแทบไม่มีเส้นขั้นต่ำเลย)
+-- ต่อจากนี้กรอกแค่ "ต้นทุน" กับ "ราคาขายปกติ" พอ ที่เหลือคิดให้ — ช่องที่กรอกเองไว้ยังชนะเสมอ
+--
+-- คิดที่จำนวน 1 ชิ้นเสมอ โดยตั้งใจ: เกณฑ์เป็นนโยบาย ไม่ควรขยับตามจำนวนที่ลูกค้าสั่ง
+-- ถ้าเกณฑ์ขยับตามจำนวนด้วย ซื้อเยอะแล้วค่าขนส่งต่อชิ้นถูกลง เกณฑ์ก็จะสูงตามจนไม่ได้เปรียบอะไรเลย
+--
+-- security_invoker = true สำคัญมาก — view ของ postgres ปกติทำงานด้วยสิทธิ์เจ้าของ จะข้าม RLS ของ
+-- product_costs ทำให้เซลล์อ่านต้นทุนได้ ใส่ตัวนี้เพื่อให้ยังบังคับ RLS เดิมทุกประการ ไม่ได้เปิดสิทธิ์ใหม่
+drop view if exists product_cost_auto;
+create view product_cost_auto with (security_invoker = true) as
+select
+  c.*,
+  a.auto_target_margin_percent,
+  a.auto_minimum_margin_percent,
+  a.auto_floor_price
+from product_costs c
+cross join lateral (
+  select
+    -- เป้าหมาย = Margin ที่ได้ตอนขายราคาปกติเต็ม (เพดานที่สินค้าตัวนี้ทำได้)
+    case when v.normal > 0 and v.fixed > 0
+         then round((1 - v.buf - v.fixed / v.normal) * 100, 2) end as auto_target_margin_percent,
+    -- ขั้นต่ำ = Margin ที่ได้ตอนลดเต็มเพดานส่วนลดพิเศษ (ต่ำสุดที่นโยบายส่วนลดยอมให้)
+    case when v.price_special > 0 and v.fixed > 0
+         then round((1 - v.buf - v.fixed / v.price_special) * 100, 2) end as auto_minimum_margin_percent,
+    -- Floor = ราคาที่ลดเต็มเพดาน แต่ห้ามต่ำกว่าราคาเท่าทุนจริง
+    case when v.price_special > 0 and (1 - v.buf) > 0
+         then round(greatest(v.price_special, v.fixed / (1 - v.buf)), 2) end as auto_floor_price
+  from (
+    select
+      coalesce(c.normal_selling_price, 0) as normal,
+      coalesce(c.normal_selling_price, 0)
+        * (1 - coalesce(c.special_discount_percent, margin_setting_num('special_discount_percent', 15)) / 100) as price_special,
+      (coalesce(c.shipping_buffer_percent,  margin_setting_num('shipping_buffer_percent', 2))
+       + coalesce(c.provision_buffer_percent, margin_setting_num('provision_buffer_percent', 2))) / 100 as buf,
+      -- ต้นทุนคงที่ต่อชิ้น = ต้นทุนสินค้า + ค่าขนส่งมาตรฐาน (buffer คิดจากยอดขาย จึงยังไม่รวมตรงนี้)
+      coalesce(c.cost_price, 0) + coalesce(c.default_shipping_cost, margin_setting_num('default_shipping_cost', 0)) as fixed
+  ) v
+) a;
+
+grant select on product_cost_auto to authenticated;
