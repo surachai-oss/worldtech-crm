@@ -77,7 +77,7 @@ input,select,textarea{font-family:'Mitr',sans-serif}
 
 .table-wrap{overflow:visible;border-radius:var(--radius);border:1px solid var(--border)}
 table{width:100%;border-collapse:collapse}
-th{position:sticky;top:0;z-index:3;background:var(--navy);color:var(--white);padding:8px 12px;text-align:left;font-size:12px;font-weight:500;white-space:nowrap}
+th{position:sticky;top:0;z-index:3;background:var(--navy);color:var(--white);padding:10px 14px;text-align:center;font-size:12px;font-weight:500;white-space:nowrap}
 
 /* หน้ารายการที่ต้อง "freeze" ส่วนบน: หัวข้อ/ตัวกรอง/สรุป อยู่กับที่ ตารางเลื่อนเองอยู่ด้านล่าง หัวตารางสีน้ำเงินค้างบนสุดของตาราง */
 .content-area:has(> .list-view){overflow:hidden;display:flex;flex-direction:column}

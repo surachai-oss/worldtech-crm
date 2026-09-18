@@ -21,8 +21,8 @@ const CSS = `
 .omr-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .omr-bar .omr-sep{width:1px;height:20px;background:var(--border)}
 .omr table td{padding:10px 14px}
-.omr table th{padding:9px 14px}
-.omr table td.num,.omr table th.num{text-align:right;white-space:nowrap}
+.omr table td.num{text-align:right;white-space:nowrap}
+.omr table th.num{white-space:nowrap}
 .omr table tbody tr:nth-child(even){background:#fcfcfe}
 .omr table tbody tr:hover{background:#f4f7ff}
 .omr-link{background:none;border:none;padding:0;font:inherit;color:var(--navy);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--border)}

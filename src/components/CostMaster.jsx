@@ -96,6 +96,16 @@ const HELP_CSS = `
 .cm-help-row .k{font-size:11.5px;font-weight:600;color:var(--navy);margin-bottom:2px}
 .cm-help-row .v{font-size:12.5px;line-height:1.65;color:var(--text);white-space:pre-line}
 .cm-help-formula{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--gray-bg);border-radius:6px;padding:8px 10px}
+/* ชื่อสินค้าบางตัวยาวเป็นย่อหน้า ปล่อยไว้แถวจะสูงสามบรรทัดจนอ่านตารางยาก
+   ตัดเหลือบรรทัดเดียวแล้วเอาเมาส์ชี้ดูชื่อเต็ม (title) — คลิกดูไม่ได้เพราะแถวไม่ได้กดอะไร */
+.cm-name{max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-sub{font-size:11px;color:var(--text-light);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ชื่อ/รหัสชิดซ้ายอ่านง่ายกว่าจัดกลาง ส่วนหัวตารางจัดกลางตามกฎกลางของแอป */
+.cm-left{text-align:left}
+/* รหัสสินค้ายาวจนขึ้นสองบรรทัด ทำให้แถวสูงเท่าเดิมทั้งที่ย่อชื่อสินค้าไปแล้ว */
+.cm-code{white-space:nowrap}
+/* ปุ่มสามตัวตกบรรทัดจนแถวสูง 96px — บังคับให้อยู่แถวเดียว แล้วคืนความกว้างจากคอลัมน์ชื่อให้ */
+.cm-actions{flex-wrap:nowrap;white-space:nowrap}
 `
 
 // หัวตารางที่กดแล้วอธิบายว่าคอลัมน์นั้นคิดยังไง
@@ -478,7 +488,7 @@ export default function CostMaster({ currentUserName }) {
                   <HelpTh id="floor" label="Floor Price" onOpen={setHelp} />
                   <HelpTh id="margins" label={t('เป้าหมาย/ขั้นต่ำ')} onOpen={setHelp} />
                   <HelpTh id="buffer" label="Buffer" onOpen={setHelp} />
-                  <th>{t('สถานะ')}</th><th>{t('อัปเดตโดย')}</th><th></th>
+                  <th>{t('สถานะ')}</th><th>{t('อัปเดตโดย')}</th><th>{t('การจัดการ')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -487,8 +497,11 @@ export default function CostMaster({ currentUserName }) {
                   const hasCost = c && Number(c.cost_price) > 0
                   return (
                     <tr key={r.id}>
-                      <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{r.code}</td>
-                      <td>{r.name}{r.category && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{r.category}{r.brand ? ` · ${r.brand}` : ''}</div>}</td>
+                      <td className="cm-left cm-code" style={{ fontWeight: 600, color: 'var(--navy)' }}>{r.code}</td>
+                      <td className="cm-left">
+                        <div className="cm-name" title={r.name}>{r.name}</div>
+                        {r.category && <div className="cm-sub">{r.category}{r.brand ? ` · ${r.brand}` : ''}</div>}
+                      </td>
                       <td style={{ fontWeight: 600 }}>
                         {hasCost ? fmtCurrency(c.cost_price) : <span className="badge badge-orange">{t('ยังไม่ได้กรอก')}</span>}
                       </td>
@@ -508,10 +521,10 @@ export default function CostMaster({ currentUserName }) {
                         <span className={`badge ${c?.status === 'Active' || !c ? 'badge-green' : 'badge-gray'}`}>{c?.status || 'Active'}</span>
                       </td>
                       <td style={{ fontSize: 11, color: 'var(--text-light)' }}>{c?.updated_by || '-'}</td>
-                      <td className="td-actions">
+                      <td className="td-actions cm-actions">
                         <button className="btn btn-outline btn-xs" onClick={() => setModal(r)}>{hasCost ? t('แก้ไข') : t('กรอกต้นทุน')}</button>
                         {hasCost && <button className="btn btn-outline btn-xs" onClick={() => setTierProduct(r)}>{t('ขั้นบันได')}{r.tiers?.length ? ` (${r.tiers.length})` : ''}</button>}
-                        {hasCost && <button className="btn btn-outline btn-xs" onClick={() => setHistoryProduct(r)}>{t('ประวัติ')}</button>}
+                        {hasCost && <button className="btn btn-outline btn-xs" onClick={() => setHistoryProduct(r)}>Log</button>}
                       </td>
                     </tr>
                   )
