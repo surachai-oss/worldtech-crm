@@ -1345,12 +1345,26 @@ export const deletePriceCheck = (id) => supabase.from('price_checks').delete().e
 // ===== Cost Master (บัญชี/แอดมินเท่านั้น — เซลล์ยิงมาก็โดน RLS ปฏิเสธ) =====
 
 // รวมสินค้าทุกตัวเข้ากับต้นทุนที่มี เพื่อให้บัญชีเห็นว่าตัวไหนยังไม่ได้กรอก
+// อ่านจาก view product_cost_auto เพื่อได้เกณฑ์ที่ระบบคิดให้อัตโนมัติมาด้วย (auto_*)
+// view เป็น security_invoker จึงยังบังคับ RLS ของ product_costs เหมือนเดิม
+//
+// ถอยไปอ่านตารางตรงๆ ถ้ายังไม่มี view — โค้ดขึ้น Netlify ก่อนที่จะมีคนรัน schema.sql เสมอ
+// ถ้าไม่ดักไว้ หน้าต้นทุนสินค้าจะว่างเปล่าทั้งหน้าพร้อม error ระหว่างช่วงรอยต่อนั้น (เคยเกิดแล้ว)
+// ผลคือคอลัมน์ค่าอัตโนมัติจะโชว์ "-" จนกว่าจะรัน SQL แต่ที่เหลือใช้งานได้ปกติ
+async function fetchCostsWithAuto() {
+  const res = await supabase.from('product_cost_auto').select('*')
+  if (!res.error) return res.data
+  // supabase-js บอกว่าหาตาราง/view ไม่เจอผ่าน res.error ไม่ได้ throw ออกมา ต้องเช็คเอง
+  if (/product_cost_auto/.test(res.error.message || '')) {
+    return supabase.from('product_costs').select('*').then(handle)
+  }
+  throw res.error
+}
+
 export async function fetchProductCosts() {
   const [products, costs, tiers] = await Promise.all([
     supabase.from('products').select('id,code,name,category,brand').order('code', { ascending: true }).then(handle),
-    // อ่านจาก view ไม่ใช่ตารางตรงๆ เพื่อให้ได้ค่าเกณฑ์ที่ระบบคิดให้อัตโนมัติมาด้วย (auto_*)
-    // view เป็น security_invoker จึงยังบังคับ RLS ของ product_costs เหมือนเดิม
-    supabase.from('product_cost_auto').select('*').then(handle),
+    fetchCostsWithAuto(),
     supabase.from('product_price_tiers').select('*').order('min_qty', { ascending: true }).then(handle)
   ])
   const byId = new Map(costs.map(c => [c.product_id, c]))
