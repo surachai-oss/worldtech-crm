@@ -63,3 +63,16 @@ export function normalizeLeadSource(raw) {
   if (!key) return ''
   return LEAD_SOURCE_ALIASES[key] ?? null
 }
+
+export const LEAD_STATUS_UNKNOWN = 'ไม่ระบุสถานะ'
+
+// คีย์ของ "ใบสรุป" ที่ลีดรายนี้ควรถูกนับเข้า — ใช้ทั้งตอนนับจำนวนบนการ์ด และตอนกดการ์ดเพื่อดูว่าใครบ้าง
+// ต้องเป็นฟังก์ชันเดียวกันทั้งสองทาง ไม่งั้นจำนวนบนการ์ดกับจำนวนแถวในป๊อปอัปจะไม่ตรงกัน
+export function leadSourceBucket(rawSource) {
+  const canon = normalizeLeadSource(rawSource)
+  return canon === '' ? LEAD_SOURCE_UNKNOWN : (canon ?? LEAD_SOURCE_INVALID)
+}
+
+export function leadStatusBucket(rawStatus) {
+  return rawStatus || LEAD_STATUS_UNKNOWN
+}

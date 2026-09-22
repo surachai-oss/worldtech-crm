@@ -918,6 +918,12 @@ export const EN_DICT = {
 
   // ===== Document settings (ตั้งค่าเอกสาร) =====
   'ตั้งค่าเอกสาร': 'Document Settings',
+  'กดเพื่อดูว่ามีใครบ้าง': 'Click to see who',
+  'ดูรายชื่อ': 'see list',
+  'กดเพื่อเปิดผู้ติดต่อรายนี้': 'Open this contact',
+  'ตามช่วงวันที่และคำค้นหาที่ตั้งไว้': 'matching the current date range and search',
+  'โหลดรายชื่อไม่สำเร็จ': 'Could not load the list',
+  'ไม่พบข้อมูล': 'Nothing found',
   'ดูว่าคืออะไรบ้าง': 'See which ones',
   'ไม่มีต้นทุน': 'No cost',
   'บรรทัดที่ไม่มีต้นทุนบันทึกไว้': 'Lines with no cost recorded',

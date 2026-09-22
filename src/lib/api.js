@@ -1,6 +1,6 @@
 import { supabase } from '../supabaseClient'
 import { TEMPLATE_SETTING_KEY, LEGACY_COMPANY_KEYS, documentLogoPath } from './documentTemplate'
-import { normalizeLeadSource, LEAD_SOURCE_UNKNOWN, LEAD_SOURCE_INVALID } from './leadOptions'
+import { normalizeLeadSource, LEAD_SOURCE_UNKNOWN, LEAD_SOURCE_INVALID, leadSourceBucket, leadStatusBucket } from './leadOptions'
 import { toLocalDateStr } from './format'
 import { BACKCOVER_SETTING_KEY, mergeBackCover, parseBackCover } from './catalogBackCover'
 
@@ -677,8 +677,7 @@ export async function fetchLeadsSourceSummary({ status = '', q = '', dateFrom = 
   // ค่าที่จับคู่ไม่ได้กองไว้ใบเดียวชื่อ "ช่องทางไม่ถูกต้อง" เพื่อให้เห็นว่ามีข้อมูลต้องแก้ ไม่ใช่ปล่อยแตกเป็นใบละ 1
   const bySource = {}
   data.forEach(r => {
-    const canon = normalizeLeadSource(r.source)
-    const key = canon === '' ? LEAD_SOURCE_UNKNOWN : (canon ?? LEAD_SOURCE_INVALID)
+    const key = leadSourceBucket(r.source)
     bySource[key] = (bySource[key] || 0) + 1
   })
   return bySource
@@ -696,7 +695,7 @@ export async function fetchLeadsStatusSummary({ q = '', dateFrom = '', dateTo = 
   if (error) throw error
   const byStatus = {}
   data.forEach(r => {
-    const key = r.status || 'ไม่ระบุสถานะ'
+    const key = leadStatusBucket(r.status)
     byStatus[key] = (byStatus[key] || 0) + 1
   })
   return byStatus

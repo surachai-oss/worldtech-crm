@@ -8,7 +8,69 @@ import { useLanguage } from './LanguageContext'
 import EditableSelect from './EditableSelect'
 import Pagination from './Pagination'
 import ImportLeadsModal from './ImportLeadsModal'
-import { normalizeLeadSource, LEAD_SOURCE_INVALID } from '../lib/leadOptions'
+import { normalizeLeadSource, LEAD_SOURCE_INVALID, leadSourceBucket, leadStatusBucket } from '../lib/leadOptions'
+
+const DRILL_CSS = `
+.ld-kpi{display:block;width:100%;text-align:left;border:none;font:inherit;cursor:pointer}
+.ld-kpi:hover{box-shadow:0 4px 14px rgba(0,0,0,.12);transform:translateY(-1px)}
+.ld-kpi .kpi-value{display:flex;align-items:baseline;gap:6px}
+.ld-kpi .ld-go{font-size:10px;font-weight:400;color:var(--text-light);opacity:0;transition:.15s}
+.ld-kpi:hover .ld-go{opacity:1}
+`
+
+// รายชื่อเบื้องหลังการ์ดสรุป — กดการ์ดแล้วเห็นเลยว่าตัวเลขนั้นมาจากใครบ้าง ไม่ต้องไปไล่กรองในตารางเอง
+function DrillPopup({ title, sub, rows, loading, error, onPick, onClose }) {
+  const { t } = useLanguage()
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  return (
+    <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="modal" style={{ maxWidth: 900 }}>
+        <div className="modal-header">
+          <div>
+            <div className="modal-title">{title}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-light)', marginTop: 2 }}>{sub}</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          {error ? <div className="empty-state"><div style={{ color: 'var(--danger)' }}>{error}</div></div>
+            : loading ? <div className="empty-state"><div>{t('กำลังโหลด...')}</div></div>
+              : !rows.length ? <div className="empty-state"><div>{t('ไม่พบข้อมูล')}</div></div>
+                : (
+                  <div className="table-wrap">
+                    <table>
+                      <thead><tr>
+                        <th>{t('ชื่อ')}</th><th>{t('หัวข้อ')}</th><th>{t('ติดต่อ')}</th>
+                        <th>{t('ที่มา')}</th><th>{t('สถานะ')}</th><th>{t('วันที่')}</th>
+                      </tr></thead>
+                      <tbody>
+                        {rows.map(l => (
+                          // กดแถวแล้วเปิดผู้ติดต่อคนนั้นต่อได้เลย ไม่ต้องปิดป๊อปอัปแล้วไปหาเองในตาราง
+                          <tr key={l.id} onClick={() => onPick(l)} title={t('กดเพื่อเปิดผู้ติดต่อรายนี้')}>
+                            <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{l.full_name || '-'}</td>
+                            <td style={{ fontSize: 12 }}>{l.subject || '-'}</td>
+                            <td style={{ fontSize: 12 }}>
+                              {l.phone || '-'}
+                              {l.email && <div style={{ color: 'var(--text-light)' }}>{l.email}</div>}
+                            </td>
+                            <td style={{ fontSize: 12 }}>{leadSourceBucket(l.source)}</td>
+                            <td style={{ fontSize: 12 }}>{leadStatusBucket(l.status)}</td>
+                            <td style={{ fontSize: 12 }}>{fmtDate(l.created_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onEdit, onCreateCompany, onStatusChange, onDelete, onLogActivity }) {
   const { toast } = useUi()
@@ -28,6 +90,25 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
   const [statusSummary, setStatusSummary] = useState({})
   const [showImport, setShowImport] = useState(false)
   const [localBump, setLocalBump] = useState(0)
+  // การ์ดสรุปที่กดค้างไว้ { kind: 'status'|'source', key } พร้อมรายชื่อที่โหลดมา
+  const [drill, setDrill] = useState(null)
+  const [drillRows, setDrillRows] = useState([])
+  const [drillLoading, setDrillLoading] = useState(false)
+  const [drillError, setDrillError] = useState('')
+
+  // ดึงลีดตามตัวกรองที่ตั้งไว้ (ช่วงวันที่ + คำค้นหา) แล้วคัดด้วยฟังก์ชันจัดกลุ่มตัวเดียวกับที่ใช้นับบนการ์ด
+  // ไม่กรองที่ฐานข้อมูลเพราะช่องทางที่มาถูกยุบค่าฝั่งแอป (LINE/Line/LINE? → Line) กรองด้วย eq จะได้ไม่ครบ
+  const openDrill = async (kind, key) => {
+    setDrill({ kind, key }); setDrillRows([]); setDrillError(''); setDrillLoading(true)
+    try {
+      const all = await fetchAllLeads({ q, dateFrom: fromDate, dateTo: toDate })
+      const bucket = kind === 'status' ? leadStatusBucket : leadSourceBucket
+      const field = kind === 'status' ? 'status' : 'source'
+      setDrillRows(all.filter(l => bucket(l[field]) === key))
+    } catch (e) {
+      setDrillError(t('โหลดรายชื่อไม่สำเร็จ') + ': ' + e.message)
+    } finally { setDrillLoading(false) }
+  }
 
   const doExport = async () => {
     setExporting(true)
@@ -68,8 +149,19 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
   const KPI_COLORS = ['', 'navy', 'green', 'red', 'blue']
   const kpiColor = (i) => KPI_COLORS[i % KPI_COLORS.length]
 
+  const drillCount = drill ? (drill.kind === 'status' ? statusSummary[drill.key] : sourceSummary[drill.key]) : 0
+
   return (
     <div className="list-view">
+      <style>{DRILL_CSS}</style>
+      {drill && (
+        <DrillPopup
+          title={drill.kind === 'status' ? `${t('สถานะ')}: ${drill.key}` : `${t('ที่มา')}: ${t(drill.key)}`}
+          sub={`${drillCount ?? 0} ${t('รายการ')} · ${t('ตามช่วงวันที่และคำค้นหาที่ตั้งไว้')}`}
+          rows={drillRows} loading={drillLoading} error={drillError}
+          onPick={(l) => { setDrill(null); onEdit(l) }}
+          onClose={() => setDrill(null)} />
+      )}
       <div className="section-header">
         <div className="section-title">{t('ผู้ติดต่อ')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({count} {t('รายการ')})</span></div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -87,10 +179,11 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-light)', marginBottom: 6 }}>{t('สรุปตามสถานะ')}</div>
             <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', margin: 0 }}>
               {statusKeys.map((st, i) => (
-                <div className={`kpi-card ${kpiColor(i)}`} key={st}>
+                <button type="button" className={`kpi-card ld-kpi ${kpiColor(i)}`} key={st}
+                  onClick={() => openDrill('status', st)} title={t('กดเพื่อดูว่ามีใครบ้าง')}>
                   <div className="kpi-label">{st}</div>
-                  <div className="kpi-value">{statusSummary[st]}</div>
-                </div>
+                  <div className="kpi-value">{statusSummary[st]}<span className="ld-go">{t('ดูรายชื่อ')}</span></div>
+                </button>
               ))}
             </div>
           </div>
@@ -99,10 +192,13 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
             <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', margin: 0 }}>
               {sourceKeys.map((src, i) => (
                 // ใบ "ช่องทางไม่ถูกต้อง" ให้แดงเสมอ ไม่ไล่สีตามลำดับ เพื่อให้เห็นว่ามีข้อมูลค้างต้องแก้
-                <div className={`kpi-card ${src === LEAD_SOURCE_INVALID ? 'red' : kpiColor(i)}`} key={src}>
+                <button type="button" className={`kpi-card ld-kpi ${src === LEAD_SOURCE_INVALID ? 'red' : kpiColor(i)}`} key={src}
+                  onClick={() => openDrill('source', src)} title={t('กดเพื่อดูว่ามีใครบ้าง')}>
                   <div className="kpi-label" style={src === LEAD_SOURCE_INVALID ? { color: 'var(--danger)' } : undefined}>{t(src)}</div>
-                  <div className="kpi-value" style={src === LEAD_SOURCE_INVALID ? { color: 'var(--danger)' } : undefined}>{sourceSummary[src]}</div>
-                </div>
+                  <div className="kpi-value" style={src === LEAD_SOURCE_INVALID ? { color: 'var(--danger)' } : undefined}>
+                    {sourceSummary[src]}<span className="ld-go">{t('ดูรายชื่อ')}</span>
+                  </div>
+                </button>
               ))}
             </div>
           </div>
