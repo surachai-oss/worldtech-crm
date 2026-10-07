@@ -918,6 +918,9 @@ export const EN_DICT = {
 
   // ===== Document settings (ตั้งค่าเอกสาร) =====
   'ตั้งค่าเอกสาร': 'Document Settings',
+  'ผสม': 'Mixed',
+  'แต่ละบรรทัดคิดไม่เท่ากัน': 'Lines use different percentages',
+  'บรรทัดยังไม่มีต้นทุน จึงไม่ถูกคิดสัดส่วนด้วย': 'lines have no cost recorded, so the percentage does not apply to them',
   'กดเพื่อดูว่ามีใครบ้าง': 'Click to see who',
   'ดูรายชื่อ': 'see list',
   'กดเพื่อเปิดผู้ติดต่อรายนี้': 'Open this contact',

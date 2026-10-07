@@ -51,7 +51,7 @@ function groupLines(lines, keyOf, labelOf) {
   const out = new Map()
   lines.forEach(l => {
     const k = keyOf(l)
-    if (!out.has(k)) out.set(k, { key: k, ...labelOf(l), sales: 0, cost: 0, normal: 0, qty: 0, lineCount: 0, noCostLines: 0, orders: new Set() })
+    if (!out.has(k)) out.set(k, { key: k, ...labelOf(l), sales: 0, cost: 0, normal: 0, qty: 0, lineCount: 0, noCostLines: 0, factors: new Set(), orders: new Set() })
     const g = out.get(k)
     g.sales += Number(l.line_sales) || 0
     g.cost += Number(l.line_cost) || 0
@@ -60,6 +60,9 @@ function groupLines(lines, keyOf, labelOf) {
     g.lineCount += 1
     // บรรทัดที่ไม่มีต้นทุน = ไม่มีแถวใน order_item_costs ซึ่งเป็นเหตุผลเดียวกับที่ปรับสัดส่วนต้นทุนไม่ได้
     if (!(Number(l.line_cost) > 0)) g.noCostLines += 1
+    // เก็บสัดส่วนต้นทุนจากเฉพาะบรรทัดที่มีต้นทุนจริง — บรรทัดที่ไม่มีแถวต้นทุนจะถูก LEFT JOIN คืนมาเป็น 100
+    // ถ้าเอาค่าจากบรรทัดแรกมาโชว์ดื้อๆ ออเดอร์ที่บรรทัดแรกไม่มีต้นทุนจะขึ้น 100% ทั้งที่บรรทัดอื่นคิด 80% อยู่
+    else g.factors.add(Number(l.cost_factor) || 100)
     g.orders.add(l.order_id)
   })
   return [...out.values()].map(g => ({
@@ -301,8 +304,25 @@ export default function OrderMarginReport() {
                     {view === 'order' && <td style={{ fontSize: 12 }}>{fmtDate(r.order_date)}</td>}
                     {view === 'order' && (
                       <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                        <span style={{ fontWeight: 600, color: r.cost_factor === 100 ? 'var(--text-light)' : '#c05621' }}>{r.cost_factor}%</span>
+                        {(() => {
+                          const fs = [...r.factors].sort((a, b) => a - b)
+                          if (!fs.length) return <span style={{ fontWeight: 600, color: 'var(--text-light)' }}>-</span>
+                          // บรรทัดในออเดอร์เดียวกันคิดคนละสัดส่วน เกิดได้ถ้าเพิ่งปรับแล้วมีบรรทัดที่ไม่มีต้นทุนปนอยู่
+                          if (fs.length > 1) return (
+                            <span style={{ fontWeight: 600, color: '#c05621' }} title={`${t('แต่ละบรรทัดคิดไม่เท่ากัน')}: ${fs.join('% / ')}%`}>
+                              {t('ผสม')} {fs.join('/')}%
+                            </span>
+                          )
+                          return <span style={{ fontWeight: 600, color: fs[0] === 100 ? 'var(--text-light)' : '#c05621' }}>{fs[0]}%</span>
+                        })()}
                         {r.order_type === 'Grade B' && <span className="badge badge-orange" style={{ marginLeft: 4, fontSize: 10 }}>GB</span>}
+                        {/* เตือนว่าตัวเลขสัดส่วนนี้ไม่ได้ครอบคลุมทั้งออเดอร์ เพราะมีบรรทัดที่ยังไม่มีต้นทุนปนอยู่ */}
+                        {r.noCostLines > 0 && r.noCostLines < r.lineCount && (
+                          <span className="badge badge-orange" style={{ marginLeft: 4, fontSize: 10 }}
+                            title={`${r.noCostLines}/${r.lineCount} ${t('บรรทัดยังไม่มีต้นทุน จึงไม่ถูกคิดสัดส่วนด้วย')}`}>
+                            {r.noCostLines}/{r.lineCount}
+                          </span>
+                        )}
                         {/* ไม่มีต้นทุนสักบรรทัด = ไม่มีอะไรให้คูณ % ปรับไปก็ไม่เกิดอะไร บอกไว้ตรงนี้ก่อนจะกด */}
                         {r.noCostLines === r.lineCount
                           ? <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 10 }}>{t('ไม่มีต้นทุน')}</span>
@@ -341,6 +361,7 @@ export default function OrderMarginReport() {
                     <th className="num">{t('จำนวน')}</th>
                     <th className="num">{t('ราคาต่อหน่วย')}</th>
                     <th className="num">{t('ยอดขาย')}</th>
+                    <th className="num">{t('ต้นทุนที่คิด')}</th>
                     <th className="num">{t('ต้นทุน')}</th>
                     <th className="num">Margin</th>
                   </tr>
@@ -359,6 +380,9 @@ export default function OrderMarginReport() {
                         <td className="num">{l.quantity}</td>
                         <td className="num">{fmtCurrency(l.unit_price)}</td>
                         <td className="num" style={{ fontWeight: 600 }}>{fmtCurrency(ls)}</td>
+                        <td className="num" style={{ color: lc > 0 && Number(l.cost_factor) !== 100 ? '#c05621' : 'var(--text-light)' }}>
+                          {lc > 0 ? `${Number(l.cost_factor) || 100}%` : '-'}
+                        </td>
                         <td className="num">
                           {lc > 0 ? fmtCurrency(lc)
                             : <span className="badge badge-gray" style={{ fontSize: 10 }}>{t('ไม่มีต้นทุน')}</span>}
