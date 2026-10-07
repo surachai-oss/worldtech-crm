@@ -918,10 +918,6 @@ export const EN_DICT = {
 
   // ===== Document settings (ตั้งค่าเอกสาร) =====
   'ตั้งค่าเอกสาร': 'Document Settings',
-  'ไม่มีทุน': 'No cost',
-  'ยังไม่มีต้นทุน': 'No cost recorded for',
-  'บรรทัด จากทั้งหมด': 'of',
-  'บรรทัด — กดเพื่อดูว่าบรรทัดไหน': 'lines — click to see which',
   'ผสม': 'Mixed',
   'แต่ละบรรทัดคิดไม่เท่ากัน': 'Lines use different percentages',
   'กดเพื่อดูว่ามีใครบ้าง': 'Click to see who',
