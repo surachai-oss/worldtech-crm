@@ -25,6 +25,7 @@ const CSS = `
 .omr table th.num{white-space:nowrap}
 .omr table tbody tr:nth-child(even){background:#fcfcfe}
 .omr table tbody tr:hover{background:#f4f7ff}
+.omr-nocost{border:none;cursor:pointer;font:inherit}
 .omr-link{background:none;border:none;padding:0;font:inherit;color:var(--navy);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--border)}
 .omr-link:hover{text-decoration-color:var(--navy)}
 .omr-warn{display:flex;gap:12px;align-items:center;justify-content:space-between;width:100%;text-align:left;
@@ -316,12 +317,15 @@ export default function OrderMarginReport() {
                           return <span style={{ fontWeight: 600, color: fs[0] === 100 ? 'var(--text-light)' : '#c05621' }}>{fs[0]}%</span>
                         })()}
                         {r.order_type === 'Grade B' && <span className="badge badge-orange" style={{ marginLeft: 4, fontSize: 10 }}>GB</span>}
-                        {/* เตือนว่าตัวเลขสัดส่วนนี้ไม่ได้ครอบคลุมทั้งออเดอร์ เพราะมีบรรทัดที่ยังไม่มีต้นทุนปนอยู่ */}
+                        {/* เตือนว่าตัวเลขสัดส่วนนี้ไม่ได้ครอบคลุมทั้งออเดอร์ เพราะมีบรรทัดที่ยังไม่มีต้นทุนปนอยู่
+                            เขียนคำกำกับไว้ด้วย — ตัวเลขเปล่าๆ อย่าง "3/45" ไม่มีใครเดาออกว่าหมายถึงอะไร
+                            และกดได้ เพื่อเปิดดูว่าบรรทัดไหนบ้างที่ไม่มีต้นทุน */}
                         {r.noCostLines > 0 && r.noCostLines < r.lineCount && (
-                          <span className="badge badge-orange" style={{ marginLeft: 4, fontSize: 10 }}
-                            title={`${r.noCostLines}/${r.lineCount} ${t('บรรทัดยังไม่มีต้นทุน จึงไม่ถูกคิดสัดส่วนด้วย')}`}>
-                            {r.noCostLines}/{r.lineCount}
-                          </span>
+                          <button type="button" className="badge badge-orange omr-nocost" style={{ marginLeft: 4, fontSize: 10 }}
+                            onClick={() => setDetailOrderId(r.key)}
+                            title={`${t('ยังไม่มีต้นทุน')} ${r.noCostLines} ${t('บรรทัด จากทั้งหมด')} ${r.lineCount} ${t('บรรทัด — กดเพื่อดูว่าบรรทัดไหน')}`}>
+                            {t('ไม่มีทุน')} {r.noCostLines}/{r.lineCount}
+                          </button>
                         )}
                         {/* ไม่มีต้นทุนสักบรรทัด = ไม่มีอะไรให้คูณ % ปรับไปก็ไม่เกิดอะไร บอกไว้ตรงนี้ก่อนจะกด */}
                         {r.noCostLines === r.lineCount
