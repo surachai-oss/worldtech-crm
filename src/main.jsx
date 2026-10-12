@@ -4,6 +4,7 @@ import App from './App.jsx'
 import PublicLeadPage from './components/PublicLeadPage.jsx'
 import PublicCatalogPage from './components/PublicCatalogPage.jsx'
 import { LanguageProvider } from './components/LanguageContext'
+import { initFacebookPixel } from './lib/facebookPixel'
 
 // /lead ไม่ต้อง login — เป็นฟอร์มสาธารณะสำหรับแปะลิงก์ใน Facebook/เว็บไซต์ ไม่ผ่านหน้า Login ของแอปหลัก
 const path = window.location.pathname
@@ -12,6 +13,9 @@ const isPublicLeadPage = path.startsWith('/lead')
 const isPublicCatalogPage = path.startsWith('/catalog/')
 
 const publicPage = isPublicLeadPage ? <PublicLeadPage /> : isPublicCatalogPage ? <PublicCatalogPage /> : null
+
+// ติด Pixel เฉพาะหน้าที่ลูกค้าเห็น ไม่ติดในหลังบ้าน — ดูเหตุผลใน src/lib/facebookPixel.js
+if (publicPage) initFacebookPixel()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

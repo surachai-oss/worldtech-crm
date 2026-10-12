@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchPublicCatalog, logCatalogView, submitCatalogLead } from '../lib/api'
+import { trackLead } from '../lib/facebookPixel'
 import CatalogGalleryView, { CatalogStateMessage } from './CatalogGalleryView'
 import '../App.css'
 
@@ -57,9 +58,11 @@ export default function PublicCatalogPage() {
   }
 
   // ฟอร์มปกหลังส่งเข้าท่อลีดเดิม ลีดจะไปโผล่ที่หน้า "ผู้ติดต่อ" พร้อมชื่อเล่มที่เปิดมา
-  const sendLead = (f) => submitCatalogLead({
-    ...f, catalogName: data.catalog.name, catalogSlug: data.catalog.slug,
-  })
+  const sendLead = async (f) => {
+    await submitCatalogLead({ ...f, catalogName: data.catalog.name, catalogSlug: data.catalog.slug })
+    // ยิงหลังบันทึกสำเร็จ — ถ้า submitCatalogLead โยน error จะไม่มาถึงบรรทัดนี้ และฟอร์มจะขึ้นข้อความผิดพลาดตามเดิม
+    trackLead(`แคตตาล็อก: ${data.catalog.name}`)
+  }
 
   return (
     <CatalogGalleryView

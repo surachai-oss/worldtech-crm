@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { submitPublicLead } from '../lib/api'
+import { trackLead } from '../lib/facebookPixel'
 import { POSITION_OPTIONS, BUSINESS_TYPE_OTHER, BUSINESS_TYPE_OPTIONS, APPLIANCE_OTHER, APPLIANCE_OPTIONS, PURCHASE_REASON_OPTIONS } from '../lib/leadOptions'
 import { useLanguage } from './LanguageContext'
 import '../App.css'
@@ -55,6 +56,8 @@ export default function PublicLeadPage() {
         position: f.position || null, business_type, appliance_interest, purchase_reason: f.purchase_reason || null
       })
       setDone(true)
+      // ยิงหลังลีดเข้าระบบแล้วเท่านั้น กรอกไม่ผ่านหรือเซิร์ฟเวอร์ปฏิเสธจะไม่ถูกนับเป็น Lead
+      trackLead(source ? `ฟอร์มลีด (${source})` : 'ฟอร์มลีด')
     } catch (err) {
       setError(err.message)
     } finally {
