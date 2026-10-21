@@ -2760,3 +2760,8 @@ cross join lateral (
 ) a;
 
 grant select on product_cost_auto to authenticated;
+
+-- ===== แนบไฟล์ PO ได้ นอกจากพิมพ์เลขที่ PO =====
+-- ลูกค้าหลายรายส่ง PO มาเป็นไฟล์ (PDF/รูปถ่าย) ไม่มีเลขให้พิมพ์ หรือเลขอยู่ในไฟล์อย่างเดียว
+-- เก็บเป็น path ใน bucket "attachments" เหมือนสลิปการโอน ใช้นโยบายสิทธิ์ชุดเดียวกัน ไม่ต้องเพิ่ม policy ใหม่
+alter table payment_requests add column if not exists po_file_url text;

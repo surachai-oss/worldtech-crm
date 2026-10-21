@@ -863,6 +863,27 @@ export async function uploadPaymentSlip(paymentRequestId, file) {
 }
 export const getPaymentSlipUrl = (filePath) => getAttachmentUrl(filePath)
 
+// ไฟล์ PO ที่ลูกค้าส่งมา — เก็บที่เดียวกับสลิป ใช้สิทธิ์ชุดเดียวกัน
+export async function uploadPoFile(paymentRequestId, file) {
+  if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('ไฟล์ใหญ่เกิน 20MB')
+  const safeName = file.name.replace(/[^\w.-]/g, '_')
+  const path = `po-files/${paymentRequestId || 'new'}/${Date.now()}_${safeName}`
+  const { error: upErr } = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file)
+  if (upErr) throw upErr
+  return path
+}
+export const getPoFileUrl = (filePath) => getAttachmentUrl(filePath)
+
+// โค้ดขึ้น Netlify ก่อนที่จะมีคนรัน schema.sql เสมอ ถ้าส่ง po_file_url ไปทั้งที่ยังไม่มีคอลัมน์
+// การบันทึกคำขอตรวจยอดจะพังทั้งหมด ไม่ใช่แค่ไฟล์แนบหาย — เช็คครั้งเดียวแล้วจำไว้
+let _poColumnExists = null
+export async function hasPoFileColumn() {
+  if (_poColumnExists !== null) return _poColumnExists
+  const res = await supabase.from('payment_requests').select('po_file_url').limit(1)
+  _poColumnExists = !(res.error && /po_file_url/.test(res.error.message || ''))
+  return _poColumnExists
+}
+
 // แจ้งเตือนฝ่ายบัญชีว่ามีคำขอตรวจยอดใหม่รอตรวจ — เรียก Netlify Function เดียว ยิงพร้อมกันหลายช่องทาง (in-app/Telegram/อีเมล)
 // best-effort: ถ้าช่องทางไหนยังไม่ตั้งค่า (Telegram/อีเมล) หรือส่งพลาด จะไม่ทำให้การ submit ล้มเหลว — in-app ใช้ได้เสมอไม่ต้องตั้งค่าเพิ่ม
 export async function notifyFinancePaymentSubmitted(prId) {

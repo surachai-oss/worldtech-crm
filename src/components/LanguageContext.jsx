@@ -918,6 +918,12 @@ export const EN_DICT = {
 
   // ===== Document settings (ตั้งค่าเอกสาร) =====
   'ตั้งค่าเอกสาร': 'Document Settings',
+  'กรอกเลขที่ PO หรือแนบไฟล์ PO ก็ได้ จะทำทั้งสองอย่างก็ได้': 'Enter a PO number, attach the PO file, or both',
+  'ดูไฟล์ PO ที่แนบไว้': 'View the attached PO file',
+  'เลือกไฟล์ใหม่เพื่อแทนที่': 'choose another file to replace it',
+  'ดูไฟล์ PO': 'View PO file',
+  'ไม่ได้กรอกเลข': 'No number entered',
+  'เปิดไฟล์ไม่สำเร็จ': 'Could not open the file',
   'ผสม': 'Mixed',
   'แต่ละบรรทัดคิดไม่เท่ากัน': 'Lines use different percentages',
   'กดเพื่อดูว่ามีใครบ้าง': 'Click to see who',

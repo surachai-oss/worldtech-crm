@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchPaymentRequests, listPaymentItems, getPaymentSlipUrl, PAYMENT_STATUS_LIST, PAYMENT_METHOD_OTHER } from '../lib/api'
+import { fetchPaymentRequests, listPaymentItems, getPaymentSlipUrl, getPoFileUrl, PAYMENT_STATUS_LIST, PAYMENT_METHOD_OTHER } from '../lib/api'
 import { exportPaymentRequestsToExcel } from '../lib/importExport'
 import { fmtCurrency, fmtDate, paymentStatusLabel, paymentBadgeClass } from '../lib/format'
 import { useUi } from './UiContext'
@@ -25,6 +25,12 @@ function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMi
     if (!pr.slip_file_url) { toast('ไม่มีสลิปแนบ', 'info'); return }
     try { window.open(await getPaymentSlipUrl(pr.slip_file_url), '_blank') }
     catch (e) { toast('เปิดสลิปไม่สำเร็จ: ' + e.message, 'error') }
+  }
+
+  const viewPoFile = async () => {
+    if (!pr.po_file_url) { toast('ไม่มีไฟล์ PO แนบ', 'info'); return }
+    try { window.open(await getPoFileUrl(pr.po_file_url), '_blank') }
+    catch (e) { toast('เปิดไฟล์ไม่สำเร็จ: ' + e.message, 'error') }
   }
 
   // needRemark = ต้องกรอกหมายเหตุ (ทุกปุ่มยกเว้นอนุมัติ)
@@ -65,7 +71,15 @@ function ReviewModal({ pr, currentUserName, onClose, onApprove, onNeedInfo, onMi
           <Row label={t('ประเภทการชำระ')} value={pr.payment_type || '-'} />
           <Row label={t('วิธีการชำระ')} value={(pr.payment_method === PAYMENT_METHOD_OTHER ? pr.payment_method_other : pr.payment_method) || '-'} />
           {pr.cod_tracking_no && <Row label="Tracking" value={pr.cod_tracking_no} />}
-          <Row label={t('เลขที่ PO')} value={pr.po_reference || '-'} />
+          {/* ลูกค้าบางรายส่ง PO เป็นไฟล์ ไม่มีเลข — ต้องเห็นทั้งสองทาง ไม่งั้นบัญชีจะนึกว่าไม่มี PO */}
+          <Row label={t('เลขที่ PO')} value={
+            <>
+              {pr.po_reference || (pr.po_file_url ? <span style={{ color: 'var(--text-light)' }}>{t('ไม่ได้กรอกเลข')}</span> : '-')}
+              {pr.po_file_url && (
+                <button className="btn btn-outline btn-xs" style={{ marginLeft: 8 }} onClick={viewPoFile}>{t('ดูไฟล์ PO')}</button>
+              )}
+            </>
+          } />
           <Row label={t('เลขที่ออเดอร์')} value={pr.order?.order_no || pr.order_no || '-'} />
           <Row label={t('ยอดไม่รวม VAT')} value={fmtCurrency(exVat)} />
           <Row label="VAT 7%" value={fmtCurrency(vat)} />

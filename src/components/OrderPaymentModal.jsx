@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   PAYMENT_STATUS, fetchPaymentRequestsByOrder, listPaymentItems, listOrderItems, listProducts, computeDealTotals,
   addPaymentRequestWithItems, updatePaymentRequestWithItems, submitPaymentRequest, uploadPaymentSlip, getPaymentSlipUrl,
+  uploadPoFile, getPoFileUrl, hasPoFileColumn,
   markPaymentOrderCreated, deletePaymentRequest, notifyFinancePaymentSubmitted,
   PAYMENT_METHOD_OPTIONS, PAYMENT_METHOD_OTHER, PAYMENT_METHOD_COD,
 } from '../lib/api'
@@ -42,6 +43,7 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
   const [f, setF] = useState(() => ({
     request_date: (existing?.request_date || '').slice(0, 10) || todayStr(),
     po_reference: existing?.po_reference || '',
+    po_file_url: existing?.po_file_url || '',
     payment_type: existing?.payment_type || 'ชำระเต็มจำนวน',
     payment_method: existing?.payment_method || '',
     payment_method_other: existing?.payment_method_other || '',
@@ -53,6 +55,7 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
   const [items, setItems] = useState(() => [{ ...EMPTY_ITEM }])
   const [products, setProducts] = useState(null)
   const [slipFile, setSlipFile] = useState(null)
+  const [poFile, setPoFile] = useState(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => { listProducts().then(setProducts).catch(() => setProducts([])) }, [])
@@ -103,7 +106,11 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
   const persist = async () => {
     let slip_file_url = f.slip_file_url
     if (slipFile) slip_file_url = await uploadPaymentSlip(existing?.id || null, slipFile)
+    let po_file_url = f.po_file_url
+    if (poFile) po_file_url = await uploadPoFile(existing?.id || null, poFile)
     const fields = { ...buildFields(), slip_file_url }
+    // ส่งคอลัมน์นี้เฉพาะตอนที่ฐานข้อมูลมีแล้ว — ถ้ายังไม่ได้รัน schema.sql การบันทึกต้องไม่พังทั้งใบ
+    if (await hasPoFileColumn()) fields.po_file_url = po_file_url || null
     if (existing?.id) return updatePaymentRequestWithItems(existing.id, fields, cleanItems())
     return addPaymentRequestWithItems({ ...fields, status: PAYMENT_STATUS.DRAFT, requested_by_name: currentUser.name, requested_by_email: currentUser.email, _actorName: currentUser.name }, cleanItems())
   }
@@ -206,6 +213,20 @@ function PaymentRequestForm({ order, companies, existing, currentUser, isAdmin, 
       <div className="form-group">
         <label className="form-label">{t('เลขที่ PO')}</label>
         <input className="form-control" value={f.po_reference} onChange={set('po_reference')} placeholder={t('ไม่บังคับ')} />
+        {/* ลูกค้าบางรายส่ง PO มาเป็นไฟล์ ไม่มีเลขให้พิมพ์ หรือเลขอยู่ในไฟล์อย่างเดียว — กรอกเลข แนบไฟล์ หรือทำทั้งคู่ก็ได้ */}
+        <input className="form-control" style={{ marginTop: 6 }} type="file" accept="image/*,.pdf"
+          onChange={e => setPoFile(e.target.files?.[0] || null)} />
+        <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>
+          {t('กรอกเลขที่ PO หรือแนบไฟล์ PO ก็ได้ จะทำทั้งสองอย่างก็ได้')}
+        </div>
+        {!poFile && f.po_file_url && (
+          <div style={{ fontSize: 11, marginTop: 4 }}>
+            <a href="#" onClick={async (e) => { e.preventDefault(); try { window.open(await getPoFileUrl(f.po_file_url), '_blank') } catch (err) { toast(t('เปิดไฟล์ไม่สำเร็จ') + ': ' + err.message, 'error') } }}>
+              {t('ดูไฟล์ PO ที่แนบไว้')}
+            </a>
+            <span style={{ color: 'var(--text-light)' }}> · {t('เลือกไฟล์ใหม่เพื่อแทนที่')}</span>
+          </div>
+        )}
       </div>
       <div className="form-group">
         <label className="form-label">{t('สลิปการโอน')}</label>
