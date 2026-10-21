@@ -918,6 +918,12 @@ export const EN_DICT = {
 
   // ===== Document settings (ตั้งค่าเอกสาร) =====
   'ตั้งค่าเอกสาร': 'Document Settings',
+  'สรุปยอดขาย/ส่วนลดของฉัน': 'My sales and discounts',
+  'สรุปยอดขายของฉัน': 'My sales summary',
+  'ยังไม่มีออเดอร์ของคุณในช่วงที่เลือก': 'You have no orders in this range',
+  'แสดงเฉพาะออเดอร์ที่คุณเป็นผู้เปิดเท่านั้น': 'Shows only orders you opened',
+  'รายงานนี้ยังไม่พร้อมใช้งาน กรุณาแจ้งผู้ดูแลระบบ': 'This report is not ready yet — please tell an administrator',
+  'โหลดรายงานไม่สำเร็จ': 'Could not load the report',
   'กรอกเลขที่ PO หรือแนบไฟล์ PO ก็ได้ จะทำทั้งสองอย่างก็ได้': 'Enter a PO number, attach the PO file, or both',
   'ดูไฟล์ PO ที่แนบไว้': 'View the attached PO file',
   'เลือกไฟล์ใหม่เพื่อแทนที่': 'choose another file to replace it',

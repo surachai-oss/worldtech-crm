@@ -1525,6 +1525,17 @@ export async function updateOrderWithItems(orderId, fields, items, { actorName, 
 
 // ปรับสัดส่วนต้นทุนของออเดอร์หนึ่งใบ (บัญชี/แอดมิน) — ใช้เมื่อล็อตนั้นได้ต้นทุนต่างจากเกณฑ์ปกติ
 // ค่ากลางของ Grade B ตั้งที่ margin_settings.grade_b_cost_factor (มีผลกับออเดอร์ที่เปิดใหม่)
+// สรุปกำไร/ส่วนลดฉบับเซลล์ — เห็นเฉพาะออเดอร์ตัวเอง ฐานข้อมูลรวมยอดให้แล้วและไม่คืนตัวเลขต้นทุนมาเลย
+// ถอยเป็นรายการว่างถ้ายังไม่ได้รัน schema.sql — โค้ดขึ้น Netlify ก่อนเสมอ ปุ่มจะได้ไม่พังทั้งหน้า
+export async function fetchMyOrderMarginReport({ dateFrom = '', dateTo = '' } = {}) {
+  const res = await supabase.rpc('margin_order_report_mine', { p_from: dateFrom || null, p_to: dateTo || null })
+  if (res.error) {
+    if (/margin_order_report_mine/.test(res.error.message || '')) return { rows: [], notReady: true }
+    throw res.error
+  }
+  return { rows: res.data || [], notReady: false }
+}
+
 export const setOrderCostFactor = (orderId, percent) =>
   supabase.rpc('margin_set_order_cost_factor', { p_order_id: orderId, p_percent: percent }).then(handle)
 

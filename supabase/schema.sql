@@ -2765,3 +2765,58 @@ grant select on product_cost_auto to authenticated;
 -- ลูกค้าหลายรายส่ง PO มาเป็นไฟล์ (PDF/รูปถ่าย) ไม่มีเลขให้พิมพ์ หรือเลขอยู่ในไฟล์อย่างเดียว
 -- เก็บเป็น path ใน bucket "attachments" เหมือนสลิปการโอน ใช้นโยบายสิทธิ์ชุดเดียวกัน ไม่ต้องเพิ่ม policy ใหม่
 alter table payment_requests add column if not exists po_file_url text;
+
+-- ============================================================================
+-- ===== สรุปกำไร/ส่วนลด ฉบับเซลล์ — เห็นเฉพาะออเดอร์ตัวเอง และไม่มีตัวเลขต้นทุน =====
+-- ============================================================================
+-- margin_order_report เดิมคืนต้นทุนรายบรรทัด และเปิดให้เฉพาะบัญชี/แอดมิน — ของเดิมไม่แตะ
+--
+-- ตัวนี้แยกออกมาต่างหากโดยตั้งใจ ไม่ใช่เติม if ในตัวเดิม เพราะ "ซ่อนคอลัมน์ในหน้าจอ" ไม่ใช่การกันข้อมูล
+-- ถ้าส่งต้นทุนรายบรรทัดลงไปถึงเบราว์เซอร์แล้วค่อยซ่อน เซลล์เปิด devtools ดู network ก็เห็นหมด
+-- ฟังก์ชันนี้จึงรวมยอดในฐานข้อมูลแล้วคืนเฉพาะ "ผลลัพธ์" — ไม่มีคอลัมน์ต้นทุนหรือกำไรออกไปเลย
+--
+-- หมายเหตุที่ตกลงกันไว้: Margin ที่คืนไปคำนวณกลับเป็นต้นทุนรวมของออเดอร์ได้ (ต้นทุน = ยอดขาย × (1 − margin))
+-- ผู้ใช้รับทราบและเลือกให้แสดง Margin ต่อ — แต่ต้นทุน "รายบรรทัด" ยังไม่หลุดออกไป ซึ่งละเอียดกว่ามาก
+create or replace function margin_order_report_mine(p_from date default null, p_to date default null)
+returns table (
+  order_id         uuid,
+  order_no         text,
+  order_date       timestamptz,
+  customer_name    text,
+  order_status     text,
+  order_type       text,
+  quantity         numeric,
+  sales            numeric,
+  margin_percent   numeric,
+  discount_percent numeric
+) as $$
+begin
+  if auth.uid() is null then
+    raise exception 'ต้องเข้าสู่ระบบก่อน';
+  end if;
+
+  return query
+  select
+    o.id, o.order_no, o.created_at, o.customer_name, o.status, o.order_type,
+    sum(oi.quantity),
+    sum(oi.quantity * oi.unit_price),
+    -- คืนเฉพาะ % ไม่ได้คืนตัวเงินของต้นทุนหรือกำไร
+    case when sum(oi.quantity * oi.unit_price) > 0
+         then round((sum(oi.quantity * oi.unit_price) - sum(oi.quantity * coalesce(oic.unit_cost, 0)))
+                    / sum(oi.quantity * oi.unit_price) * 100, 2) end,
+    -- ส่วนลดเทียบราคาขายปกติ นับเฉพาะบรรทัดที่มีราคาขายปกติบันทึกไว้ ให้ตรงกับรายงานของผู้จัดการ
+    case when sum(oi.quantity * coalesce(oic.normal_selling_price, 0)) > 0
+         then round((1 - sum(oi.quantity * oi.unit_price)
+                         / sum(oi.quantity * coalesce(oic.normal_selling_price, 0))) * 100, 2) end
+  from orders o
+  join order_items oi on oi.order_id = o.id
+  left join order_item_costs oic on oic.order_item_id = oi.id
+  where o.sales_id = auth.uid()          -- เห็นเฉพาะออเดอร์ที่ตัวเองเปิด
+    and (p_from is null or o.created_at >= p_from::timestamptz)
+    and (p_to is null or o.created_at < (p_to::timestamptz + interval '1 day'))
+  group by o.id, o.order_no, o.created_at, o.customer_name, o.status, o.order_type
+  order by o.created_at desc;
+end;
+$$ language plpgsql stable security definer set search_path = public;
+
+grant execute on function margin_order_report_mine(date, date) to authenticated;
