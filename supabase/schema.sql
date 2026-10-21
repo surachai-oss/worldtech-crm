@@ -2829,23 +2829,31 @@ alter table quotations add column if not exists customer_contact text;  -- ผ�
 alter table orders     add column if not exists customer_contact text;  -- ไหลต่อมาจากใบเสนอราคา
 
 -- ============================================================================
--- ===== แก้วิธีคิดยอดขาย/ส่วนลดในรายงานกำไร ให้ตรงกับความจริง =====
+-- ===== แก้วิธีคิดยอดขาย กำไร และส่วนลด ในรายงานกำไร ให้ตรงกับความจริง =====
 -- ============================================================================
--- แก้ 2 เรื่องที่ตัวเลขเพี้ยนมาตลอด:
+-- แก้ 3 เรื่องที่ตัวเลขไม่ตรงกับของจริง:
 --
 -- 1) ส่วนลดท้ายบิล (orders.discount_type/discount_value) ไม่เคยถูกนับในรายงานเลย
---    รายงานบวกแค่ (จำนวน × ราคาต่อหน่วย) ของแต่ละบรรทัด ซึ่งเป็นยอดก่อนหักส่วนลดท้ายบิล
---    ออเดอร์ที่ลดท้ายบิลจึงแสดงยอดขายสูงกว่าที่เก็บเงินจริง และ Margin ดูดีกว่าความจริง
+--    รายงานบวกแค่ (จำนวน × ราคาต่อหน่วย) ซึ่งเป็นยอดก่อนหักส่วนลดท้ายบิล
+--    ออเดอร์ที่ลดท้ายบิลจึงแสดงยอดขายสูงกว่าที่เก็บเงินจริง และกำไรดูดีกว่าความจริง
 --    แก้โดยเฉลี่ยส่วนลดท้ายบิลลงแต่ละบรรทัดตามสัดส่วนยอดขาย (line_discount)
---    ใช้สูตรเดียวกับ computeDealTotals ฝั่งแอปเป๊ะๆ คือปัดทศนิยม 2 ตำแหน่งแล้วไม่ให้เกินยอดรวม
---    ไม่ปัดเศษรายบรรทัด ผลรวมของ line_discount จึงเท่ากับส่วนลดท้ายบิลพอดี ไม่ขาดไม่เกิน
+--    ใช้สูตรเดียวกับ computeDealTotals ฝั่งแอปเป๊ะๆ และไม่ปัดเศษรายบรรทัด
+--    ผลรวมของ line_discount จึงเท่ากับส่วนลดท้ายบิลพอดี ไม่ขาดไม่เกิน
 --
--- 2) ส่วนลดเทียบราคาขายปกติ เคยเอา "ยอดขายทั้งออเดอร์" ไปหารด้วย "ราคาปกติเฉพาะบรรทัดที่กรอกไว้"
---    ซึ่งเป็นคนละฐานกัน ออเดอร์ที่มีสินค้าบางตัวยังไม่ได้กรอกราคาขายปกติจึงแสดงส่วนลดต่ำกว่าจริง
---    (เช่น ตู้เย็นลด 20% แต่ในใบมีพัดลมที่ไม่ได้กรอกราคาปกติปนอยู่ ส่วนลดอาจขึ้น 0%)
---    แก้โดยให้ตัวตั้งนับเฉพาะบรรทัดที่มีราคาขายปกติบันทึกไว้ เท่ากับเทียบเฉพาะของที่เทียบได้
+-- 2) กำไรไม่เคยหัก Buffer ทั้งที่หน้าเช็คราคาหักมาตลอด ตัวเลขสองหน้าจึงไม่ตรงกัน
+--    เพิ่ม line_buffer = ยอดขายสุทธิของบรรทัดนั้น × (Shipping Buffer % + Provision Buffer %)
+--    ใช้ลำดับเดียวกับ margin_check_price คือค่าเฉพาะสินค้า > ค่ากลางใน margin_settings > ค่าสำรอง 2%
+--    กำไรขั้นต้น = ยอดขายสุทธิ − ต้นทุนสินค้า − Buffer
+--    ยังไม่รวมค่าขนส่งจริง เพราะออเดอร์ไม่ได้เก็บค่าขนส่งไว้รายใบ
+--    หมายเหตุ: Buffer % ใช้ค่าปัจจุบัน ไม่ใช่ค่า ณ วันเปิดออเดอร์ (ต่างจากต้นทุนที่เก็บสำเนาไว้)
+--    เพราะ Buffer เป็นนโยบาย ไม่ใช่ข้อเท็จจริงของออเดอร์ ปรับนโยบายแล้วย้อนดูใหม่ได้ทั้งชุด
+--
+-- 3) ส่วนลดเทียบราคาขายปกติ เดิมเป็น % และคิดคนละฐาน
+--    เปลี่ยนเป็น "ลดไปกี่บาท" = (ราคาปกติ − ราคาขายจริง) × จำนวน
+--    นับเฉพาะบรรทัดที่มีราคาขายปกติบันทึกไว้ และหักส่วนลดท้ายบิลออกจากราคาขายแล้ว
+--    เป็นตัวเงินจึงไม่แกว่งตามการปรับราคาตั้งต้นเหมือน % เดิม
 
--- ----- รายงานฝ่ายบัญชี/แอดมิน: เพิ่ม line_discount (ส่วนลดท้ายบิลที่เฉลี่ยลงบรรทัดนี้) -----
+-- ----- รายงานฝ่ายบัญชี/แอดมิน -----
 -- เปลี่ยนคอลัมน์ที่คืนค่า ต้อง drop ก่อน (postgres แก้ return type ของฟังก์ชันเดิมไม่ได้)
 drop function if exists margin_order_report(date, date);
 
@@ -2866,6 +2874,7 @@ returns table (
   unit_price      numeric,
   line_sales      numeric,   -- ยอดก่อนหักส่วนลดท้ายบิล (จำนวน × ราคาต่อหน่วย)
   line_discount   numeric,   -- ส่วนลดท้ายบิลที่เฉลี่ยลงบรรทัดนี้ — ยอดสุทธิ = line_sales − line_discount
+  line_buffer     numeric,   -- Buffer ของบรรทัดนี้ (% ของยอดสุทธิ)
   line_cost       numeric,
   line_normal     numeric
 ) as $$
@@ -2891,43 +2900,62 @@ begin
              s.subtotal) as disc
     from orders o
     join sub s on s.order_id = o.id
+  ),
+  line as (
+    select
+      o.id as order_id, o.order_no, o.created_at, o.customer_name, o.sales_name,
+      o.status, o.order_type,
+      coalesce(oic.cost_factor_percent, 100) as cost_factor,
+      oi.id as item_id, oi.sort_order, oi.product_id, p.code, coalesce(p.name, oi.description) as pname,
+      oi.quantity, oi.unit_price,
+      oi.quantity * oi.unit_price as gross,
+      case when b.subtotal > 0 then oi.quantity * oi.unit_price * b.disc / b.subtotal else 0 end as disc,
+      oi.quantity * coalesce(oic.unit_cost, 0) as cost,
+      oi.quantity * coalesce(oic.normal_selling_price, 0) as normal_total,
+      -- ลำดับเดียวกับ margin_check_price: ค่าเฉพาะสินค้า > ค่ากลาง > ค่าสำรอง
+      coalesce(pc.shipping_buffer_percent,  margin_setting_num('shipping_buffer_percent', 2))
+      + coalesce(pc.provision_buffer_percent, margin_setting_num('provision_buffer_percent', 2)) as buf_pct
+    from orders o
+    join order_items oi on oi.order_id = o.id
+    join bill b on b.id = o.id
+    left join order_item_costs oic on oic.order_item_id = oi.id
+    left join products p on p.id = oi.product_id
+    left join product_costs pc on pc.product_id = oi.product_id
+    where (p_from is null or o.created_at >= p_from::timestamptz)
+      and (p_to is null or o.created_at < (p_to::timestamptz + interval '1 day'))
   )
   select
-    o.id, o.order_no, o.created_at, o.customer_name, o.sales_name, o.status, o.order_type,
-    coalesce(oic.cost_factor_percent, 100),
-    oi.product_id, p.code, coalesce(p.name, oi.description),
-    oi.quantity, oi.unit_price,
-    oi.quantity * oi.unit_price,
-    case when b.subtotal > 0 then oi.quantity * oi.unit_price * b.disc / b.subtotal else 0 end,
-    oi.quantity * coalesce(oic.unit_cost, 0),
-    oi.quantity * coalesce(oic.normal_selling_price, 0)
-  from orders o
-  join order_items oi on oi.order_id = o.id
-  join bill b on b.id = o.id
-  left join order_item_costs oic on oic.order_item_id = oi.id
-  left join products p on p.id = oi.product_id
-  where (p_from is null or o.created_at >= p_from::timestamptz)
-    and (p_to is null or o.created_at < (p_to::timestamptz + interval '1 day'))
-  order by o.created_at desc, oi.sort_order;
+    l.order_id, l.order_no, l.created_at, l.customer_name, l.sales_name, l.status, l.order_type,
+    l.cost_factor, l.product_id, l.code, l.pname,
+    l.quantity, l.unit_price,
+    l.gross,
+    l.disc,
+    (l.gross - l.disc) * l.buf_pct / 100,
+    l.cost,
+    l.normal_total
+  from line l
+  order by l.created_at desc, l.sort_order;
 end;
 $$ language plpgsql stable security definer set search_path = public;
 
 grant execute on function margin_order_report(date, date) to authenticated;
 
--- ----- รายงานฝ่ายขาย: ยอดขายเป็นยอดสุทธิ และส่วนลดเทียบบนฐานเดียวกัน -----
--- คอลัมน์ที่คืนค่าเหมือนเดิมทุกตัว เปลี่ยนแค่วิธีคิด จึงไม่ต้อง drop
+-- ----- รายงานฝ่ายขาย: ยอดสุทธิ, กำไรหลังหัก Buffer, ส่วนลดเป็นบาท -----
+-- เปลี่ยนชื่อคอลัมน์สุดท้ายเป็น discount_amount ต้อง drop ก่อนเช่นกัน
+drop function if exists margin_order_report_mine(date, date);
+
 create or replace function margin_order_report_mine(p_from date default null, p_to date default null)
 returns table (
-  order_id         uuid,
-  order_no         text,
-  order_date       timestamptz,
-  customer_name    text,
-  order_status     text,
-  order_type       text,
-  quantity         numeric,
-  sales            numeric,
-  margin_percent   numeric,
-  discount_percent numeric
+  order_id        uuid,
+  order_no        text,
+  order_date      timestamptz,
+  customer_name   text,
+  order_status    text,
+  order_type      text,
+  quantity        numeric,
+  sales           numeric,   -- ยอดขายสุทธิ หักส่วนลดท้ายบิลแล้ว
+  margin_percent  numeric,   -- หักต้นทุนสินค้าและ Buffer แล้ว
+  discount_amount numeric    -- ลดไปกี่บาทเทียบราคาขายปกติ (เฉพาะสินค้าที่มีราคาปกติบันทึกไว้)
 ) as $$
 begin
   if auth.uid() is null then
@@ -2935,42 +2963,57 @@ begin
   end if;
 
   return query
-  with mine as (
+  with line as (
     select
       o.id, o.order_no, o.created_at, o.customer_name, o.status, o.order_type,
       o.discount_type, o.discount_value,
-      sum(oi.quantity)                                   as qty,
-      sum(oi.quantity * oi.unit_price)                   as subtotal,
-      sum(oi.quantity * coalesce(oic.unit_cost, 0))      as cost,
-      sum(oi.quantity * coalesce(oic.normal_selling_price, 0)) as normal_total,
-      -- ยอดขายเฉพาะบรรทัดที่มีราคาขายปกติบันทึกไว้ — ต้องเป็นฐานเดียวกับ normal_total ถึงจะเทียบส่วนลดได้
-      sum(case when coalesce(oic.normal_selling_price, 0) > 0
-               then oi.quantity * oi.unit_price else 0 end) as sales_cmp
+      oi.quantity,
+      oi.quantity * oi.unit_price as gross,
+      oi.quantity * coalesce(oic.unit_cost, 0) as cost,
+      oi.quantity * coalesce(oic.normal_selling_price, 0) as normal_total,
+      coalesce(oic.normal_selling_price, 0) > 0 as has_normal,
+      coalesce(pc.shipping_buffer_percent,  margin_setting_num('shipping_buffer_percent', 2))
+      + coalesce(pc.provision_buffer_percent, margin_setting_num('provision_buffer_percent', 2)) as buf_pct
     from orders o
     join order_items oi on oi.order_id = o.id
     left join order_item_costs oic on oic.order_item_id = oi.id
+    left join product_costs pc on pc.product_id = oi.product_id
     where o.sales_id = auth.uid()          -- เห็นเฉพาะออเดอร์ที่ตัวเองเปิด
       and (p_from is null or o.created_at >= p_from::timestamptz)
       and (p_to is null or o.created_at < (p_to::timestamptz + interval '1 day'))
-    group by o.id, o.order_no, o.created_at, o.customer_name, o.status, o.order_type,
-             o.discount_type, o.discount_value
+  ),
+  agg as (
+    select
+      l.id, l.order_no, l.created_at, l.customer_name, l.status, l.order_type,
+      l.discount_type, l.discount_value,
+      sum(l.quantity)      as qty,
+      sum(l.gross)         as subtotal,
+      sum(l.cost)          as cost,
+      sum(l.normal_total) filter (where l.has_normal) as normal_cmp,
+      sum(l.gross)        filter (where l.has_normal) as gross_cmp,
+      -- Buffer รวมของทั้งใบคิดจากยอดก่อนลดท้ายบิลไว้ก่อน แล้วค่อยปรับสัดส่วนทีเดียวข้างล่าง
+      sum(l.gross * l.buf_pct / 100) as buf_gross
+    from line l
+    group by l.id, l.order_no, l.created_at, l.customer_name, l.status, l.order_type,
+             l.discount_type, l.discount_value
   ),
   calc as (
-    select m.*,
+    select a.*,
       least(
-        case when coalesce(m.discount_value, 0) > 0 and m.discount_type is not null
-             then case when m.discount_type = 'เปอร์เซ็นต์'
-                       then round(m.subtotal * m.discount_value / 100, 2)
-                       else round(m.discount_value, 2) end
+        case when coalesce(a.discount_value, 0) > 0 and a.discount_type is not null
+             then case when a.discount_type = 'เปอร์เซ็นต์'
+                       then round(a.subtotal * a.discount_value / 100, 2)
+                       else round(a.discount_value, 2) end
              else 0 end,
-        m.subtotal) as disc
-    from mine m
+        a.subtotal) as disc
+    from agg a
   ),
   net as (
     select c.*,
       c.subtotal - c.disc as net_sales,
-      -- ส่วนลดท้ายบิลเฉลี่ยตามสัดส่วน จึงต้องหักออกจากฐานเทียบส่วนลดด้วยในสัดส่วนเดียวกัน
-      case when c.subtotal > 0 then c.sales_cmp * (c.subtotal - c.disc) / c.subtotal else 0 end as net_cmp
+      -- ส่วนลดท้ายบิลเฉลี่ยตามสัดส่วน Buffer กับฐานเทียบส่วนลดจึงหดตามสัดส่วนเดียวกัน
+      case when c.subtotal > 0 then c.subtotal - c.disc else 1 end
+      / case when c.subtotal > 0 then c.subtotal else 1 end as ratio
     from calc c
   )
   select
@@ -2979,9 +3022,9 @@ begin
     n.net_sales,
     -- คืนเฉพาะ % ไม่ได้คืนตัวเงินของต้นทุนหรือกำไร
     case when n.net_sales > 0
-         then round((n.net_sales - n.cost) / n.net_sales * 100, 2) end,
-    case when n.normal_total > 0
-         then round((1 - n.net_cmp / n.normal_total) * 100, 2) end
+         then round((n.net_sales - n.cost - n.buf_gross * n.ratio) / n.net_sales * 100, 2) end,
+    case when coalesce(n.normal_cmp, 0) > 0
+         then round(n.normal_cmp - coalesce(n.gross_cmp, 0) * n.ratio, 2) end
   from net n
   order by n.created_at desc;
 end;
