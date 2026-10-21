@@ -61,6 +61,8 @@ function groupLines(lines, keyOf, labelOf) {
     g.billDisc += lineDisc
     g.sales += lineGross - lineDisc
     g.cost += Number(l.line_cost) || 0
+    // รวม Buffer ไว้แต่ไม่ได้เอาไปหักกำไรและไม่ได้โชว์ — ลองหักแล้วตัวเลขต่ำเกินกว่าที่ใช้ตัดสินใจจริง
+    // คงท่อไว้เพราะ margin_order_report ยังคืน line_buffer มาอยู่ ถ้าวันหนึ่งอยากหักอีกก็แก้บรรทัดเดียว
     g.buffer += Number(l.line_buffer) || 0
     g.normal += Number(l.line_normal) || 0
     // ส่วนลดเป็นตัวเงิน = ราคาปกติ − ราคาขายจริง นับเฉพาะบรรทัดที่มีราคาขายปกติบันทึกไว้
@@ -78,8 +80,8 @@ function groupLines(lines, keyOf, labelOf) {
   return [...out.values()].map(g => ({
     ...g,
     orderCount: g.orders.size,
-    profit: g.sales - g.cost - g.buffer,
-    margin: g.sales > 0 ? (g.sales - g.cost - g.buffer) / g.sales * 100 : 0,
+    profit: g.sales - g.cost,
+    margin: g.sales > 0 ? (g.sales - g.cost) / g.sales * 100 : 0,
     discount: g.normal > 0 ? g.discAmt : null,
   })).sort((a, b) => b.sales - a.sales)
 }
@@ -151,8 +153,8 @@ export default function OrderMarginReport() {
     const missingCost = active.filter(l => !(Number(l.line_cost) > 0)).length
     return {
       sales, cost, buffer, normal, orders, missingCost, gross, billDisc,
-      profit: sales - cost - buffer,
-      margin: sales > 0 ? (sales - cost - buffer) / sales * 100 : 0,
+      profit: sales - cost,
+      margin: sales > 0 ? (sales - cost) / sales * 100 : 0,
       discount: normal > 0 ? discAmt : null,
     }
   }, [active])
@@ -185,7 +187,7 @@ export default function OrderMarginReport() {
     const cost = ls.reduce((a, l) => a + (Number(l.line_cost) || 0), 0)
     const buffer = ls.reduce((a, l) => a + (Number(l.line_buffer) || 0), 0)
     return { head: ls[0], lines: ls, gross, billDisc, sales, cost, buffer,
-             profit: sales - cost - buffer, margin: sales > 0 ? (sales - cost - buffer) / sales * 100 : 0 }
+             profit: sales - cost, margin: sales > 0 ? (sales - cost) / sales * 100 : 0 }
   }, [detailOrderId, active])
 
   const missingLines = useMemo(() => active.filter(l => !(Number(l.line_cost) > 0)), [active])
@@ -216,7 +218,6 @@ export default function OrderMarginReport() {
         { key: 'qty', label: 'จำนวนชิ้น' },
         { key: 'sales', label: 'ยอดขาย' },
         { key: 'cost', label: 'ต้นทุน' },
-        { key: 'buffer', label: 'Buffer' },
         { key: 'profit', label: 'กำไรขั้นต้น' },
         { key: 'margin', label: 'Margin (%)' },
         { key: 'discount', label: 'ส่วนลดจากราคาปกติ (บาท)' },
@@ -227,7 +228,6 @@ export default function OrderMarginReport() {
         orderCount: r.orderCount, qty: r.qty,
         sales: Math.round(r.sales * 100) / 100,
         cost: Math.round(r.cost * 100) / 100,
-        buffer: Math.round(r.buffer * 100) / 100,
         profit: Math.round(r.profit * 100) / 100,
         margin: Math.round(r.margin * 100) / 100,
         discount: r.discount === null ? '' : Math.round(r.discount * 100) / 100,
@@ -271,16 +271,11 @@ export default function OrderMarginReport() {
           <div className="kpi-card green">
             <div className="kpi-label">{t('กำไรขั้นต้น')}</div>
             <div className="kpi-value">{fmtCurrency(totals.profit)}</div>
-            <div className="kpi-sub">{t('หัก Buffer แล้ว · ยังไม่หักค่าขนส่งจริง')}</div>
+            <div className="kpi-sub">{t('ยังไม่หักค่าขนส่ง/Buffer')}</div>
           </div>
           <div className="kpi-card">
             <div className="kpi-label">Margin</div>
             <div className="kpi-value" style={{ color: marginColor(totals.margin) }}>{pct(totals.margin)}</div>
-          </div>
-          <div className="kpi-card red">
-            <div className="kpi-label">{t('ส่วนลดจากราคาปกติ')}</div>
-            <div className="kpi-value">{totals.discount === null ? '-' : fmtCurrency(totals.discount)}</div>
-            <div className="kpi-sub">{t('เฉพาะสินค้าที่มีราคาปกติบันทึกไว้')}</div>
           </div>
         </div>
 
@@ -306,10 +301,8 @@ export default function OrderMarginReport() {
                   <th className="num">{t('จำนวน')}</th>
                   <th className="num">{t('ยอดขาย')}</th>
                   <th className="num">{t('ต้นทุน')}</th>
-                  <th className="num">Buffer</th>
                   <th className="num">{t('กำไรขั้นต้น')}</th>
                   <th className="num">Margin</th>
-                  <th className="num">{t('ส่วนลด')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -348,10 +341,8 @@ export default function OrderMarginReport() {
                     <td className="num">{r.qty}</td>
                     <td className="num" style={{ fontWeight: 600 }}>{fmtCurrency(r.sales)}</td>
                     <td className="num">{fmtCurrency(r.cost)}</td>
-                    <td className="num" style={{ color: 'var(--text-light)' }}>{fmtCurrency(r.buffer)}</td>
                     <td className="num" style={{ fontWeight: 600 }}>{fmtCurrency(r.profit)}</td>
                     <td className="num" style={{ fontWeight: 700, color: marginColor(r.margin) }}>{pct(r.margin)}</td>
-                    <td className="num">{r.discount === null ? '-' : fmtCurrency(r.discount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -366,7 +357,6 @@ export default function OrderMarginReport() {
             <div className="omr-sum">
               <div><div className="k">{t('ยอดขาย')}</div><div className="v">{fmtCurrency(detail.sales)}</div></div>
               <div><div className="k">{t('ต้นทุน')}</div><div className="v">{fmtCurrency(detail.cost)}</div></div>
-              <div><div className="k">Buffer</div><div className="v">{fmtCurrency(detail.buffer)}</div></div>
               <div><div className="k">{t('กำไรขั้นต้น')}</div><div className="v">{fmtCurrency(detail.profit)}</div></div>
               <div><div className="k">Margin</div><div className="v" style={{ color: marginColor(detail.margin) }}>{pct(detail.margin)}</div></div>
             </div>
@@ -389,8 +379,7 @@ export default function OrderMarginReport() {
                     // Margin รายบรรทัดคิดจากยอดสุทธิหลังเฉลี่ยส่วนลดท้ายบิลแล้ว ไม่งั้นจะไม่ตรงกับ Margin ของทั้งใบ
                     const ls = lg - (Number(l.line_discount) || 0)
                     const lc = Number(l.line_cost) || 0
-                    const lb = Number(l.line_buffer) || 0
-                    const m = ls > 0 ? (ls - lc - lb) / ls * 100 : 0
+                    const m = ls > 0 ? (ls - lc) / ls * 100 : 0
                     return (
                       <tr key={i} style={{ cursor: 'default' }}>
                         <td>
@@ -485,7 +474,6 @@ export default function OrderMarginReport() {
         <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 8, lineHeight: 1.6 }}>
           <div>{t('ต้นทุนที่ใช้คือต้นทุน ณ วันที่เปิดออเดอร์ ไม่ใช่ต้นทุนวันนี้ — ออเดอร์เก่าจึงยังสะท้อนราคาทุนตอนนั้น')}</div>
           <div>{t('กำไรขั้นต้น = ยอดขาย − ต้นทุนสินค้า ยังไม่ได้หักค่าขนส่งจริงและ Buffer ตัวเลขจึงสูงกว่า Margin ในหน้าเช็คราคาเล็กน้อย')}</div>
-          <div>{t('ส่วนลดเทียบกับราคาขายปกติ ณ วันที่เปิดออเดอร์ นับเฉพาะรายการที่มีราคาขายปกติบันทึกไว้')}</div>
           <div>{t('"ต้นทุนที่คิด" คือคิดต้นทุนกี่ % ของราคาเต็ม — ออเดอร์ Grade B ใช้ค่ากลางจากหน้าต้นทุนสินค้า ปรับรายออเดอร์ได้ที่ปุ่ม "ปรับ"')}</div>
         </div>
       </div>

@@ -39,30 +39,14 @@ const HELP = {
   margin: {
     title: 'Margin (กำไรขั้นต้น %)',
     body: [
-      ['สูตร', '(ยอดขาย − ต้นทุนสินค้า − Buffer) ÷ ยอดขาย × 100'],
-      ['Buffer คืออะไร', 'เงินกันไว้เผื่อค่าขนส่งและความเสียหาย คิดเป็น % ของยอดขาย\nค่ากลางคือขนส่ง 2% + สำรอง 2% รวม 4% บัญชีตั้งแยกรายสินค้าได้'],
-      ['เป็น % ของอะไร', 'เป็น % ของยอดขาย ไม่ใช่ % ของต้นทุน — ขาย 100 ต้นทุน 70 Buffer 4 คือ Margin 26%'],
+      ['สูตร', '(ยอดขาย − ต้นทุนสินค้า) ÷ ยอดขาย × 100'],
+      ['เป็น % ของอะไร', 'เป็น % ของยอดขาย ไม่ใช่ % ของต้นทุน — ขาย 100 ต้นทุน 70 คือ Margin 30%'],
       ['ต้นทุนที่ใช้', 'สำเนาต้นทุน ณ วันที่เปิดออเดอร์ ไม่ใช่ต้นทุนวันนี้ — บัญชีแก้ต้นทุนวันนี้จะไม่ย้อนไปเปลี่ยนออเดอร์เก่า'],
       ['ออเดอร์ Grade B', 'คิดต้นทุนตามสัดส่วนที่บัญชีตั้งไว้ให้ออเดอร์นั้น (ค่ากลางคือ 80% ของต้นทุนเต็ม)'],
       ['ถ้าสินค้ายังไม่ได้กรอกต้นทุน', 'บรรทัดนั้นจะถูกคิดต้นทุนเป็น 0 ทำให้ Margin ที่เห็นสูงกว่าความจริง'],
       ['หักส่วนลดท้ายบิลแล้ว', 'คิดจากยอดขายสุทธิ ถ้าออเดอร์นั้นลดท้ายบิล จะเฉลี่ยลงแต่ละบรรทัดตามสัดส่วนยอดขายก่อน'],
-      ['ยังไม่หักอะไรบ้าง', 'ยังไม่หักค่าขนส่งจริงของใบนั้น เพราะระบบไม่ได้เก็บค่าขนส่งรายออเดอร์ไว้ มีแต่ Buffer ที่กันเผื่อไว้แล้ว'],
-      ['Buffer ใช้ค่าวันไหน', 'ใช้ค่าปัจจุบัน ไม่ใช่ค่า ณ วันเปิดออเดอร์ (ต่างจากต้นทุนที่เก็บสำเนาไว้)\nเพราะ Buffer เป็นนโยบาย ปรับแล้วย้อนดูใหม่ได้ทั้งชุด'],
+      ['ยังไม่หักอะไรบ้าง', 'ยังไม่หักค่าขนส่งจริงและ Buffer ตัวเลขจริงจะต่ำกว่านี้เล็กน้อย'],
       ['สีที่ขึ้น', 'เขียว = 25% ขึ้นไป · เหลือง = 15–25% · แดง = ต่ำกว่า 15%'],
-    ],
-  },
-  discount: {
-    title: 'ส่วนลด (ลดไปกี่บาท)',
-    body: [
-      ['สูตร', '(ราคาขายปกติ − ราคาขายจริง) × จำนวน'],
-      ['บอกอะไร', 'ใบนี้ให้ส่วนลดลูกค้าไปเป็นเงินเท่าไร เทียบกับถ้าขายราคาป้ายเต็ม'],
-      ['ทำไมเป็นบาทไม่ใช่ %', 'เป็น % จะแกว่งตามราคาป้าย พอปรับราคาป้ายขึ้น % ส่วนลดก็เปลี่ยนทั้งที่ขายเท่าเดิม\nตัวเงินไม่แกว่งแบบนั้น'],
-      ['ราคาปกติคืออะไร', 'ราคาป้ายก่อนลดที่บัญชีกรอกไว้ในหน้าต้นทุนสินค้า ไม่ใช่ราคาทุน และไม่ใช่ราคาที่เซลล์ตั้งเอง'],
-      ['ราคาปกติ ณ วันไหน', 'ใช้ราคาขายปกติ ณ วันที่เปิดออเดอร์ บัญชีแก้ราคาปกติวันนี้จะไม่ย้อนไปเปลี่ยนออเดอร์เก่า'],
-      ['ตัวอย่าง', 'ราคาปกติ 1,000 ขายจริง 800 จำนวน 5 ชิ้น → ลดไป (1,000 − 800) × 5 = 1,000 บาท'],
-      ['นับเฉพาะอะไร', 'นับเฉพาะสินค้าที่มีราคาขายปกติบันทึกไว้ สินค้าที่ยังไม่ได้กรอกราคาปกติจะไม่ถูกนำมาคิด'],
-      ['รวมส่วนลดท้ายบิลด้วย', 'ถ้าออเดอร์นั้นลดท้ายบิลอีก ส่วนลดท้ายบิลถูกนับรวมอยู่ในตัวเลขนี้แล้ว'],
-      ['ขึ้น "-" แปลว่า', 'ทั้งออเดอร์ไม่มีสินค้าตัวไหนมีราคาขายปกติบันทึกไว้เลย จึงเทียบไม่ได้'],
     ],
   },
   salesTotal: {
@@ -77,15 +61,7 @@ const HELP = {
     body: [
       ['คิดยังไง', 'ไม่ได้เอา % ของแต่ละออเดอร์มาเฉลี่ยตรงๆ แต่ถ่วงน้ำหนักด้วยยอดขาย'],
       ['แปลว่าอะไร', 'ออเดอร์ใหญ่มีผลต่อตัวเลขนี้มากกว่าออเดอร์เล็ก ซึ่งให้ผลเท่ากับคิดจากกำไรรวมหารยอดขายรวมพอดี'],
-      ['เงื่อนไขอื่น', 'หักต้นทุนสินค้าและ Buffer แล้ว ใช้เงื่อนไขเดียวกับ Margin รายออเดอร์ทุกข้อ'],
-    ],
-  },
-  discountTotal: {
-    title: 'ส่วนลดจากราคาปกติ (รวม)',
-    body: [
-      ['คิดยังไง', 'บวกส่วนลดเป็นตัวเงินของทุกออเดอร์ในช่วงที่เลือก'],
-      ['บอกอะไร', 'ช่วงนี้ให้ส่วนลดลูกค้าไปเป็นเงินรวมเท่าไร'],
-      ['นับเฉพาะอะไร', 'นับเฉพาะสินค้าที่มีราคาขายปกติบันทึกไว้ ออเดอร์ที่ขึ้น "-" จะไม่ถูกนำมาคิด'],
+      ['เงื่อนไขอื่น', 'ใช้เงื่อนไขเดียวกับ Margin รายออเดอร์ทุกข้อ'],
     ],
   },
 }
@@ -229,17 +205,9 @@ export default function SalesMarginSummary() {
     const sales = active.reduce((s, r) => s + (Number(r.sales) || 0), 0)
     // Margin รวม = ถ่วงน้ำหนักด้วยยอดขาย ซึ่งให้ผลเท่ากับคิดจากต้นทุนรวมพอดี (ต้นทุน = ยอดขาย × (1 − margin))
     const marginWeighted = active.reduce((s, r) => s + (Number(r.sales) || 0) * (Number(r.margin_percent) || 0), 0)
-    // ส่วนลดเป็นตัวเงินแล้ว บวกตรงๆ ได้เลย ไม่ต้องถ่วงน้ำหนักเหมือนตอนที่ยังเป็น %
-    let discount = null
-    active.forEach(r => {
-      const d = r.discount_amount
-      if (d === null || d === undefined) return
-      discount = (discount || 0) + Number(d)
-    })
     return {
       sales, orders: active.length,
       margin: sales > 0 ? marginWeighted / sales : 0,
-      discount,
     }
   }, [active])
 
@@ -305,11 +273,6 @@ export default function SalesMarginSummary() {
                 <div className="kpi-label">Margin<Hint help={HELP.marginTotal} /></div>
                 <div className="kpi-value" style={{ color: marginColor(totals.margin) }}>{pct(totals.margin)}</div>
               </div>
-              <div className="kpi-card red">
-                <div className="kpi-label">{t('ส่วนลดจากราคาปกติ')}<Hint help={HELP.discountTotal} /></div>
-                <div className="kpi-value">{totals.discount === null ? '-' : fmtCurrency(totals.discount)}</div>
-                <div className="kpi-sub">{t('เฉพาะสินค้าที่มีราคาปกติบันทึกไว้')}</div>
-              </div>
             </div>
 
             <div className="table-wrap" style={{ maxHeight: 420, overflow: 'auto' }}>
@@ -323,7 +286,6 @@ export default function SalesMarginSummary() {
                       <th className="num">{t('จำนวน')}<Hint help={HELP.qty} /></th>
                       <th className="num">{t('ยอดขาย')}<Hint help={HELP.sales} /></th>
                       <th className="num">Margin<Hint help={HELP.margin} /></th>
-                      <th className="num">{t('ส่วนลด')}<Hint help={HELP.discount} /></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -339,7 +301,6 @@ export default function SalesMarginSummary() {
                         <td className="num">{r.quantity}</td>
                         <td className="num" style={{ fontWeight: 600 }}>{fmtCurrency(r.sales)}</td>
                         <td className="num" style={{ fontWeight: 700, color: marginColor(Number(r.margin_percent)) }}>{pct(r.margin_percent)}</td>
-                        <td className="num">{r.discount_amount === null || r.discount_amount === undefined ? '-' : fmtCurrency(r.discount_amount)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -364,7 +325,6 @@ export default function SalesMarginSummary() {
             <div><div className="k">{t('ยอดขาย')}<Hint help={HELP.sales} /></div><div className="v">{fmtCurrency(detail.sales)}</div></div>
             <div><div className="k">{t('จำนวน')}<Hint help={HELP.qty} /></div><div className="v">{detail.quantity}</div></div>
             <div><div className="k">Margin<Hint help={HELP.margin} /></div><div className="v" style={{ color: marginColor(Number(detail.margin_percent)) }}>{pct(detail.margin_percent)}</div></div>
-            <div><div className="k">{t('ส่วนลด')}<Hint help={HELP.discount} /></div><div className="v">{detail.discount_amount === null || detail.discount_amount === undefined ? '-' : fmtCurrency(detail.discount_amount)}</div></div>
           </div>
 
           {detailLines === null ? (
