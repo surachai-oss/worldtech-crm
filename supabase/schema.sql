@@ -2827,3 +2827,164 @@ grant execute on function margin_order_report_mine(date, date) to authenticated;
 alter table deals      add column if not exists created_by_name text;   -- เซลล์ผู้เปิดดีล = ผู้เสนอราคา (ระบบใส่ให้ แก้ไม่ได้)
 alter table quotations add column if not exists customer_contact text;  -- ผู้รับผิดชอบฝั่งลูกค้า ไหลมาจากดีล
 alter table orders     add column if not exists customer_contact text;  -- ไหลต่อมาจากใบเสนอราคา
+
+-- ============================================================================
+-- ===== แก้วิธีคิดยอดขาย/ส่วนลดในรายงานกำไร ให้ตรงกับความจริง =====
+-- ============================================================================
+-- แก้ 2 เรื่องที่ตัวเลขเพี้ยนมาตลอด:
+--
+-- 1) ส่วนลดท้ายบิล (orders.discount_type/discount_value) ไม่เคยถูกนับในรายงานเลย
+--    รายงานบวกแค่ (จำนวน × ราคาต่อหน่วย) ของแต่ละบรรทัด ซึ่งเป็นยอดก่อนหักส่วนลดท้ายบิล
+--    ออเดอร์ที่ลดท้ายบิลจึงแสดงยอดขายสูงกว่าที่เก็บเงินจริง และ Margin ดูดีกว่าความจริง
+--    แก้โดยเฉลี่ยส่วนลดท้ายบิลลงแต่ละบรรทัดตามสัดส่วนยอดขาย (line_discount)
+--    ใช้สูตรเดียวกับ computeDealTotals ฝั่งแอปเป๊ะๆ คือปัดทศนิยม 2 ตำแหน่งแล้วไม่ให้เกินยอดรวม
+--    ไม่ปัดเศษรายบรรทัด ผลรวมของ line_discount จึงเท่ากับส่วนลดท้ายบิลพอดี ไม่ขาดไม่เกิน
+--
+-- 2) ส่วนลดเทียบราคาขายปกติ เคยเอา "ยอดขายทั้งออเดอร์" ไปหารด้วย "ราคาปกติเฉพาะบรรทัดที่กรอกไว้"
+--    ซึ่งเป็นคนละฐานกัน ออเดอร์ที่มีสินค้าบางตัวยังไม่ได้กรอกราคาขายปกติจึงแสดงส่วนลดต่ำกว่าจริง
+--    (เช่น ตู้เย็นลด 20% แต่ในใบมีพัดลมที่ไม่ได้กรอกราคาปกติปนอยู่ ส่วนลดอาจขึ้น 0%)
+--    แก้โดยให้ตัวตั้งนับเฉพาะบรรทัดที่มีราคาขายปกติบันทึกไว้ เท่ากับเทียบเฉพาะของที่เทียบได้
+
+-- ----- รายงานฝ่ายบัญชี/แอดมิน: เพิ่ม line_discount (ส่วนลดท้ายบิลที่เฉลี่ยลงบรรทัดนี้) -----
+-- เปลี่ยนคอลัมน์ที่คืนค่า ต้อง drop ก่อน (postgres แก้ return type ของฟังก์ชันเดิมไม่ได้)
+drop function if exists margin_order_report(date, date);
+
+create or replace function margin_order_report(p_from date default null, p_to date default null)
+returns table (
+  order_id        uuid,
+  order_no        text,
+  order_date      timestamptz,
+  customer_name   text,
+  sales_name      text,
+  order_status    text,
+  order_type      text,
+  cost_factor     numeric,
+  product_id      uuid,
+  product_code    text,
+  product_name    text,
+  quantity        numeric,
+  unit_price      numeric,
+  line_sales      numeric,   -- ยอดก่อนหักส่วนลดท้ายบิล (จำนวน × ราคาต่อหน่วย)
+  line_discount   numeric,   -- ส่วนลดท้ายบิลที่เฉลี่ยลงบรรทัดนี้ — ยอดสุทธิ = line_sales − line_discount
+  line_cost       numeric,
+  line_normal     numeric
+) as $$
+begin
+  if not (is_admin() or is_finance()) then
+    raise exception 'ดูรายงานนี้ได้เฉพาะฝ่ายบัญชีและผู้ดูแลระบบ';
+  end if;
+
+  return query
+  with sub as (
+    select oi.order_id, sum(oi.quantity * oi.unit_price) as subtotal
+    from order_items oi
+    group by oi.order_id
+  ),
+  bill as (
+    select o.id, s.subtotal,
+           least(
+             case when coalesce(o.discount_value, 0) > 0 and o.discount_type is not null
+                  then case when o.discount_type = 'เปอร์เซ็นต์'
+                            then round(s.subtotal * o.discount_value / 100, 2)
+                            else round(o.discount_value, 2) end
+                  else 0 end,
+             s.subtotal) as disc
+    from orders o
+    join sub s on s.order_id = o.id
+  )
+  select
+    o.id, o.order_no, o.created_at, o.customer_name, o.sales_name, o.status, o.order_type,
+    coalesce(oic.cost_factor_percent, 100),
+    oi.product_id, p.code, coalesce(p.name, oi.description),
+    oi.quantity, oi.unit_price,
+    oi.quantity * oi.unit_price,
+    case when b.subtotal > 0 then oi.quantity * oi.unit_price * b.disc / b.subtotal else 0 end,
+    oi.quantity * coalesce(oic.unit_cost, 0),
+    oi.quantity * coalesce(oic.normal_selling_price, 0)
+  from orders o
+  join order_items oi on oi.order_id = o.id
+  join bill b on b.id = o.id
+  left join order_item_costs oic on oic.order_item_id = oi.id
+  left join products p on p.id = oi.product_id
+  where (p_from is null or o.created_at >= p_from::timestamptz)
+    and (p_to is null or o.created_at < (p_to::timestamptz + interval '1 day'))
+  order by o.created_at desc, oi.sort_order;
+end;
+$$ language plpgsql stable security definer set search_path = public;
+
+grant execute on function margin_order_report(date, date) to authenticated;
+
+-- ----- รายงานฝ่ายขาย: ยอดขายเป็นยอดสุทธิ และส่วนลดเทียบบนฐานเดียวกัน -----
+-- คอลัมน์ที่คืนค่าเหมือนเดิมทุกตัว เปลี่ยนแค่วิธีคิด จึงไม่ต้อง drop
+create or replace function margin_order_report_mine(p_from date default null, p_to date default null)
+returns table (
+  order_id         uuid,
+  order_no         text,
+  order_date       timestamptz,
+  customer_name    text,
+  order_status     text,
+  order_type       text,
+  quantity         numeric,
+  sales            numeric,
+  margin_percent   numeric,
+  discount_percent numeric
+) as $$
+begin
+  if auth.uid() is null then
+    raise exception 'ต้องเข้าสู่ระบบก่อน';
+  end if;
+
+  return query
+  with mine as (
+    select
+      o.id, o.order_no, o.created_at, o.customer_name, o.status, o.order_type,
+      o.discount_type, o.discount_value,
+      sum(oi.quantity)                                   as qty,
+      sum(oi.quantity * oi.unit_price)                   as subtotal,
+      sum(oi.quantity * coalesce(oic.unit_cost, 0))      as cost,
+      sum(oi.quantity * coalesce(oic.normal_selling_price, 0)) as normal_total,
+      -- ยอดขายเฉพาะบรรทัดที่มีราคาขายปกติบันทึกไว้ — ต้องเป็นฐานเดียวกับ normal_total ถึงจะเทียบส่วนลดได้
+      sum(case when coalesce(oic.normal_selling_price, 0) > 0
+               then oi.quantity * oi.unit_price else 0 end) as sales_cmp
+    from orders o
+    join order_items oi on oi.order_id = o.id
+    left join order_item_costs oic on oic.order_item_id = oi.id
+    where o.sales_id = auth.uid()          -- เห็นเฉพาะออเดอร์ที่ตัวเองเปิด
+      and (p_from is null or o.created_at >= p_from::timestamptz)
+      and (p_to is null or o.created_at < (p_to::timestamptz + interval '1 day'))
+    group by o.id, o.order_no, o.created_at, o.customer_name, o.status, o.order_type,
+             o.discount_type, o.discount_value
+  ),
+  calc as (
+    select m.*,
+      least(
+        case when coalesce(m.discount_value, 0) > 0 and m.discount_type is not null
+             then case when m.discount_type = 'เปอร์เซ็นต์'
+                       then round(m.subtotal * m.discount_value / 100, 2)
+                       else round(m.discount_value, 2) end
+             else 0 end,
+        m.subtotal) as disc
+    from mine m
+  ),
+  net as (
+    select c.*,
+      c.subtotal - c.disc as net_sales,
+      -- ส่วนลดท้ายบิลเฉลี่ยตามสัดส่วน จึงต้องหักออกจากฐานเทียบส่วนลดด้วยในสัดส่วนเดียวกัน
+      case when c.subtotal > 0 then c.sales_cmp * (c.subtotal - c.disc) / c.subtotal else 0 end as net_cmp
+    from calc c
+  )
+  select
+    n.id, n.order_no, n.created_at, n.customer_name, n.status, n.order_type,
+    n.qty,
+    n.net_sales,
+    -- คืนเฉพาะ % ไม่ได้คืนตัวเงินของต้นทุนหรือกำไร
+    case when n.net_sales > 0
+         then round((n.net_sales - n.cost) / n.net_sales * 100, 2) end,
+    case when n.normal_total > 0
+         then round((1 - n.net_cmp / n.normal_total) * 100, 2) end
+  from net n
+  order by n.created_at desc;
+end;
+$$ language plpgsql stable security definer set search_path = public;
+
+grant execute on function margin_order_report_mine(date, date) to authenticated;
