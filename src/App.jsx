@@ -165,7 +165,7 @@ function AppInner({ session }) {
       try {
         const rows = await api.listDealItems(deal.id)
         const items = rows.map(r => ({ product_id: r.product_id || '', description: r.description || r.product?.name || '', quantity: r.quantity, unit_price: r.unit_price }))
-        setModal({ type: 'quotation', payload: { initial: { company_id: deal.company_id, subject: deal.name, deal_id: deal.id, items } } })
+        setModal({ type: 'quotation', payload: { initial: { company_id: deal.company_id, subject: deal.name, deal_id: deal.id, customer_contact: deal.owner || '', items } } })
       } catch (e) { toast('โหลดรายการสินค้าของดีลไม่สำเร็จ: ' + e.message, 'error') }
     },
     // ก็อปรายการสินค้า+บริษัทจากใบเสนอราคาไปตั้งต้นดีลใหม่ — ผูกกลับไปที่ deal_id ของใบเสนอราคานี้หลังบันทึกดีลสำเร็จ (ดู saveDeal)
@@ -459,7 +459,7 @@ function AppInner({ session }) {
 
       {modal?.type === 'company' && <CompanyModal initial={modal.payload?.initial} isAdmin={isAdmin} onClose={closeModal} onSave={saveCompany} />}
       {modal?.type === 'contact' && <ContactModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} onClose={closeModal} onSave={saveContact} />}
-      {modal?.type === 'deal' && <DealModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} defaultStage={modal.payload?.defaultStage} isAdmin={isAdmin} onClose={closeModal} onSave={saveDeal} />}
+      {modal?.type === 'deal' && <DealModal initial={modal.payload?.initial} companies={data.companies} defaultCompanyId={modal.payload?.defaultCompanyId} defaultStage={modal.payload?.defaultStage} isAdmin={isAdmin} currentUserName={currentUser.name} onClose={closeModal} onSave={saveDeal} />}
       {modal?.type === 'activity' && <ActivityModal companies={data.companies} contacts={data.contacts} activities={data.activities} defaultCompanyId={modal.payload?.defaultCompanyId} lead={modal.payload?.lead} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveActivity} />}
       {modal?.type === 'task' && <TaskModal initial={modal.payload?.initial} companies={data.companies} quotations={data.quotations} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveTask} />}
       {modal?.type === 'quotation' && <QuotationModal initial={modal.payload?.initial} companies={data.companies} settings={settings} defaultCompanyId={modal.payload?.defaultCompanyId} currentUserName={currentUser.name} isAdmin={isAdmin} onClose={closeModal} onSave={saveQuotation} />}

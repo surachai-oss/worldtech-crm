@@ -2820,3 +2820,10 @@ end;
 $$ language plpgsql stable security definer set search_path = public;
 
 grant execute on function margin_order_report_mine(date, date) to authenticated;
+
+-- ===== แยก "ผู้รับผิดชอบฝั่งลูกค้า" ออกจากคนของเรา =====
+-- deals.owner เดิมถูกใช้กรอกชื่อคนฝั่งลูกค้าอยู่แล้ว (เช่นชื่อไลน์ของผู้ติดต่อ) แค่ป้ายไม่ได้บอก
+-- เปลี่ยนป้ายเป็น "ผู้รับผิดชอบ (ลูกค้า)" และเพิ่มช่องคนของเราแยกต่างหาก ไม่ย้ายข้อมูลเดิม
+alter table deals      add column if not exists created_by_name text;   -- เซลล์ผู้เปิดดีล = ผู้เสนอราคา (ระบบใส่ให้ แก้ไม่ได้)
+alter table quotations add column if not exists customer_contact text;  -- ผู้รับผิดชอบฝั่งลูกค้า ไหลมาจากดีล
+alter table orders     add column if not exists customer_contact text;  -- ไหลต่อมาจากใบเสนอราคา

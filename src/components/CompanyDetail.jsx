@@ -144,7 +144,8 @@ function DealsTab({ deals, quotations, perm, onAdd, onEdit, onDelete, onCreateQu
       <div className="card"><div className="table-wrap">
         {deals.length ? (
           <table>
-            <thead><tr><th>{t('ชื่อดีล')}</th><th>Stage</th><th>{t('มูลค่า')}</th><th>{t('วันปิดดีล')}</th><th>{t('ผู้รับผิดชอบ')}</th><th>{t('การจัดการ')}</th></tr></thead>
+            {/* คอลัมน์นี้คือ deals.owner ซึ่งเป็นคนฝั่งลูกค้า ไม่ใช่เซลล์ของเรา — ให้ชื่อตรงกับป้ายในฟอร์มแก้ไขดีล */}
+            <thead><tr><th>{t('ชื่อดีล')}</th><th>Stage</th><th>{t('มูลค่า')}</th><th>{t('วันปิดดีล')}</th><th>{t('ผู้รับผิดชอบ (ลูกค้า)')}</th><th>{t('การจัดการ')}</th></tr></thead>
             <tbody>{deals.map(d => {
               const qCount = quotations.filter(q => q.deal_id === d.id).length
               return (

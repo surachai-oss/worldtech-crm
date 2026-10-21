@@ -33,6 +33,8 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
   const [quotationId, setQuotationId] = useState('')
   const [companyId, setCompanyId] = useState('')
   const [customerName, setCustomerName] = useState('')
+  // ผู้รับผิดชอบฝั่งลูกค้า — ไหลมาจากใบเสนอราคา แก้ได้ก่อนบันทึก
+  const [customerContact, setCustomerContact] = useState('')
   const [companyInfo, setCompanyInfo] = useState({ tax_id: '', address: '', phone: '', email: '' })
   const [quotNo, setQuotNo] = useState('')
   const [items, setItems] = useState([{ ...EMPTY_ITEM }])
@@ -139,7 +141,7 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
   const onQuotationChange = async (quotId) => {
     setQuotationId(quotId)
     if (!quotId) {
-      setCompanyId(''); setCustomerName(''); setQuotNo('')
+      setCompanyId(''); setCustomerName(''); setQuotNo(''); setCustomerContact('')
       setCompanyInfo({ tax_id: '', address: '', phone: '', email: '' })
       setDiscountType(''); setDiscountValue(0)
       return
@@ -149,6 +151,7 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
     setCompanyId(quot?.company_id || '')
     setCustomerName(company?.name || '')
     setQuotNo(quot?.quot_no || '')
+    setCustomerContact(quot?.customer_contact || '')
     setCompanyInfo({ tax_id: company?.tax_id || '', address: company?.address || '', phone: company?.phone || '', email: company?.email || '' })
     // คัดลอกส่วนลดท้ายบิลจากใบเสนอราคามาให้ด้วย (แก้ไขต่อได้ก่อนบันทึก) เพราะใบเสนอราคา/ออเดอร์เชื่อมกัน
     setDiscountType(quot?.discount_type || ''); setDiscountValue(quot?.discount_value || 0)
@@ -187,6 +190,7 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
     catch (e) { toast('รันเลขออเดอร์ไม่สำเร็จ: ' + e.message, 'error'); setSaving(false); return }
     onSave({
       order_no: realOrderNo, order_type: orderType, quotation_id: quotationId, quot_no: quotNo, company_id: companyId || null, customer_name: customerName,
+      customer_contact: customerContact || null,
       company_tax_id: companyInfo.tax_id || null, company_address: companyInfo.address || null,
       company_phone: companyInfo.phone || null, company_email: companyInfo.email || null,
       shipping_address: composeShippingAddress(ship),
@@ -357,6 +361,11 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
                 placeholder={t('เติมให้เองเมื่อเลือกตำบล')} />
             </div>
           </div>
+          {/* คนฝั่งลูกค้าที่ดูแลดีลนี้ — คนละคนกับผู้รับของหน้างาน ไหลมาจากใบเสนอราคาให้อัตโนมัติ */}
+          <div className="form-group">
+            <label className="form-label">{t('ผู้รับผิดชอบ (ลูกค้า)')}</label>
+            <input className="form-control" value={customerContact} onChange={e => setCustomerContact(e.target.value)} placeholder={t('ไม่บังคับ')} />
+          </div>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">{t('ชื่อผู้รับ (ถ้ามี)')}</label>
@@ -437,6 +446,7 @@ export function OrderDetailModal({ order, items, onClose, onCancel }) {
           {order.company_phone && <Row label={t('โทรศัพท์บริษัท')} value={order.company_phone} />}
           {order.company_email && <Row label={t('อีเมลบริษัท')} value={order.company_email} />}
           <Row label={t('ที่อยู่จัดส่ง')} value={order.shipping_address} />
+          {order.customer_contact && <Row label={t('ผู้รับผิดชอบ (ลูกค้า)')} value={order.customer_contact} />}
           {order.shipping_contact_name && <Row label={t('ผู้รับ')} value={order.shipping_contact_name} />}
           {order.shipping_contact_phone && <Row label={t('เบอร์โทรติดต่อ')} value={order.shipping_contact_phone} />}
           {order.remark && <Row label={t('หมายเหตุ')} value={order.remark} />}

@@ -289,7 +289,8 @@ export const listDealItems = (dealId) =>
 // สร้างดีล + รายการสินค้าในทีเดียว — มูลค่ารวม (value) คำนวณจาก items ให้อัตโนมัติ
 export async function addDealWithItems(dealFields, items) {
   const totals = computeDealTotals(items, { type: dealFields.discount_type, value: dealFields.discount_value })
-  const deal = await addDeal({ ...dealFields, value: totals.grandTotal })
+  const safe = await stripMissingColumns('deals', dealFields, ['created_by_name'])
+  const deal = await addDeal({ ...safe, value: totals.grandTotal })
   if (items?.length) {
     const rows = items.map((it, i) => ({
       deal_id: deal.id, product_id: it.product_id, description: it.description, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
@@ -302,7 +303,8 @@ export async function addDealWithItems(dealFields, items) {
 // แก้ไขดีล — ลบรายการเดิมทั้งหมดแล้วใส่ชุดใหม่ทั้งหมด (ง่ายกว่า diff รายแถว และจำนวนรายการต่อดีลน้อยอยู่แล้ว)
 export async function updateDealWithItems(id, dealFields, items) {
   const totals = computeDealTotals(items, { type: dealFields.discount_type, value: dealFields.discount_value })
-  const deal = await updateDeal(id, { ...dealFields, value: totals.grandTotal })
+  const safe = await stripMissingColumns('deals', dealFields, ['created_by_name'])
+  const deal = await updateDeal(id, { ...safe, value: totals.grandTotal })
   await supabase.from('deal_items').delete().eq('deal_id', id).then(handle)
   if (items?.length) {
     const rows = items.map((it, i) => ({
@@ -394,7 +396,8 @@ export async function addQuotationWithItems(fields, items) {
   const totals = computeDealTotals(items, { type: fields.discount_type, value: fields.discount_value })
   const quot_no = await genQuotNo()
   // credit_term ว่างเก็บเป็น null เสมอ (ไม่ใช่ '') กันฟิลเตอร์ประเภทลูกค้าใน fetchQuotationsPage/Total พลาด
-  const quot = await supabase.from('quotations').insert({ ...fields, credit_term: fields.credit_term || null, quot_no, value: totals.grandTotal }).select().single().then(handle)
+  const safe = await stripMissingColumns('quotations', fields, ['customer_contact'])
+  const quot = await supabase.from('quotations').insert({ ...safe, credit_term: safe.credit_term || null, quot_no, value: totals.grandTotal }).select().single().then(handle)
   if (items?.length) {
     const rows = items.map((it, i) => ({
       quotation_id: quot.id, product_id: it.product_id, description: it.description, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
@@ -407,7 +410,8 @@ export async function addQuotationWithItems(fields, items) {
 // แก้ไขใบเสนอราคา — ลบรายการเดิมทั้งหมดแล้วใส่ชุดใหม่ทั้งหมด (แบบเดียวกับดีล)
 export async function updateQuotationWithItems(id, fields, items) {
   const totals = computeDealTotals(items, { type: fields.discount_type, value: fields.discount_value })
-  const quot = await updateQuotation(id, { ...fields, credit_term: fields.credit_term || null, value: totals.grandTotal })
+  const safe = await stripMissingColumns('quotations', fields, ['customer_contact'])
+  const quot = await updateQuotation(id, { ...safe, credit_term: safe.credit_term || null, value: totals.grandTotal })
   await supabase.from('quotation_items').delete().eq('quotation_id', id).then(handle)
   if (items?.length) {
     const rows = items.map((it, i) => ({
@@ -874,14 +878,27 @@ export async function uploadPoFile(paymentRequestId, file) {
 }
 export const getPoFileUrl = (filePath) => getAttachmentUrl(filePath)
 
-// โค้ดขึ้น Netlify ก่อนที่จะมีคนรัน schema.sql เสมอ ถ้าส่ง po_file_url ไปทั้งที่ยังไม่มีคอลัมน์
-// การบันทึกคำขอตรวจยอดจะพังทั้งหมด ไม่ใช่แค่ไฟล์แนบหาย — เช็คครั้งเดียวแล้วจำไว้
-let _poColumnExists = null
-export async function hasPoFileColumn() {
-  if (_poColumnExists !== null) return _poColumnExists
-  const res = await supabase.from('payment_requests').select('po_file_url').limit(1)
-  _poColumnExists = !(res.error && /po_file_url/.test(res.error.message || ''))
-  return _poColumnExists
+// โค้ดขึ้น Netlify ก่อนที่จะมีคนรัน schema.sql เสมอ ถ้าส่งคอลัมน์ใหม่ไปทั้งที่ฐานข้อมูลยังไม่มี
+// การบันทึกจะพังทั้งใบ ไม่ใช่แค่ฟิลด์ใหม่หาย — เช็คครั้งเดียวต่อคอลัมน์แล้วจำไว้
+const _columnExists = new Map()
+export async function hasColumn(table, column) {
+  const key = `${table}.${column}`
+  if (_columnExists.has(key)) return _columnExists.get(key)
+  const res = await supabase.from(table).select(column).limit(1)
+  const ok = !(res.error && new RegExp(column).test(res.error.message || ''))
+  _columnExists.set(key, ok)
+  return ok
+}
+export const hasPoFileColumn = () => hasColumn('payment_requests', 'po_file_url')
+
+// ตัดฟิลด์ที่ฐานข้อมูลยังไม่มีออกก่อนบันทึก — ใช้กับคอลัมน์ที่เพิ่งเพิ่มในรอบเดียวกับโค้ด
+export async function stripMissingColumns(table, fields, candidates) {
+  const out = { ...fields }
+  for (const col of candidates) {
+    if (!(col in out)) continue
+    if (!(await hasColumn(table, col))) delete out[col]
+  }
+  return out
 }
 
 // แจ้งเตือนฝ่ายบัญชีว่ามีคำขอตรวจยอดใหม่รอตรวจ — เรียก Netlify Function เดียว ยิงพร้อมกันหลายช่องทาง (in-app/Telegram/อีเมล)
@@ -979,7 +996,8 @@ export async function addOrderWithItems(fields, items) {
   const totals = computeDealTotals(items, { type: fields.discount_type, value: fields.discount_value })
   let order
   try {
-    order = await supabase.from('orders').insert({ ...fields, value: totals.grandTotal, status: ORDER_STATUS.ACTIVE }).select().single().then(handle)
+    const safe = await stripMissingColumns('orders', fields, ['customer_contact'])
+    order = await supabase.from('orders').insert({ ...safe, value: totals.grandTotal, status: ORDER_STATUS.ACTIVE }).select().single().then(handle)
   } catch (e) {
     if (e.code === '23505') throw new Error('ใบเสนอราคานี้ถูกใช้เปิดออเดอร์ไปแล้ว กรุณาเลือกใบอื่น หรือรีเฟรชแล้วลองใหม่')
     throw e

@@ -233,7 +233,7 @@ export function LeadModal({ initial, isAdmin, onClose, onSave }) {
 // แถวรายการสินค้าว่างเปล่า 1 แถวเริ่มต้น — quantity เริ่มที่ 1 เพื่อลดการพิมพ์ซ้ำๆ
 const EMPTY_ITEM = { product_id: '', description: '', quantity: 1, unit_price: '' }
 
-export function DealModal({ initial, companies, defaultCompanyId, defaultStage, isAdmin, onClose, onSave }) {
+export function DealModal({ initial, companies, defaultCompanyId, defaultStage, isAdmin, currentUserName, onClose, onSave }) {
   const { toast } = useUi()
   const { t, lang } = useLanguage()
   const [f, setF] = useState(() => {
@@ -243,6 +243,8 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
     return { ...base, ...rest }
   })
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }))
+  // ดีลที่มีอยู่แล้วใช้ชื่อที่บันทึกไว้ ดีลใหม่ใช้ชื่อคนที่กำลังเปิดอยู่ — ไม่ทับของเดิม เพราะนั่นคือคนที่เปิดดีลจริง
+  const dealProposer = initial?.created_by_name || (initial?.id ? '' : (currentUserName || ''))
 
   const [products, setProducts] = useState(null) // null = กำลังโหลดรายการสินค้า
   // initial.items = รายการที่ก็อปมาจากใบเสนอราคา (ตอนยังไม่มี initial.id) — ถ้ามีให้ใช้เป็นค่าเริ่มต้นแทนแถวเปล่า
@@ -279,7 +281,7 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
   // แถวที่ไม่ได้เลือกสินค้าและไม่ได้พิมพ์ชื่อรายการเอง ถือว่าเป็นช่องว่างที่ยังไม่ได้ใช้ ตัดทิ้งก่อนบันทึก
   // close_date/follow_up_date ไม่บังคับ ถ้าไม่ได้กรอก/เคลียร์ทิ้งจะได้ "" มา ต้องแปลงเป็น null ก่อนส่ง ไม่งั้น Postgres ปฏิเสธ (invalid input syntax for type date)
   const submit = () => onSave(
-    { ...f, close_date: f.close_date || null, follow_up_date: f.follow_up_date || null },
+    { ...f, close_date: f.close_date || null, follow_up_date: f.follow_up_date || null, created_by_name: dealProposer || null },
     items.filter(it => it.product_id || it.description?.trim())
   )
 
@@ -302,7 +304,16 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
         <Field label={t('วันที่คาดว่าปิดดีล')}><input className="form-control" type="date" value={f.close_date || ''} onChange={set('close_date')} /></Field>
         <Field label={t('วันที่ต้อง Follow up')}><input className="form-control" type="date" value={f.follow_up_date || ''} onChange={set('follow_up_date')} /></Field>
       </div>
-      <Field label={t('ผู้รับผิดชอบ')}><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
+      <div className="form-row">
+        {/* ช่องนี้คือคนฝั่งลูกค้า (เช่นชื่อไลน์ของผู้ติดต่อ) ป้ายเดิมเขียนว่า "ผู้รับผิดชอบ" เฉยๆ เลยสับสนกับคนของเรา */}
+        <Field label={t('ผู้รับผิดชอบ (ลูกค้า)')}><input className="form-control" value={f.owner || ''} onChange={set('owner')} /></Field>
+        {/* คนของเรา = เซลล์ที่เปิดดีล ระบบใส่ให้ แก้ไม่ได้ ดีลเก่าที่ยังไม่มีข้อมูลจะขึ้นขีด */}
+        <Field label={t('ผู้เสนอราคา')}>
+          <div className="form-control" style={{ background: 'var(--gray-bg)', color: dealProposer ? 'inherit' : 'var(--text-light)' }}>
+            {dealProposer || t('— ไม่มีข้อมูลผู้เปิดดีลนี้ —')}
+          </div>
+        </Field>
+      </div>
 
       <Field label={t('รายการสินค้า (ราคาต่อหน่วยกรอกแบบรวม VAT แล้ว)')}>
         <div className="table-wrap" style={{ marginBottom: 8 }}>
@@ -485,7 +496,8 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
     const base = {
       company_id: defaultCompanyId || '', subject: '', status: 'Draft', sale_phone: tplQuot.defaultSalePhone, proposer_name: lockedProposer,
       quot_date: new Date().toISOString().split('T')[0], expire_date: '', note: tplQuot.defaultNote, deal_id: null,
-      credit_term: '', payment_due_date: '', payment_status: 'ยังไม่ชำระ', discount_type: '', discount_value: 0
+      credit_term: '', payment_due_date: '', payment_status: 'ยังไม่ชำระ', discount_type: '', discount_value: 0,
+      customer_contact: ''
     }
     if (!initial) return base
     // items เป็นแค่ค่าตั้งต้นสำหรับ seed ไม่ใช่คอลัมน์ในตาราง quotations, company/product เป็น relation ที่ join มาตอน select (ไม่ใช่คอลัมน์จริง) — ต้องตัดออกก่อนเก็บใน f ไม่งั้น update จะพังเพราะ Supabase หาคอลัมน์ชื่อนี้ไม่เจอ
@@ -665,6 +677,10 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
           </div>
         </Field>
       </div>
+      {/* คนฝั่งลูกค้าที่ดูแลดีลนี้ — ไหลมาจากดีลอัตโนมัติถ้าเปิดใบจากดีล แก้ได้ */}
+      <Field label={t('ผู้รับผิดชอบ (ลูกค้า)')}>
+        <input className="form-control" value={f.customer_contact || ''} onChange={set('customer_contact')} placeholder={t('ไม่บังคับ')} />
+      </Field>
       <Field label={t('หมายเหตุ')}><textarea className="form-control" rows={6} value={f.note || ''} onChange={set('note')} /></Field>
     </ModalShell>
   )

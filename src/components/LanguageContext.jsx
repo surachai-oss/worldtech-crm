@@ -918,6 +918,8 @@ export const EN_DICT = {
 
   // ===== Document settings (ตั้งค่าเอกสาร) =====
   'ตั้งค่าเอกสาร': 'Document Settings',
+  'ผู้รับผิดชอบ (ลูกค้า)': 'Customer contact',
+  '— ไม่มีข้อมูลผู้เปิดดีลนี้ —': '— no record of who opened this deal —',
   'สรุปยอดขาย/ส่วนลดของฉัน': 'My sales and discounts',
   'สรุปยอดขายของฉัน': 'My sales summary',
   'ยังไม่มีออเดอร์ของคุณในช่วงที่เลือก': 'You have no orders in this range',
