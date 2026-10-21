@@ -10,13 +10,13 @@ import { useLanguage } from './LanguageContext'
 import SearchableSelect from './SearchableSelect'
 import DiscountField from './DiscountField'
 
-const EMPTY_ITEM = { product_id: '', description: '', quantity: 1, unit_price: '' }
+const EMPTY_ITEM = { product_id: '', description: '', quantity: 1, unit_price: '', is_freebie: false }
 
 // map แถวรายการสินค้าจากใบเสนอราคา -> รูปแบบรายการของออเดอร์ (ไม่มีส่วนลด/หมายเหตุเหมือน quotation_items/deal_items)
 function mapCopiedItems(rows) {
   return rows.map(r => ({
     product_id: r.product_id || '', description: r.description || r.product?.name || '',
-    quantity: r.quantity, unit_price: r.unit_price,
+    quantity: r.quantity, unit_price: r.unit_price, is_freebie: false,
   }))
 }
 
@@ -265,6 +265,7 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
                   <th style={{ width: 70 }}>{t('จำนวน')}</th>
                   <th style={{ width: 120 }}>{t('ราคา/หน่วย')}</th>
                   <th style={{ width: 110 }}>{t('รวม')}</th>
+                  <th style={{ width: 72 }}>{t('ของแถม')}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -277,6 +278,11 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
                     <td><input className="form-control" type="number" min="0" value={it.quantity} onChange={e => updateItem(i, { quantity: e.target.value })} /></td>
                     <td><input className="form-control" type="number" min="0" value={it.unit_price} onChange={e => updateItem(i, { unit_price: e.target.value })} /></td>
                     <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)).toLocaleString('th-TH')}</td>
+                    {/* ติ๊กแล้วบรรทัดนี้จะไม่ถูกนับใน Margin แต่ต้นทุนยังโชว์แยกไว้ในรายงาน */}
+                    <td style={{ textAlign: 'center' }}>
+                      <input type="checkbox" checked={!!it.is_freebie} onChange={e => updateItem(i, { is_freebie: e.target.checked })}
+                        title={t('ของแถม — ไม่นับในการคิด Margin')} />
+                    </td>
                     <td><button type="button" className="btn btn-danger btn-xs" onClick={() => removeItem(i)}>{t('ลบ')}</button></td>
                   </tr>
                 ))}

@@ -2875,7 +2875,8 @@ returns table (
   line_discount   numeric,   -- ส่วนลดท้ายบิลที่เฉลี่ยลงบรรทัดนี้ — ยอดสุทธิ = line_sales − line_discount
   line_buffer     numeric,   -- Buffer ของบรรทัดนี้ (% ของยอดสุทธิ)
   line_cost       numeric,
-  line_normal     numeric
+  line_normal     numeric,
+  is_freebie      boolean    -- ของแถม: ฝั่งแอปตัดออกจากการคิด Margin แล้วแสดงต้นทุนแยก
 ) as $$
 begin
   if not (is_admin() or is_finance()) then
@@ -2913,7 +2914,8 @@ begin
       oi.quantity * coalesce(oic.normal_selling_price, 0) as normal_total,
       -- ลำดับเดียวกับ margin_check_price: ค่าเฉพาะสินค้า > ค่ากลาง > ค่าสำรอง
       coalesce(pc.shipping_buffer_percent,  margin_setting_num('shipping_buffer_percent', 2))
-      + coalesce(pc.provision_buffer_percent, margin_setting_num('provision_buffer_percent', 2)) as buf_pct
+      + coalesce(pc.provision_buffer_percent, margin_setting_num('provision_buffer_percent', 2)) as buf_pct,
+      coalesce(oi.is_freebie, false) as is_freebie
     from orders o
     join order_items oi on oi.order_id = o.id
     join bill b on b.id = o.id
@@ -2931,7 +2933,8 @@ begin
     l.disc,
     (l.gross - l.disc) * l.buf_pct / 100,
     l.cost,
-    l.normal_total
+    l.normal_total,
+    l.is_freebie
   from line l
   order by l.created_at desc, l.sort_order;
 end;
@@ -2978,6 +2981,7 @@ begin
     left join order_item_costs oic on oic.order_item_id = oi.id
     left join product_costs pc on pc.product_id = oi.product_id
     where o.sales_id = auth.uid()          -- เห็นเฉพาะออเดอร์ที่ตัวเองเปิด
+      and not coalesce(oi.is_freebie, false)  -- ของแถมไม่เข้าการคิด Margin
       and (p_from is null or o.created_at >= p_from::timestamptz)
       and (p_to is null or o.created_at < (p_to::timestamptz + interval '1 day'))
   ),
@@ -3030,3 +3034,9 @@ end;
 $$ language plpgsql stable security definer set search_path = public;
 
 grant execute on function margin_order_report_mine(date, date) to authenticated;
+
+-- ===== ของแถม: ติ๊กรายบรรทัด ไม่ให้ไปปนกับ Margin ของสินค้าที่ขายจริง =====
+-- ของแถมมีต้นทุนจริง แต่ไม่มีรายได้ ถ้านับรวมใน Margin จะดึงตัวเลขลงจนอ่านไม่ออกว่าขายได้กำไรเท่าไร
+-- เก็บเป็นธงรายบรรทัด ไม่ใช่รายสินค้า เพราะสินค้าตัวเดียวกันใบนี้แถม ใบหน้าขายจริงก็มี
+-- รายงานจะตัดบรรทัดที่ติ๊กออกจากการคิด Margin แล้วแสดงต้นทุนของแถมแยกไว้ต่างหาก ไม่ได้ทำให้หายไปเฉยๆ
+alter table order_items add column if not exists is_freebie boolean not null default false;

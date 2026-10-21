@@ -1003,8 +1003,12 @@ export async function addOrderWithItems(fields, items) {
     throw e
   }
   if (items?.length) {
+    // is_freebie เพิ่งเพิ่ม — ถ้ายังไม่ได้รัน schema.sql ให้ตัดทิ้งไป ไม่งั้น insert ทั้งก้อนพังและออเดอร์ไม่มีรายการสินค้า
+    const freebieOk = await hasColumn('order_items', 'is_freebie')
     const rows = items.map((it, i) => ({
-      order_id: order.id, product_id: it.product_id || null, description: it.description, quantity: it.quantity, unit_price: it.unit_price, sort_order: i
+      order_id: order.id, product_id: it.product_id || null, description: it.description,
+      quantity: it.quantity, unit_price: it.unit_price, sort_order: i,
+      ...(freebieOk ? { is_freebie: !!it.is_freebie } : {}),
     }))
     await supabase.from('order_items').insert(rows).then(handle)
   }
@@ -1520,10 +1524,12 @@ export async function updateOrderWithItems(orderId, fields, items, { actorName, 
   if (removed.length) {
     await supabase.from('order_items').delete().in('id', removed.map(r => r.id)).then(handle)
   }
+  const freebieOk = await hasColumn('order_items', 'is_freebie')
   for (const [i, it] of items.entries()) {
     const payload = {
       product_id: it.product_id || null, description: it.description,
-      quantity: Number(it.quantity) || 0, unit_price: Number(it.unit_price) || 0, sort_order: i
+      quantity: Number(it.quantity) || 0, unit_price: Number(it.unit_price) || 0, sort_order: i,
+      ...(freebieOk ? { is_freebie: !!it.is_freebie } : {}),
     }
     if (it.id) await supabase.from('order_items').update(payload).eq('id', it.id).then(handle)
     else await supabase.from('order_items').insert({ ...payload, order_id: orderId }).then(handle)

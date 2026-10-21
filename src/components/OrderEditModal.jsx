@@ -83,7 +83,7 @@ export default function OrderEditModal({ order, currentUserName, onClose, onSave
       .then(([its, ps]) => {
         setItems(its.map(it => ({
           id: it.id, product_id: it.product_id || '', description: it.description || it.product?.name || '',
-          quantity: it.quantity, unit_price: it.unit_price
+          quantity: it.quantity, unit_price: it.unit_price, is_freebie: !!it.is_freebie
         })))
         setProducts(ps)
       })
@@ -99,7 +99,7 @@ export default function OrderEditModal({ order, currentUserName, onClose, onSave
     const p = products.find(x => x.id === productId)
     setItems(prev => prev.map((it, idx) => (idx === i ? { ...it, product_id: productId, description: p ? p.name : it.description } : it)))
   }
-  const addRow = () => setItems(prev => [...prev, { product_id: '', description: '', quantity: 1, unit_price: 0 }])
+  const addRow = () => setItems(prev => [...prev, { product_id: '', description: '', quantity: 1, unit_price: 0, is_freebie: false }])
   const removeRow = (i) => setItems(prev => prev.filter((_, idx) => idx !== i))
 
   const totals = computeDealTotals(items, { type: f.discount_type, value: f.discount_value })
@@ -186,6 +186,7 @@ export default function OrderEditModal({ order, currentUserName, onClose, onSave
                     <th style={{ width: 90 }}>{t('จำนวน')}</th>
                     <th style={{ width: 120 }}>{t('ราคา/หน่วย')}</th>
                     <th style={{ width: 110 }}>{t('รวม')}</th>
+                    <th style={{ width: 72 }}>{t('ของแถม')}</th>
                     <th style={{ width: 50 }}></th>
                   </tr>
                 </thead>
@@ -200,6 +201,12 @@ export default function OrderEditModal({ order, currentUserName, onClose, onSave
                       <td style={cell}><input className="form-control" style={inputSm} type="number" min="0" step="1" value={it.quantity} onChange={setItem(i, 'quantity')} /></td>
                       <td style={cell}><input className="form-control" style={inputSm} type="number" min="0" step="0.01" value={it.unit_price} onChange={setItem(i, 'unit_price')} /></td>
                       <td style={{ ...cell, fontWeight: 600 }}>{fmtCurrency((Number(it.quantity) || 0) * (Number(it.unit_price) || 0))}</td>
+                      {/* ติ๊กแล้วบรรทัดนี้จะไม่ถูกนับใน Margin แต่ต้นทุนยังโชว์แยกไว้ในรายงาน */}
+                      <td style={{ ...cell, textAlign: 'center' }}>
+                        <input type="checkbox" checked={!!it.is_freebie}
+                          onChange={e => setItems(prev => prev.map((r, idx) => idx === i ? { ...r, is_freebie: e.target.checked } : r))}
+                          title={t('ของแถม — ไม่นับในการคิด Margin')} />
+                      </td>
                       <td style={cell}>
                         <button className="btn btn-danger btn-xs" onClick={() => removeRow(i)}>×</button>
                       </td>

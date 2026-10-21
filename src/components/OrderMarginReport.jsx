@@ -51,8 +51,16 @@ function groupLines(lines, keyOf, labelOf) {
   const out = new Map()
   lines.forEach(l => {
     const k = keyOf(l)
-    if (!out.has(k)) out.set(k, { key: k, ...labelOf(l), gross: 0, billDisc: 0, sales: 0, cost: 0, buffer: 0, normal: 0, discAmt: 0, qty: 0, lineCount: 0, noCostLines: 0, factors: new Set(), orders: new Set() })
+    if (!out.has(k)) out.set(k, { key: k, ...labelOf(l), gross: 0, billDisc: 0, sales: 0, cost: 0, buffer: 0, normal: 0, discAmt: 0, freebieCost: 0, freebieLines: 0, qty: 0, lineCount: 0, noCostLines: 0, factors: new Set(), orders: new Set() })
     const g = out.get(k)
+    g.orders.add(l.order_id)
+    // ของแถม: มีต้นทุนแต่ไม่มีรายได้ ถ้าปนเข้า Margin จะดึงตัวเลขลงจนอ่านไม่ออกว่าขายได้กำไรเท่าไร
+    // เก็บต้นทุนไว้แยกต่างหาก ไม่ได้ทำให้หายไป
+    if (l.is_freebie) {
+      g.freebieCost += Number(l.line_cost) || 0
+      g.freebieLines += 1
+      return
+    }
     // ยอดสุทธิ = ยอดก่อนลด − ส่วนลดท้ายบิลที่เฉลี่ยลงบรรทัดนี้
     // line_discount เป็น undefined ถ้ายังไม่ได้รัน schema.sql ตัวใหม่ → กลายเป็น 0 แล้วได้ผลเท่าของเดิมพอดี
     const lineGross = Number(l.line_sales) || 0
@@ -75,7 +83,6 @@ function groupLines(lines, keyOf, labelOf) {
     // เก็บสัดส่วนต้นทุนจากเฉพาะบรรทัดที่มีต้นทุนจริง — บรรทัดที่ไม่มีแถวต้นทุนจะถูก LEFT JOIN คืนมาเป็น 100
     // ถ้าเอาค่าจากบรรทัดแรกมาโชว์ดื้อๆ ออเดอร์ที่บรรทัดแรกไม่มีต้นทุนจะขึ้น 100% ทั้งที่บรรทัดอื่นคิด 80% อยู่
     else g.factors.add(Number(l.cost_factor) || 100)
-    g.orders.add(l.order_id)
   })
   return [...out.values()].map(g => ({
     ...g,
@@ -141,18 +148,21 @@ export default function OrderMarginReport() {
 
   const totals = useMemo(() => {
     const lineNet = (l) => (Number(l.line_sales) || 0) - (Number(l.line_discount) || 0)
-    const gross = active.reduce((s, l) => s + (Number(l.line_sales) || 0), 0)
-    const billDisc = active.reduce((s, l) => s + (Number(l.line_discount) || 0), 0)
+    const sold = active.filter(l => !l.is_freebie)      // ของแถมไม่เข้าการคิด Margin
+    const gross = sold.reduce((s, l) => s + (Number(l.line_sales) || 0), 0)
+    const billDisc = sold.reduce((s, l) => s + (Number(l.line_discount) || 0), 0)
     const sales = gross - billDisc          // ยอดขายสุทธิ หักส่วนลดท้ายบิลแล้ว
-    const cost = active.reduce((s, l) => s + (Number(l.line_cost) || 0), 0)
-    const buffer = active.reduce((s, l) => s + (Number(l.line_buffer) || 0), 0)
-    const normal = active.reduce((s, l) => s + (Number(l.line_normal) || 0), 0)
-    const discAmt = active.reduce((s, l) => s + (Number(l.line_normal) > 0 ? (Number(l.line_normal) || 0) - lineNet(l) : 0), 0)
+    const cost = sold.reduce((s, l) => s + (Number(l.line_cost) || 0), 0)
+    const buffer = sold.reduce((s, l) => s + (Number(l.line_buffer) || 0), 0)
+    const normal = sold.reduce((s, l) => s + (Number(l.line_normal) || 0), 0)
+    const discAmt = sold.reduce((s, l) => s + (Number(l.line_normal) > 0 ? (Number(l.line_normal) || 0) - lineNet(l) : 0), 0)
+    const freebieCost = active.reduce((s, l) => s + (l.is_freebie ? (Number(l.line_cost) || 0) : 0), 0)
+    const freebieLines = active.filter(l => l.is_freebie).length
     const orders = new Set(active.map(l => l.order_id)).size
     // บรรทัดที่ยังไม่มีต้นทุนบันทึกไว้ ทำให้กำไรดูสูงเกินจริง ต้องบอกให้เห็น ไม่ใช่ซ่อน
-    const missingCost = active.filter(l => !(Number(l.line_cost) > 0)).length
+    const missingCost = sold.filter(l => !(Number(l.line_cost) > 0)).length
     return {
-      sales, cost, buffer, normal, orders, missingCost, gross, billDisc,
+      sales, cost, buffer, normal, orders, missingCost, gross, billDisc, freebieCost, freebieLines,
       profit: sales - cost,
       margin: sales > 0 ? (sales - cost) / sales * 100 : 0,
       discount: normal > 0 ? discAmt : null,
@@ -181,12 +191,14 @@ export default function OrderMarginReport() {
     if (!detailOrderId) return null
     const ls = active.filter(l => l.order_id === detailOrderId)
     if (!ls.length) return null
-    const gross = ls.reduce((a, l) => a + (Number(l.line_sales) || 0), 0)
-    const billDisc = ls.reduce((a, l) => a + (Number(l.line_discount) || 0), 0)
+    const sold = ls.filter(l => !l.is_freebie)
+    const gross = sold.reduce((a, l) => a + (Number(l.line_sales) || 0), 0)
+    const billDisc = sold.reduce((a, l) => a + (Number(l.line_discount) || 0), 0)
     const sales = gross - billDisc
-    const cost = ls.reduce((a, l) => a + (Number(l.line_cost) || 0), 0)
-    const buffer = ls.reduce((a, l) => a + (Number(l.line_buffer) || 0), 0)
-    return { head: ls[0], lines: ls, gross, billDisc, sales, cost, buffer,
+    const cost = sold.reduce((a, l) => a + (Number(l.line_cost) || 0), 0)
+    const buffer = sold.reduce((a, l) => a + (Number(l.line_buffer) || 0), 0)
+    const freebieCost = ls.reduce((a, l) => a + (l.is_freebie ? (Number(l.line_cost) || 0) : 0), 0)
+    return { head: ls[0], lines: ls, gross, billDisc, sales, cost, buffer, freebieCost,
              profit: sales - cost, margin: sales > 0 ? (sales - cost) / sales * 100 : 0 }
   }, [detailOrderId, active])
 
@@ -277,6 +289,13 @@ export default function OrderMarginReport() {
             <div className="kpi-label">Margin</div>
             <div className="kpi-value" style={{ color: marginColor(totals.margin) }}>{pct(totals.margin)}</div>
           </div>
+          {totals.freebieLines > 0 && (
+            <div className="kpi-card red">
+              <div className="kpi-label">{t('ต้นทุนของแถม')}</div>
+              <div className="kpi-value">{fmtCurrency(totals.freebieCost)}</div>
+              <div className="kpi-sub">{totals.freebieLines} {t('รายการ · ไม่นับใน Margin')}</div>
+            </div>
+          )}
         </div>
 
         {totals.missingCost > 0 && (
@@ -359,6 +378,7 @@ export default function OrderMarginReport() {
               <div><div className="k">{t('ต้นทุน')}</div><div className="v">{fmtCurrency(detail.cost)}</div></div>
               <div><div className="k">{t('กำไรขั้นต้น')}</div><div className="v">{fmtCurrency(detail.profit)}</div></div>
               <div><div className="k">Margin</div><div className="v" style={{ color: marginColor(detail.margin) }}>{pct(detail.margin)}</div></div>
+              {detail.freebieCost > 0 && <div><div className="k">{t('ต้นทุนของแถม')}</div><div className="v">{fmtCurrency(detail.freebieCost)}</div></div>}
             </div>
             <div className="table-wrap">
               <table>
@@ -384,6 +404,7 @@ export default function OrderMarginReport() {
                       <tr key={i} style={{ cursor: 'default' }}>
                         <td>
                           {l.product_name || '-'}
+                          {l.is_freebie && <span className="badge badge-orange" style={{ marginLeft: 6, fontSize: 10 }}>{t('ของแถม')}</span>}
                           {l.product_code && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{l.product_code}</div>}
                         </td>
                         <td className="num">{l.quantity}</td>
@@ -396,8 +417,8 @@ export default function OrderMarginReport() {
                           {lc > 0 ? fmtCurrency(lc)
                             : <span className="badge badge-gray" style={{ fontSize: 10 }}>{t('ไม่มีต้นทุน')}</span>}
                         </td>
-                        <td className="num" style={{ fontWeight: 600, color: lc > 0 ? marginColor(m) : 'var(--text-light)' }}>
-                          {lc > 0 ? pct(m) : '-'}
+                        <td className="num" style={{ fontWeight: 600, color: l.is_freebie ? 'var(--text-light)' : (lc > 0 ? marginColor(m) : 'var(--text-light)') }}>
+                          {l.is_freebie ? '-' : (lc > 0 ? pct(m) : '-')}
                         </td>
                       </tr>
                     )
@@ -475,6 +496,7 @@ export default function OrderMarginReport() {
           <div>{t('ต้นทุนที่ใช้คือต้นทุน ณ วันที่เปิดออเดอร์ ไม่ใช่ต้นทุนวันนี้ — ออเดอร์เก่าจึงยังสะท้อนราคาทุนตอนนั้น')}</div>
           <div>{t('กำไรขั้นต้น = ยอดขาย − ต้นทุนสินค้า ยังไม่ได้หักค่าขนส่งจริงและ Buffer ตัวเลขจึงสูงกว่า Margin ในหน้าเช็คราคาเล็กน้อย')}</div>
           <div>{t('"ต้นทุนที่คิด" คือคิดต้นทุนกี่ % ของราคาเต็ม — ออเดอร์ Grade B ใช้ค่ากลางจากหน้าต้นทุนสินค้า ปรับรายออเดอร์ได้ที่ปุ่ม "ปรับ"')}</div>
+          <div>{t('รายการที่ติ๊กว่า "ของแถม" ตอนเปิดออเดอร์ ไม่ถูกนับใน Margin — ต้นทุนของแถมแสดงแยกไว้ในการ์ดด้านบน')}</div>
         </div>
       </div>
     </div>
