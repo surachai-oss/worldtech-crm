@@ -44,7 +44,7 @@ const CSS = `
 // เอามาปนกับสินค้าปกติแล้วอ่านกำไรไม่ออก แต่ก็เป็นยอดขายจริงที่เก็บเงินได้ จะซ่อนถาวรก็ไม่ถูก
 // ให้สลับดูเอาเองว่าคิดหรือไม่คิด ไม่ได้แตะข้อมูล แค่กรองตอนแสดงผล
 const GRADE_B_VIEWS = [
-  { key: 'all',     label: 'รวม Grade B' },
+  { key: 'all',     label: 'ทั้งหมด' },
   { key: 'exclude', label: 'ไม่รวม Grade B' },
   { key: 'only',    label: 'เฉพาะ Grade B' },
 ]
@@ -277,12 +277,11 @@ export default function OrderMarginReport() {
               onClick={() => setView(v.key)}>{t(v.label)}</button>
           ))}
           <span className="omr-sep" />
-          {GRADE_B_VIEWS.map(g => (
-            <button key={g.key} className={`btn btn-xs ${gradeB === g.key ? 'btn-primary' : 'btn-outline'}`}
-              disabled={gradeBOrders === 0 && g.key !== 'all'}
-              title={gradeBOrders === 0 ? t('ช่วงวันที่นี้ไม่มีออเดอร์ Grade B') : ''}
-              onClick={() => setGradeB(g.key)}>{t(g.label)}</button>
-          ))}
+          <select className="filter-select" value={gradeB} onChange={e => setGradeB(e.target.value)}
+            disabled={gradeBOrders === 0}
+            title={gradeBOrders === 0 ? t('ช่วงวันที่นี้ไม่มีออเดอร์ Grade B') : t('Grade B เป็นการขายเหมาสินค้าที่เสียหาย เลือกได้ว่าจะเอามาคิดกำไรด้วยหรือไม่')}>
+            {GRADE_B_VIEWS.map(g => <option key={g.key} value={g.key}>{t(g.label)}</option>)}
+          </select>
           <span className="omr-sep" />
           <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} />
           <span style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ถึง')}</span>
@@ -526,7 +525,7 @@ export default function OrderMarginReport() {
           <div>{t('กำไรขั้นต้น = ยอดขาย − ต้นทุนสินค้า ยังไม่ได้หักค่าขนส่งจริงและ Buffer ตัวเลขจึงสูงกว่า Margin ในหน้าเช็คราคาเล็กน้อย')}</div>
           <div>{t('"ต้นทุนที่คิด" คือคิดต้นทุนกี่ % ของราคาเต็ม — ออเดอร์ Grade B ใช้ค่ากลางจากหน้าต้นทุนสินค้า ปรับรายออเดอร์ได้ที่ปุ่ม "ปรับ"')}</div>
           <div>{t('รายการที่ติ๊กว่า "ของแถม" ตอนเปิดออเดอร์ ไม่ถูกนับใน Margin — ต้นทุนของแถมแสดงแยกไว้ในการ์ดด้านบน')}</div>
-          <div>{t('Grade B เป็นการขายเหมาสินค้าที่เสียหาย ต้นทุนต่อชิ้นจึงไม่เทียบกับการขายปกติ — ใช้ปุ่มด้านบนสลับดูว่าคิดหรือไม่คิด ตัวเลขดิบไม่ได้ถูกแก้')}</div>
+          <div>{t('Grade B เป็นการขายเหมาสินค้าที่เสียหาย ต้นทุนต่อชิ้นจึงไม่เทียบกับการขายปกติ — ใช้ตัวกรองด้านบนเลือกได้ว่าจะเอามาคิดหรือไม่ ตัวเลขดิบไม่ได้ถูกแก้')}</div>
         </div>
       </div>
     </div>
