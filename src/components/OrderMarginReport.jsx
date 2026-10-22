@@ -40,6 +40,15 @@ const CSS = `
 .omr-meta .k{color:var(--text-light);font-size:11px}
 `
 
+// Grade B = ขายเหมาสินค้าที่เสียหาย ต้นทุนต่อชิ้นจึงไม่สะท้อนการขายปกติ
+// เอามาปนกับสินค้าปกติแล้วอ่านกำไรไม่ออก แต่ก็เป็นยอดขายจริงที่เก็บเงินได้ จะซ่อนถาวรก็ไม่ถูก
+// ให้สลับดูเอาเองว่าคิดหรือไม่คิด ไม่ได้แตะข้อมูล แค่กรองตอนแสดงผล
+const GRADE_B_VIEWS = [
+  { key: 'all',     label: 'รวม Grade B' },
+  { key: 'exclude', label: 'ไม่รวม Grade B' },
+  { key: 'only',    label: 'เฉพาะ Grade B' },
+]
+
 const VIEWS = [
   { key: 'order', label: 'รายออเดอร์' },
   { key: 'product', label: 'รายสินค้า' },
@@ -123,6 +132,7 @@ export default function OrderMarginReport() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState('order')
   const [includeCancelled, setIncludeCancelled] = useState(false)
+  const [gradeB, setGradeB] = useState('all')   // all | exclude | only
   const [fromDate, setFromDate] = useState(() => currentMonthRange().first)
   const [toDate, setToDate] = useState(() => currentMonthRange().last)
   const [exporting, setExporting] = useState(false)
@@ -141,10 +151,18 @@ export default function OrderMarginReport() {
     return () => { alive = false; clearTimeout(timer) }
   }, [fromDate, toDate, toast])
 
-  const active = useMemo(
-    () => (includeCancelled ? lines : lines.filter(l => l.order_status !== 'Cancelled')),
-    [lines, includeCancelled]
-  )
+  const active = useMemo(() => {
+    let rows = includeCancelled ? lines : lines.filter(l => l.order_status !== 'Cancelled')
+    if (gradeB === 'exclude') rows = rows.filter(l => l.order_type !== 'Grade B')
+    if (gradeB === 'only') rows = rows.filter(l => l.order_type === 'Grade B')
+    return rows
+  }, [lines, includeCancelled, gradeB])
+
+  // นับไว้บอกว่าปุ่มนี้มีผลกับช่วงที่ดูอยู่หรือเปล่า — ถ้าไม่มี Grade B เลยจะได้ไม่ต้องงงว่ากดแล้วไม่เปลี่ยน
+  const gradeBOrders = useMemo(() => {
+    const base = includeCancelled ? lines : lines.filter(l => l.order_status !== 'Cancelled')
+    return new Set(base.filter(l => l.order_type === 'Grade B').map(l => l.order_id)).size
+  }, [lines, includeCancelled])
 
   const totals = useMemo(() => {
     const lineNet = (l) => (Number(l.line_sales) || 0) - (Number(l.line_discount) || 0)
@@ -259,6 +277,13 @@ export default function OrderMarginReport() {
               onClick={() => setView(v.key)}>{t(v.label)}</button>
           ))}
           <span className="omr-sep" />
+          {GRADE_B_VIEWS.map(g => (
+            <button key={g.key} className={`btn btn-xs ${gradeB === g.key ? 'btn-primary' : 'btn-outline'}`}
+              disabled={gradeBOrders === 0 && g.key !== 'all'}
+              title={gradeBOrders === 0 ? t('ช่วงวันที่นี้ไม่มีออเดอร์ Grade B') : ''}
+              onClick={() => setGradeB(g.key)}>{t(g.label)}</button>
+          ))}
+          <span className="omr-sep" />
           <input className="filter-input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} />
           <span style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('ถึง')}</span>
           <input className="filter-input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} />
@@ -278,7 +303,11 @@ export default function OrderMarginReport() {
           <div className="kpi-card navy">
             <div className="kpi-label">{t('ยอดขายรวม')}</div>
             <div className="kpi-value">{fmtCurrency(totals.sales)}</div>
-            <div className="kpi-sub">{totals.orders} {t('ออเดอร์', 'orders')}</div>
+            <div className="kpi-sub">
+              {totals.orders} {t('ออเดอร์', 'orders')}
+              {gradeB === 'exclude' && gradeBOrders > 0 && ` · ${t('ตัด Grade B ออก')} ${gradeBOrders} ${t('ใบ')}`}
+              {gradeB === 'only' && ` · ${t('เฉพาะ Grade B')}`}
+            </div>
           </div>
           <div className="kpi-card green">
             <div className="kpi-label">{t('กำไรขั้นต้น')}</div>
@@ -497,6 +526,7 @@ export default function OrderMarginReport() {
           <div>{t('กำไรขั้นต้น = ยอดขาย − ต้นทุนสินค้า ยังไม่ได้หักค่าขนส่งจริงและ Buffer ตัวเลขจึงสูงกว่า Margin ในหน้าเช็คราคาเล็กน้อย')}</div>
           <div>{t('"ต้นทุนที่คิด" คือคิดต้นทุนกี่ % ของราคาเต็ม — ออเดอร์ Grade B ใช้ค่ากลางจากหน้าต้นทุนสินค้า ปรับรายออเดอร์ได้ที่ปุ่ม "ปรับ"')}</div>
           <div>{t('รายการที่ติ๊กว่า "ของแถม" ตอนเปิดออเดอร์ ไม่ถูกนับใน Margin — ต้นทุนของแถมแสดงแยกไว้ในการ์ดด้านบน')}</div>
+          <div>{t('Grade B เป็นการขายเหมาสินค้าที่เสียหาย ต้นทุนต่อชิ้นจึงไม่เทียบกับการขายปกติ — ใช้ปุ่มด้านบนสลับดูว่าคิดหรือไม่คิด ตัวเลขดิบไม่ได้ถูกแก้')}</div>
         </div>
       </div>
     </div>
