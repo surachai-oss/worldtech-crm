@@ -2216,8 +2216,10 @@ begin
   if not (is_admin() or is_finance()) then
     raise exception 'ปรับสัดส่วนต้นทุนได้เฉพาะฝ่ายบัญชีและผู้ดูแลระบบ';
   end if;
-  if p_percent is null or p_percent <= 0 or p_percent > 200 then
-    raise exception 'สัดส่วนต้นทุนต้องอยู่ระหว่าง 1-200%%';
+  -- ยอมให้ 0 ได้ — ของ Grade B ที่เสียหายจนตัดต้นทุนทิ้งไปแล้ว คิดต้นทุน 0 เป็นเรื่องที่ตั้งใจ
+  -- ไม่ใช่ความผิดพลาด (แถวใน order_item_costs ยังอยู่ จึงยังแยกออกจาก "ไม่เคยกรอกต้นทุน" ได้)
+  if p_percent is null or p_percent < 0 or p_percent > 200 then
+    raise exception 'สัดส่วนต้นทุนต้องอยู่ระหว่าง 0-200%%';
   end if;
 
   select order_no into v_no from orders where id = p_order_id;

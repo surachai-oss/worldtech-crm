@@ -55,6 +55,11 @@ const VIEWS = [
   { key: 'sales', label: 'รายเซลล์' },
 ]
 
+// บรรทัดที่ "ไม่เคยกรอกต้นทุน" กับบรรทัดที่ "ตั้งใจคิดต้นทุน 0%" หน้าตาเหมือนกันคือ line_cost = 0
+// แยกออกจากกันด้วย cost_factor: ถ้าไม่มีแถวใน order_item_costs เลย ฝั่ง DB จะ coalesce เป็น 100 เสมอ
+// ฉะนั้น cost_factor = 0 แปลว่ามีแถวต้นทุนอยู่จริงและมีคนตั้งใจตั้งเป็น 0 ไม่ใช่ข้อมูลขาด
+const hasCostRow = (l) => (Number(l.line_cost) || 0) > 0 || Number(l.cost_factor) === 0
+
 // รวมยอดจากบรรทัดสินค้า — คืน map ของ key -> ตัวเลขรวม
 function groupLines(lines, keyOf, labelOf) {
   const out = new Map()
@@ -88,10 +93,10 @@ function groupLines(lines, keyOf, labelOf) {
     g.qty += Number(l.quantity) || 0
     g.lineCount += 1
     // บรรทัดที่ไม่มีต้นทุน = ไม่มีแถวใน order_item_costs ซึ่งเป็นเหตุผลเดียวกับที่ปรับสัดส่วนต้นทุนไม่ได้
-    if (!(Number(l.line_cost) > 0)) g.noCostLines += 1
-    // เก็บสัดส่วนต้นทุนจากเฉพาะบรรทัดที่มีต้นทุนจริง — บรรทัดที่ไม่มีแถวต้นทุนจะถูก LEFT JOIN คืนมาเป็น 100
+    if (!hasCostRow(l)) g.noCostLines += 1
+    // เก็บสัดส่วนต้นทุนจากเฉพาะบรรทัดที่มีแถวต้นทุนจริง — บรรทัดที่ไม่มีแถวจะถูก LEFT JOIN คืนมาเป็น 100
     // ถ้าเอาค่าจากบรรทัดแรกมาโชว์ดื้อๆ ออเดอร์ที่บรรทัดแรกไม่มีต้นทุนจะขึ้น 100% ทั้งที่บรรทัดอื่นคิด 80% อยู่
-    else g.factors.add(Number(l.cost_factor) || 100)
+    else g.factors.add(Number.isFinite(Number(l.cost_factor)) ? Number(l.cost_factor) : 100)
   })
   return [...out.values()].map(g => ({
     ...g,
@@ -178,7 +183,7 @@ export default function OrderMarginReport() {
     const freebieLines = active.filter(l => l.is_freebie).length
     const orders = new Set(active.map(l => l.order_id)).size
     // บรรทัดที่ยังไม่มีต้นทุนบันทึกไว้ ทำให้กำไรดูสูงเกินจริง ต้องบอกให้เห็น ไม่ใช่ซ่อน
-    const missingCost = sold.filter(l => !(Number(l.line_cost) > 0)).length
+    const missingCost = sold.filter(l => !hasCostRow(l)).length
     return {
       sales, cost, buffer, normal, orders, missingCost, gross, billDisc, freebieCost, freebieLines,
       profit: sales - cost,
@@ -220,17 +225,17 @@ export default function OrderMarginReport() {
              profit: sales - cost, margin: sales > 0 ? (sales - cost) / sales * 100 : 0 }
   }, [detailOrderId, active])
 
-  const missingLines = useMemo(() => active.filter(l => !(Number(l.line_cost) > 0)), [active])
+  const missingLines = useMemo(() => active.filter(l => !hasCostRow(l)), [active])
 
   // ปรับสัดส่วนต้นทุนของออเดอร์นั้น เช่น Grade B ล็อตที่สภาพแย่กว่าปกติ อยากคิดต้นทุน 70% แทน 80%
   const adjustFactor = async (row) => {
     const input = window.prompt(
-      `ออเดอร์ ${row.order_no}: คิดต้นทุนกี่ % ของต้นทุนเต็ม?\n100 = ต้นทุนเต็ม, 80 = ลบ 20%`,
+      `ออเดอร์ ${row.order_no}: คิดต้นทุนกี่ % ของต้นทุนเต็ม?\n100 = ต้นทุนเต็ม, 80 = ลบ 20%, 0 = ไม่คิดต้นทุนเลย`,
       String(row.cost_factor ?? 100)
     )
     if (input === null) return
     const pct2 = Number(input)
-    if (!(pct2 > 0 && pct2 <= 200)) { toast('กรุณากรอกตัวเลขระหว่าง 1-200', 'error'); return }
+    if (!(pct2 >= 0 && pct2 <= 200)) { toast('กรุณากรอกตัวเลขระหว่าง 0-200', 'error'); return }
     try {
       await setOrderCostFactor(row.key, pct2)
       toast('ปรับสัดส่วนต้นทุนแล้ว', 'success')
