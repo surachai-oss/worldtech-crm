@@ -154,7 +154,7 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
                       <td style={{ fontSize: 12 }}>{o.sales_name || '-'}</td>
                       <td style={{ fontSize: 12 }}>{fmtDate(o.created_at)}</td>
                       <td><span className={`badge ${o.status === ORDER_STATUS.ACTIVE ? 'badge-green' : 'badge-gray'}`}>{o.status === ORDER_STATUS.ACTIVE ? t('ใช้งานอยู่') : t('ยกเลิกแล้ว')}</span></td>
-                      <td className="td-actions" style={{ alignItems: 'flex-start', gap: 16 }}>
+                      <td className="td-actions">
                         <ActionStack button={<button className="btn btn-outline btn-xs" onClick={() => openDetail(o)}>{t('ดูรายละเอียด')}</button>} />
                         {/* แก้ไขออเดอร์ที่บันทึกแล้ว — แอดมินเท่านั้น สำหรับกรณีคีย์ผิดแต่เอกสารอื่นออกไปถูกแล้ว */}
                         {perm?.isAdmin && o.status === ORDER_STATUS.ACTIVE && (
