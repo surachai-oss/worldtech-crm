@@ -185,7 +185,7 @@ export default function FinanceReview({ reloadKey, currentUserName, perm, onAppr
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>{t('เลขคำขอ')}</th><th>{t('วันที่')}</th><th>{t('ลูกค้า')}</th><th>{t('ประเภทลูกค้า')}</th><th>{t('วิธีการชำระ')}</th><th>{t('ยอดรวม')}</th><th>{t('สถานะ')}</th><th>{t('ผู้ขอ')}</th><th>{t('การจัดการ')}</th></tr></thead>
+              <thead><tr><th>{t('เลขคำขอ')}</th><th>{t('วันที่')}</th><th className="col-left">{t('บริษัท')}</th><th>{t('ประเภทลูกค้า')}</th><th>{t('วิธีการชำระ')}</th><th className="col-right">{t('ยอดรวม')}</th><th>{t('สถานะ')}</th><th>{t('ผู้ขอ')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(pr => (
                   <tr key={pr.id}>
@@ -194,10 +194,10 @@ export default function FinanceReview({ reloadKey, currentUserName, perm, onAppr
                       {(pr.order?.order_no || pr.order_no) && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>{lang === 'en' ? 'Order' : 'ออเดอร์'}: {pr.order?.order_no || pr.order_no}</div>}
                     </td>
                     <td style={{ fontSize: 12 }}>{fmtDate(pr.request_date || pr.created_at)}</td>
-                    <td>{pr.customer_name || pr.company?.name || '-'}</td>
+                    <td className="col-left">{pr.customer_name || pr.company?.name || '-'}</td>
                     <td style={{ fontSize: 12 }}>{pr.credit_type ? <span className={`badge ${pr.credit_type.startsWith('ลูกค้าเครดิต') ? 'badge-orange' : 'badge-green'}`}>{pr.credit_type}</span> : '-'}</td>
                     <td style={{ fontSize: 12 }}>{(pr.payment_method === PAYMENT_METHOD_OTHER ? pr.payment_method_other : pr.payment_method) || '-'}</td>
-                    <td style={{ fontWeight: 600 }}>{fmtCurrency(pr.total_amount)}</td>
+                    <td className="col-right" style={{ fontWeight: 600 }}>{fmtCurrency(pr.total_amount)}</td>
                     <td><span className={`badge ${paymentBadgeClass(pr.status)}`}>{paymentStatusLabel(pr.status)}</span></td>
                     <td style={{ fontSize: 12 }}>{pr.requested_by_name || '-'}</td>
                     <td className="td-actions">

@@ -94,7 +94,7 @@ export default function Quotations({ perm, reloadKey, settings, deals, isAdmin, 
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>{t('เลขที่')}</th><th className="col-left">{t('หัวข้อ')}</th><th className="col-left">{t('บริษัท')}</th><th>{t('มูลค่า')}</th><th>{t('สถานะ')}</th><th>{t('วันที่')}</th><th>{t('ประเภท')}</th><th>{t('การจัดการ')}</th></tr></thead>
+              <thead><tr><th>{t('เลขที่')}</th><th className="col-left">{t('หัวข้อ')}</th><th className="col-left">{t('บริษัท')}</th><th className="col-right">{t('มูลค่า')}</th><th>{t('สถานะ')}</th><th>{t('วันที่')}</th><th>{t('ประเภท')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(qt => {
                   const fromDeal = qt.deal_id ? deals.find(d => d.id === qt.deal_id) : null
@@ -108,7 +108,7 @@ export default function Quotations({ perm, reloadKey, settings, deals, isAdmin, 
                       </td>
                       <td className="col-left" style={{ fontWeight: 500 }}>{qt.subject}{fromDeal && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>{lang === 'en' ? 'From deal:' : 'จากดีล:'} {fromDeal.name}</div>}</td>
                       <td className="col-left">{qt.company ? qt.company.name : '-'}</td>
-                      <td style={{ fontWeight: 600 }}>{fmtCurrency(qt.value)}</td>
+                      <td className="col-right" style={{ fontWeight: 600 }}>{fmtCurrency(qt.value)}</td>
                       <td><span className={`badge ${quotBadgeClass(qt.status)}`}>{qt.status}</span></td>
                       <td style={{ fontSize: 12 }}>{fmtDate(qt.quot_date)}</td>
                       <td>{qt.credit_term
