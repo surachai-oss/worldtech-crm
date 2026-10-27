@@ -113,7 +113,7 @@ export default function Products({ perm }) {
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th></th><th>{t('รหัสสินค้า')}</th><th>{t('ชื่อสินค้า')}</th><th>{t('การจัดการ')}</th></tr></thead>
+              <thead><tr><th></th><th>{t('รหัสสินค้า')}</th><th className="col-left">{t('ชื่อสินค้า')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(p => {
                   const imgUrl = getProductImageUrl(p.image_path)
@@ -123,7 +123,7 @@ export default function Products({ perm }) {
                         {imgUrl && <img src={imgUrl} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)' }} />}
                       </td>
                       <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{p.code}</td>
-                      <td>{p.name}</td>
+                      <td className="col-left">{p.name}</td>
                       <td className="td-actions">
                         <button className="btn btn-outline btn-xs" onClick={() => setModal({ initial: p })}>{t('แก้ไข')}</button>
                         {adminOnlyDelete(perm) && <button className="btn btn-danger btn-xs" onClick={() => onDelete(p)}>{t('ลบ')}</button>}

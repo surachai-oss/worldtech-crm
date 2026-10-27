@@ -346,7 +346,7 @@ export default function OrderMarginReport() {
               <thead>
                 <tr>
                   <th>{view === 'order' ? t('เลขออเดอร์') : view === 'product' ? t('สินค้า') : t('เซลล์')}</th>
-                  {view === 'order' && <th>{t('ลูกค้า')}</th>}
+                  {view === 'order' && <th className="col-left">{t('ลูกค้า')}</th>}
                   {view === 'order' && <th>{t('วันที่')}</th>}
                   {view === 'order' && <th>{t('ต้นทุนที่คิด')}</th>}
                   {view !== 'order' && <th className="num">{t('ออเดอร์', 'Order')}</th>}
@@ -367,7 +367,7 @@ export default function OrderMarginReport() {
                       {r.order_status === 'Cancelled' && <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 10 }}>{t('ยกเลิกแล้ว')}</span>}
                       {view === 'product' && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>{r.product_name}</div>}
                     </td>
-                    {view === 'order' && <td style={{ fontSize: 12 }}>{r.customer_name || '-'}<div style={{ fontSize: 11, color: 'var(--text-light)' }}>{r.sales_name || ''}</div></td>}
+                    {view === 'order' && <td className="col-left" style={{ fontSize: 12 }}>{r.customer_name || '-'}<div style={{ fontSize: 11, color: 'var(--text-light)' }}>{r.sales_name || ''}</div></td>}
                     {view === 'order' && <td style={{ fontSize: 12 }}>{fmtDate(r.order_date)}</td>}
                     {view === 'order' && (
                       <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>

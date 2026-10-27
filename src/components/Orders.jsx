@@ -140,7 +140,7 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>{t('เลขออเดอร์')}</th><th>{t('เลขใบเสนอราคา')}</th><th>{t('บริษัท')}</th><th>{t('ยอดรวม')}</th><th>{t('เซลล์')}</th><th>{t('วันที่สร้าง')}</th><th>{t('สถานะ')}</th><th>{t('การจัดการ')}</th></tr></thead>
+              <thead><tr><th>{t('เลขออเดอร์')}</th><th>{t('เลขใบเสนอราคา')}</th><th className="col-left">{t('บริษัท')}</th><th>{t('ยอดรวม')}</th><th>{t('เซลล์')}</th><th>{t('วันที่สร้าง')}</th><th>{t('สถานะ')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(o => {
                   const pr = latestPaymentRequest(o)
@@ -149,7 +149,7 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
                     <tr key={o.id}>
                       <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{o.order_no}</td>
                       <td style={{ fontSize: 12 }}>{o.quot_no || '-'}</td>
-                      <td>{o.customer_name || o.company?.name || '-'}</td>
+                      <td className="col-left">{o.customer_name || o.company?.name || '-'}</td>
                       <td style={{ fontWeight: 600 }}>{fmtCurrency(o.value)}</td>
                       <td style={{ fontSize: 12 }}>{o.sales_name || '-'}</td>
                       <td style={{ fontSize: 12 }}>{fmtDate(o.created_at)}</td>

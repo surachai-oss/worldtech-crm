@@ -281,7 +281,7 @@ export default function SalesMarginSummary() {
                   <thead>
                     <tr>
                       <th>{t('เลขออเดอร์')}</th>
-                      <th>{t('ลูกค้า')}</th>
+                      <th className="col-left">{t('ลูกค้า')}</th>
                       <th>{t('วันที่')}</th>
                       <th className="num">{t('จำนวน')}<Hint help={HELP.qty} /></th>
                       <th className="num">{t('ยอดขาย')}<Hint help={HELP.sales} /></th>
@@ -296,7 +296,7 @@ export default function SalesMarginSummary() {
                           {r.order_status === 'Cancelled' && <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 10 }}>{t('ยกเลิกแล้ว')}</span>}
                           {r.order_type === 'Grade B' && <span className="badge badge-orange" style={{ marginLeft: 4, fontSize: 10 }}>GB</span>}
                         </td>
-                        <td style={{ fontSize: 12 }}>{r.customer_name || '-'}</td>
+                        <td className="col-left" style={{ fontSize: 12 }}>{r.customer_name || '-'}</td>
                         <td style={{ fontSize: 12 }}>{fmtDate(r.order_date)}</td>
                         <td className="num">{r.quantity}</td>
                         <td className="num" style={{ fontWeight: 600 }}>{fmtCurrency(r.sales)}</td>

@@ -93,6 +93,10 @@ tbody tr{transition:.15s;cursor:pointer}
 tbody tr:hover{background:#f8f9ff}
 .td-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
 
+/* คอลัมน์ข้อความยาว (ชื่อบริษัท ชื่อคน หัวข้อ ชื่อสินค้า) อ่านง่ายกว่าเมื่อชิดซ้าย
+   ใส่ที่ทั้ง th และ td ของคอลัมน์นั้น ขอบซ้ายจะได้ตรงกัน ไม่ใช่หัวกลางข้อมูลซ้าย */
+th.col-left,td.col-left{text-align:left}
+
 .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap}
 .badge-green{background:#e6f7f0;color:#276749}
 .badge-red{background:#fff5f5;color:#c53030}

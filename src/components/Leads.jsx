@@ -44,15 +44,15 @@ function DrillPopup({ title, sub, rows, loading, error, onPick, onClose }) {
                   <div className="table-wrap">
                     <table>
                       <thead><tr>
-                        <th>{t('ชื่อ')}</th><th>{t('หัวข้อ')}</th><th>{t('ติดต่อ')}</th>
+                        <th className="col-left">{t('ชื่อ')}</th><th className="col-left">{t('หัวข้อ')}</th><th>{t('ติดต่อ')}</th>
                         <th>{t('ที่มา')}</th><th>{t('สถานะ')}</th><th>{t('วันที่')}</th>
                       </tr></thead>
                       <tbody>
                         {rows.map(l => (
                           // กดแถวแล้วเปิดผู้ติดต่อคนนั้นต่อได้เลย ไม่ต้องปิดป๊อปอัปแล้วไปหาเองในตาราง
                           <tr key={l.id} onClick={() => onPick(l)} title={t('กดเพื่อเปิดผู้ติดต่อรายนี้')}>
-                            <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{l.full_name || '-'}</td>
-                            <td style={{ fontSize: 12 }}>{l.subject || '-'}</td>
+                            <td className="col-left" style={{ fontWeight: 600, color: 'var(--navy)' }}>{l.full_name || '-'}</td>
+                            <td className="col-left" style={{ fontSize: 12 }}>{l.subject || '-'}</td>
                             <td style={{ fontSize: 12 }}>
                               {l.phone || '-'}
                               {l.email && <div style={{ color: 'var(--text-light)' }}>{l.email}</div>}
@@ -223,12 +223,12 @@ export default function Leads({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>{t('หัวข้อ')}</th><th>{t('ชื่อ')}</th><th>{t('ติดต่อ')}</th><th>{t('ตำแหน่ง/ธุรกิจ')}</th><th>{t('สนใจ')}</th><th>{t('เหตุผล')}</th><th>{t('ที่มา')}</th><th>{t('สถานะ')}</th><th>{t('วันที่')}</th><th>{t('การจัดการ')}</th></tr></thead>
+              <thead><tr><th className="col-left">{t('หัวข้อ')}</th><th className="col-left">{t('ชื่อ')}</th><th>{t('ติดต่อ')}</th><th>{t('ตำแหน่ง/ธุรกิจ')}</th><th>{t('สนใจ')}</th><th>{t('เหตุผล')}</th><th>{t('ที่มา')}</th><th>{t('สถานะ')}</th><th>{t('วันที่')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(l => (
                   <tr key={l.id}>
-                    <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{l.subject}</td>
-                    <td style={{ fontSize: 12 }}>{l.full_name}</td>
+                    <td className="col-left" style={{ fontWeight: 600, color: 'var(--navy)' }}>{l.subject}</td>
+                    <td className="col-left" style={{ fontSize: 12 }}>{l.full_name}</td>
                     <td style={{ fontSize: 12 }}>{l.phone}{l.email ? <div style={{ color: 'var(--text-light)' }}>{l.email}</div> : null}</td>
                     <td style={{ fontSize: 12 }}>{l.position || '-'}{l.business_type ? <div style={{ color: 'var(--text-light)' }}>{l.business_type}</div> : null}</td>
                     <td style={{ fontSize: 12 }}>{(l.appliance_interest?.length ? l.appliance_interest.join(', ') : l.interested_product) || '-'}</td>

@@ -74,11 +74,11 @@ export default function Companies({ perm, reloadKey, onOpen, onEdit, onDelete })
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>{t('ชื่อบริษัท')}</th><th>{t('อุตสาหกรรม')}</th><th>{t('โทรศัพท์')}</th><th>{t('สถานะ')}</th><th>{t('ผู้รับผิดชอบ')}</th><th>{t('การจัดการ')}</th></tr></thead>
+              <thead><tr><th className="col-left">{t('ชื่อบริษัท')}</th><th>{t('อุตสาหกรรม')}</th><th>{t('โทรศัพท์')}</th><th>{t('สถานะ')}</th><th>{t('ผู้รับผิดชอบ')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(c => (
                   <tr key={c.id} onClick={() => onOpen(c.id)}>
-                    <td>
+                    <td className="col-left">
                       <div style={{ fontWeight: 600, color: 'var(--navy)' }}>
                         {c.name}
                         {c.customer_type === 'บุคคลธรรมดา' && <span className="badge badge-blue" style={{ marginLeft: 6, fontSize: 10, fontWeight: 400 }}>{t('บุคคล')}</span>}
