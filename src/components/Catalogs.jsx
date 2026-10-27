@@ -182,11 +182,11 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
               <thead>
                 <tr>
                   <th></th>
-                  <th>{t('ชื่อแคตตาล็อก')}</th>
-                  <th>{t('ลิงก์ (slug)')}</th>
+                  <th className="col-left">{t('ชื่อแคตตาล็อก')}</th>
+                  <th className="col-left">{t('ลิงก์ (slug)')}</th>
                   <th>{t('สถานะ')}</th>
-                  <th style={{ textAlign: 'right' }}>{t('รูปที่แสดง')}</th>
-                  <th style={{ textAlign: 'right' }}>{t('เปิดดู')}</th>
+                  <th className="col-right">{t('รูปที่แสดง')}</th>
+                  <th className="col-right">{t('เปิดดู')}</th>
                   <th>{t('แก้ไขล่าสุด')}</th>
                   <th>{t('การจัดการ')}</th>
                 </tr>
@@ -200,17 +200,17 @@ export default function Catalogs({ perm, currentUser, onOpen }) {
                             style={{ width: 46, height: 46, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)' }} />
                         : <div style={{ width: 46, height: 46, borderRadius: 4, background: 'var(--gray-bg)', border: '1px dashed var(--border)' }} />}
                     </td>
-                    <td style={{ fontWeight: 600, color: 'var(--navy)', cursor: 'pointer' }} onClick={() => onOpen(c.id)}>
+                    <td className="col-left" style={{ fontWeight: 600, color: 'var(--navy)', cursor: 'pointer' }} onClick={() => onOpen(c.id)}>
                       {c.catalog_name}
                       {c.description && <div style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 400 }}>{c.description}</div>}
                     </td>
-                    <td style={{ fontSize: 12, color: isTempSlug(c.catalog_slug) ? '#c05621' : 'var(--text-light)' }}>
+                    <td className="col-left" style={{ fontSize: 12, color: isTempSlug(c.catalog_slug) ? '#c05621' : 'var(--text-light)' }}>
                       /catalog/{c.catalog_slug}
                       {isTempSlug(c.catalog_slug) && <div style={{ fontSize: 11 }}>{t('ลิงก์ชั่วคราว — ยังไม่ได้ตั้ง')}</div>}
                     </td>
                     <td><StatusBadge status={c.status} t={t} /></td>
-                    <td style={{ textAlign: 'right' }}>{counts.get(c.id) || 0}</td>
-                    <td style={{ textAlign: 'right' }}>{views.get(c.id) || 0}</td>
+                    <td className="col-right">{counts.get(c.id) || 0}</td>
+                    <td className="col-right">{views.get(c.id) || 0}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-light)' }}>
                       {c.updated_at ? new Date(c.updated_at).toLocaleDateString('th-TH') : '-'}
                       {c.updated_by_name && <div style={{ fontSize: 11 }}>{c.updated_by_name}</div>}

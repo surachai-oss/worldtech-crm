@@ -462,14 +462,14 @@ export function OrderDetailModal({ order, items, onClose, onCancel }) {
 
           <div className="table-wrap" style={{ marginTop: 12 }}>
             <table>
-              <thead><tr><th>{lang === 'en' ? 'Product/Item' : 'สินค้า/รายการ'}</th><th style={{ textAlign: 'center' }}>{t('จำนวน')}</th><th style={{ textAlign: 'right' }}>{t('ราคา/หน่วย')}</th><th style={{ textAlign: 'right' }}>{t('รวม')}</th></tr></thead>
+              <thead><tr><th className="col-left">{lang === 'en' ? 'Product/Item' : 'สินค้า/รายการ'}</th><th className="col-right">{t('จำนวน')}</th><th className="col-right">{t('ราคา/หน่วย')}</th><th className="col-right">{t('รวม')}</th></tr></thead>
               <tbody>
                 {(items || []).map(it => (
                   <tr key={it.id}>
-                    <td>{it.description || it.product?.name || '-'}</td>
-                    <td style={{ textAlign: 'center' }}>{it.quantity}</td>
-                    <td style={{ textAlign: 'right' }}>{fmtCurrency(it.unit_price)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtCurrency((Number(it.quantity) || 0) * (Number(it.unit_price) || 0))}</td>
+                    <td className="col-left">{it.description || it.product?.name || '-'}</td>
+                    <td className="col-right">{it.quantity}</td>
+                    <td className="col-right">{fmtCurrency(it.unit_price)}</td>
+                    <td className="col-right" style={{ fontWeight: 600 }}>{fmtCurrency((Number(it.quantity) || 0) * (Number(it.unit_price) || 0))}</td>
                   </tr>
                 ))}
               </tbody>

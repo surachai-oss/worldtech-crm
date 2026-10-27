@@ -217,12 +217,12 @@ export default function Users({ currentUserId, accessToken }) {
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>{t('ชื่อ')}</th><th>{t('อีเมล')}</th><th>{t('สิทธิ์')}</th><th>{t('เข้าร่วมเมื่อ')}</th><th>{t('การจัดการ')}</th></tr></thead>
+              <thead><tr><th className="col-left">{t('ชื่อ')}</th><th className="col-left">{t('อีเมล')}</th><th>{t('สิทธิ์')}</th><th>{t('เข้าร่วมเมื่อ')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(u => (
                   <tr key={u.id}>
-                    <td style={{ fontWeight: 500 }}>{u.full_name}{u.id === currentUserId && <span style={{ color: 'var(--text-light)', fontWeight: 400 }}> {t('(คุณ)')}</span>}</td>
-                    <td style={{ fontSize: 12 }}>{u.email}</td>
+                    <td className="col-left" style={{ fontWeight: 500 }}>{u.full_name}{u.id === currentUserId && <span style={{ color: 'var(--text-light)', fontWeight: 400 }}> {t('(คุณ)')}</span>}</td>
+                    <td className="col-left" style={{ fontSize: 12 }}>{u.email}</td>
                     <td>
                       <select className="filter-select" value={u.role} onChange={e => onChangeRole(u, e.target.value)}>
                         {CONSTANTS.ROLES.map(r => <option key={r} value={r}>{t(ROLE_LABEL[r]) || r}</option>)}

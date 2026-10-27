@@ -166,14 +166,14 @@ function DetailModal({ req, currentUserName, onClose, onChanged }) {
             <div style={{ marginTop: 12 }}>
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>{t('สินค้า/รายการ')}</th><th style={{ textAlign: 'center' }}>{t('จำนวน')}</th><th style={{ textAlign: 'right' }}>{t('ราคา/หน่วย')}</th><th style={{ textAlign: 'right' }}>{t('รวม')}</th></tr></thead>
+                  <thead><tr><th className="col-left">{t('สินค้า/รายการ')}</th><th className="col-right">{t('จำนวน')}</th><th className="col-right">{t('ราคา/หน่วย')}</th><th className="col-right">{t('รวม')}</th></tr></thead>
                   <tbody>
                     {orderItems.map(it => (
                       <tr key={it.id}>
-                        <td>{it.description || it.product?.name || '-'}</td>
-                        <td style={{ textAlign: 'center' }}>{it.quantity}</td>
-                        <td style={{ textAlign: 'right' }}>{fmtCurrency(it.unit_price)}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtCurrency((Number(it.quantity) || 0) * (Number(it.unit_price) || 0))}</td>
+                        <td className="col-left">{it.description || it.product?.name || '-'}</td>
+                        <td className="col-right">{it.quantity}</td>
+                        <td className="col-right">{fmtCurrency(it.unit_price)}</td>
+                        <td className="col-right" style={{ fontWeight: 600 }}>{fmtCurrency((Number(it.quantity) || 0) * (Number(it.unit_price) || 0))}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -305,9 +305,9 @@ export default function AccountingDocuments({ reloadKey, currentUserName, perm, 
             <table>
               <thead>
                 <tr>
-                  <th>{t('เลขที่ออเดอร์')}</th><th>{t('วันที่ออเดอร์')}</th><th>{t('ลูกค้า')}</th><th>{t('เซลล์')}</th><th>{t('ยอดเงิน')}</th>
+                  <th>{t('เลขที่ออเดอร์')}</th><th>{t('วันที่ออเดอร์')}</th><th className="col-left">{t('บริษัท')}</th><th className="col-left">{t('เซลล์')}</th><th className="col-right">{t('ยอดเงิน')}</th>
                   <th>{t('ประเภทเอกสาร')}</th><th>{t('วิธีส่ง')}</th><th>{t('ความเร่งด่วน')}</th><th>{t('สถานะ')}</th>
-                  <th>{t('อีเมลลูกค้า')}</th><th>{t('ส่งตัวจริง')}</th><th>Tracking</th>
+                  <th className="col-left">{t('อีเมลลูกค้า')}</th><th>{t('ส่งตัวจริง')}</th><th>Tracking</th>
                   <th>{t('การจัดการ')}</th>
                 </tr>
               </thead>
@@ -319,14 +319,14 @@ export default function AccountingDocuments({ reloadKey, currentUserName, perm, 
                       {req.order?.order_no || '-'}
                     </td>
                     <td style={{ fontSize: 12 }}>{fmtDate(req.order?.created_at)}</td>
-                    <td>{req.customer_name || '-'}</td>
-                    <td style={{ fontSize: 12 }}>{req.sales_name || '-'}</td>
-                    <td style={{ fontWeight: 600 }}>{fmtCurrency(req.order?.value)}</td>
+                    <td className="col-left">{req.customer_name || '-'}</td>
+                    <td className="col-left" style={{ fontSize: 12 }}>{req.sales_name || '-'}</td>
+                    <td className="col-right" style={{ fontWeight: 600 }}>{fmtCurrency(req.order?.value)}</td>
                     <td style={{ fontSize: 12 }}>{req.document_type}</td>
                     <td style={{ fontSize: 12 }}>{req.delivery_method}</td>
                     <td>{req.priority !== 'ปกติ' ? <span className={`badge ${docPriorityBadgeClass(req.priority)}`}>{req.priority}</span> : '-'}</td>
                     <td><span className={`badge ${docStatusBadgeClass(req.document_status)}`}>{req.document_status}</span></td>
-                    <td style={{ fontSize: 12 }}>{req.email_to || '-'}</td>
+                    <td className="col-left" style={{ fontSize: 12 }}>{req.email_to || '-'}</td>
                     <td style={{ fontSize: 12 }}>{NEEDS_ORIGINAL(req.delivery_method) ? t('ใช่') : t('ไม่')}</td>
                     <td style={{ fontSize: 12 }}>{req.original_tracking_no || '-'}</td>
                     <td className="td-actions">

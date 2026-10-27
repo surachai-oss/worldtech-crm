@@ -33,11 +33,11 @@ function KpiDetailModal({ config, onClose }) {
           </div>
           <div className="table-wrap">
             <table>
-              <thead><tr>{config.columns.map(c => <th key={c.key}>{t(c.label)}</th>)}</tr></thead>
+              <thead><tr>{config.columns.map(c => <th key={c.key} className={DRILL_ALIGN[c.key] || ''}>{t(c.label)}</th>)}</tr></thead>
               <tbody>
                 {rows.length ? rows.map((r, i) => (
                   <tr key={r.id || i}>
-                    {config.columns.map(c => <td key={c.key}>{c.render ? c.render(r) : (r[c.key] ?? '-')}</td>)}
+                    {config.columns.map(c => <td key={c.key} className={DRILL_ALIGN[c.key] || ''}>{c.render ? c.render(r) : (r[c.key] ?? '-')}</td>)}
                   </tr>
                 )) : <tr><td colSpan={config.columns.length} style={{ textAlign: 'center', padding: 24, color: 'var(--text-light)' }}>{t('ไม่มีข้อมูลในช่วงที่เลือก')}</td></tr>}
               </tbody>
@@ -47,6 +47,13 @@ function KpiDetailModal({ config, onClose }) {
       </div>
     </div>
   )
+}
+
+// ตารางเจาะลึกสร้างคอลัมน์จาก config ทีละอัน เลยกำหนดการจัดวางจากชื่อคอลัมน์ที่เดียว
+// ข้อความยาวชิดซ้าย จำนวนเงินชิดขวา ที่เหลือจัดกลางตามค่าเริ่มต้นของตาราง
+const DRILL_ALIGN = {
+  name: 'col-left', company: 'col-left', subject: 'col-left', industry: 'col-left',
+  value: 'col-right', _value: 'col-right',
 }
 
 export default function Dashboard({ data, onNav }) {
@@ -154,15 +161,15 @@ export default function Dashboard({ data, onNav }) {
             </div>
             <div className="table-wrap" style={{ marginTop: 10 }}>
               <table>
-                <thead><tr><th>Stage</th><th style={{ textAlign: 'center' }}>{t('จำนวน')}</th><th style={{ textAlign: 'right' }}>{t('มูลค่า')}</th></tr></thead>
+                <thead><tr><th className="col-left">Stage</th><th className="col-right">{t('จำนวน')}</th><th className="col-right">{t('มูลค่า')}</th></tr></thead>
                 <tbody>
                   {stages.map(st => {
                     const info = d.stageData[st] || { count: 0, value: 0 }
                     return (
                       <tr key={st}>
-                        <td><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: stageColor(st), marginRight: 6 }} />{st}</td>
-                        <td style={{ textAlign: 'center', fontWeight: 600 }}>{info.count}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(info.value)}</td>
+                        <td className="col-left"><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: stageColor(st), marginRight: 6 }} />{st}</td>
+                        <td className="col-right" style={{ fontWeight: 600 }}>{info.count}</td>
+                        <td className="col-right" style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(info.value)}</td>
                       </tr>
                     )
                   })}
@@ -176,13 +183,13 @@ export default function Dashboard({ data, onNav }) {
           <div className="card-body" style={{ padding: 0 }}>
             <div className="table-wrap" style={{ border: 'none' }}>
               <table>
-                <thead><tr><th>{t('ดีล')}</th><th>Stage</th><th>{t('มูลค่า')}</th><th>{t('กำหนด')}</th></tr></thead>
+                <thead><tr><th className="col-left">{t('ดีล')}</th><th>Stage</th><th className="col-right">{t('มูลค่า')}</th><th>{t('กำหนด')}</th></tr></thead>
                 <tbody>
                   {d.topDeals.length ? d.topDeals.map(dl => (
                     <tr key={dl.id}>
-                      <td><div style={{ fontWeight: 500 }}>{dl.name}</div><div style={{ fontSize: 11, color: 'var(--text-light)' }}>{dl.companyName}</div></td>
+                      <td className="col-left"><div style={{ fontWeight: 500 }}>{dl.name}</div><div style={{ fontSize: 11, color: 'var(--text-light)' }}>{dl.companyName}</div></td>
                       <td><span className={`badge ${stageBadgeClass(dl.stage)}`}>{dl.stage}</span></td>
-                      <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(dl.value)}</td>
+                      <td className="col-right" style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(dl.value)}</td>
                       <td style={{ fontSize: 12 }}>{fmtDate(dl.close_date)}</td>
                     </tr>
                   )) : <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-light)', padding: 20 }}>{t('ยังไม่มีดีล')}</td></tr>}
@@ -217,14 +224,14 @@ export default function Dashboard({ data, onNav }) {
             <div className="table-wrap" style={{ border: 'none' }}>
               {d.upcomingTasks.length ? (
                 <table>
-                  <thead><tr><th>{t('งาน')}</th><th>{t('บริษัท')}</th><th>{t('กำหนด')}</th><th>{t('ลำดับ')}</th></tr></thead>
+                  <thead><tr><th className="col-left">{t('งาน')}</th><th className="col-left">{t('บริษัท')}</th><th>{t('กำหนด')}</th><th>{t('ลำดับ')}</th></tr></thead>
                   <tbody>
                     {d.upcomingTasks.map(t2 => {
                       const ov = isOverdue(t2.due_date), td = isDueToday(t2.due_date)
                       return (
                         <tr key={t2.id}>
-                          <td style={{ fontWeight: 500 }}>{t2.subject}</td>
-                          <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{t2.companyName || '-'}</td>
+                          <td className="col-left" style={{ fontWeight: 500 }}>{t2.subject}</td>
+                          <td className="col-left" style={{ fontSize: 12, color: 'var(--text-light)' }}>{t2.companyName || '-'}</td>
                           <td className={ov ? 'overdue' : td ? 'due-today' : ''}>{fmtDate(t2.due_date)}</td>
                           <td>{t2.priority}</td>
                         </tr>

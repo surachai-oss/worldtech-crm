@@ -137,9 +137,9 @@ export default function CatalogViewReport({ onClose }) {
               <table>
                 <thead>
                   <tr>
-                    <th style={{ position: 'sticky', left: 0, background: 'var(--navy)' }}>{t('เดือน')}</th>
-                    {catalogs.map(c => <th key={c.id} style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{c.name}</th>)}
-                    <th style={{ textAlign: 'right' }}>{t('รวม')}</th>
+                    <th className="col-left" style={{ position: 'sticky', left: 0, background: 'var(--navy)' }}>{t('เดือน')}</th>
+                    {catalogs.map(c => <th key={c.id} className="col-right" style={{ whiteSpace: 'nowrap' }}>{c.name}</th>)}
+                    <th className="col-right">{t('รวม')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -148,15 +148,15 @@ export default function CatalogViewReport({ onClose }) {
                       <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{monthLabel(m)}</td>
                       {catalogs.map(c => {
                         const v = cell.get(`${m}|${c.id}`) || 0
-                        return <td key={c.id} style={{ textAlign: 'right', color: v ? 'var(--text)' : 'var(--text-light)' }}>{v || '-'}</td>
+                        return <td key={c.id} className="col-right" style={{ color: v ? 'var(--text)' : 'var(--text-light)' }}>{v || '-'}</td>
                       })}
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{monthTotal.get(m) || 0}</td>
+                      <td className="col-right" style={{ fontWeight: 600 }}>{monthTotal.get(m) || 0}</td>
                     </tr>
                   ))}
                   <tr style={{ background: 'var(--gray-bg)' }}>
                     <td style={{ fontWeight: 700 }}>{t('รวมทั้งช่วง')}</td>
-                    {catalogs.map(c => <td key={c.id} style={{ textAlign: 'right', fontWeight: 700 }}>{catalogTotal.get(c.id) || 0}</td>)}
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--navy)' }}>{grand}</td>
+                    {catalogs.map(c => <td key={c.id} className="col-right" style={{ fontWeight: 700 }}>{catalogTotal.get(c.id) || 0}</td>)}
+                    <td className="col-right" style={{ fontWeight: 700, color: 'var(--navy)' }}>{grand}</td>
                   </tr>
                 </tbody>
               </table>

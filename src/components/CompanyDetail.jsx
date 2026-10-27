@@ -115,13 +115,13 @@ function ContactsTab({ contacts, perm, company, onAdd, onEdit, onDelete }) {
       <div className="card"><div className="table-wrap">
         {contacts.length ? (
           <table>
-            <thead><tr><th>{t('ชื่อ')}</th><th>{t('ตำแหน่ง')}</th><th>{t('โทรศัพท์')}</th><th>{t('อีเมล')}</th><th>Line</th><th>{t('การจัดการ')}</th></tr></thead>
+            <thead><tr><th className="col-left">{t('ชื่อ')}</th><th className="col-left">{t('ตำแหน่ง')}</th><th>{t('โทรศัพท์')}</th><th className="col-left">{t('อีเมล')}</th><th>Line</th><th>{t('การจัดการ')}</th></tr></thead>
             <tbody>{contacts.map(c => (
               <tr key={c.id}>
-                <td><div style={{ fontWeight: 500 }}>{c.full_name}</div><div style={{ fontSize: 11, color: 'var(--text-light)' }}>{c.department}</div></td>
-                <td style={{ fontSize: 12 }}>{c.position || '-'}</td>
+                <td className="col-left"><div style={{ fontWeight: 500 }}>{c.full_name}</div><div style={{ fontSize: 11, color: 'var(--text-light)' }}>{c.department}</div></td>
+                <td className="col-left" style={{ fontSize: 12 }}>{c.position || '-'}</td>
                 <td style={{ fontSize: 12 }}>{c.phone || '-'}</td>
-                <td style={{ fontSize: 12 }}>{c.email || '-'}</td>
+                <td className="col-left" style={{ fontSize: 12 }}>{c.email || '-'}</td>
                 <td style={{ fontSize: 12 }}>{c.line_id || '-'}</td>
                 <td className="td-actions">
                   {manageable && <button className="btn btn-outline btn-xs" onClick={() => onEdit(c)}>{t('แก้ไข')}</button>}
@@ -145,14 +145,14 @@ function DealsTab({ deals, quotations, perm, onAdd, onEdit, onDelete, onCreateQu
         {deals.length ? (
           <table>
             {/* คอลัมน์นี้คือ deals.owner ซึ่งเป็นคนฝั่งลูกค้า ไม่ใช่เซลล์ของเรา — ให้ชื่อตรงกับป้ายในฟอร์มแก้ไขดีล */}
-            <thead><tr><th>{t('ชื่อดีล')}</th><th>Stage</th><th>{t('มูลค่า')}</th><th>{t('วันปิดดีล')}</th><th>{t('ผู้รับผิดชอบ (ลูกค้า)')}</th><th>{t('การจัดการ')}</th></tr></thead>
+            <thead><tr><th className="col-left">{t('ชื่อดีล')}</th><th>Stage</th><th className="col-right">{t('มูลค่า')}</th><th>{t('วันปิดดีล')}</th><th>{t('ผู้รับผิดชอบ (ลูกค้า)')}</th><th>{t('การจัดการ')}</th></tr></thead>
             <tbody>{deals.map(d => {
               const qCount = quotations.filter(q => q.deal_id === d.id).length
               return (
                 <tr key={d.id}>
-                  <td style={{ fontWeight: 500 }}>{d.name}{qCount > 0 && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{lang === 'en' ? `${qCount} quotation(s) issued` : `ออกใบเสนอราคาแล้ว ${qCount} ใบ`}</div>}</td>
+                  <td className="col-left" style={{ fontWeight: 500 }}>{d.name}{qCount > 0 && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{lang === 'en' ? `${qCount} quotation(s) issued` : `ออกใบเสนอราคาแล้ว ${qCount} ใบ`}</div>}</td>
                   <td><span className={`badge ${stageBadgeClass(d.stage)}`}>{d.stage}</span></td>
-                  <td style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(d.value)}</td>
+                  <td className="col-right" style={{ fontWeight: 600, color: 'var(--navy)' }}>{fmtCurrency(d.value)}</td>
                   <td style={{ fontSize: 12 }}>{fmtDate(d.close_date)}</td>
                   <td style={{ fontSize: 12 }}>{d.owner || '-'}</td>
                   <td className="td-actions">
@@ -204,7 +204,7 @@ function TasksTab({ tasks, perm, onAdd, onEdit, onComplete, onDelete }) {
       <div className="card"><div className="table-wrap">
         {tasks.length ? (
           <table>
-            <thead><tr><th>{t('งาน')}</th><th>{t('ลำดับ')}</th><th>{t('วันครบกำหนด')}</th><th>{t('สถานะ')}</th><th>{t('การจัดการ')}</th></tr></thead>
+            <thead><tr><th className="col-left">{t('งาน')}</th><th>{t('ลำดับ')}</th><th>{t('วันครบกำหนด')}</th><th>{t('สถานะ')}</th><th>{t('การจัดการ')}</th></tr></thead>
             <tbody>{tasks.map(task => {
               const ov = task.status !== 'เสร็จสิ้น' && isOverdue(task.due_date)
               return (
@@ -237,7 +237,7 @@ function QuotationsTab({ quotations, deals, company, perm, settings, onAdd, onEd
       <div className="card"><div className="table-wrap">
         {quotations.length ? (
           <table>
-            <thead><tr><th>{t('เลขที่')}</th><th>{t('หัวข้อ')}</th><th>{t('มูลค่า')}</th><th>{t('สถานะ')}</th><th>{t('วันที่')}</th><th>{t('ครบกำหนดชำระ')}</th><th>{t('การชำระ')}</th><th>{t('การจัดการ')}</th></tr></thead>
+            <thead><tr><th>{t('เลขที่')}</th><th className="col-left">{t('หัวข้อ')}</th><th className="col-right">{t('มูลค่า')}</th><th>{t('สถานะ')}</th><th>{t('วันที่')}</th><th>{t('ครบกำหนดชำระ')}</th><th>{t('การชำระ')}</th><th>{t('การจัดการ')}</th></tr></thead>
             <tbody>{quotations.map(q => {
               const fromDeal = q.deal_id ? deals.find(d => d.id === q.deal_id) : null
               const ov = q.payment_status !== 'ชำระแล้ว' && isOverdue(q.payment_due_date)
@@ -340,12 +340,12 @@ function AttachmentsTab({ company, perm, currentUserName }) {
       <div className="card"><div className="table-wrap">
         {files.length ? (
           <table>
-            <thead><tr><th>{t('ไฟล์')}</th><th>{t('ขนาด')}</th><th>{t('อัปโหลดโดย')}</th><th>{t('วันที่')}</th><th>{t('การจัดการ')}</th></tr></thead>
+            <thead><tr><th className="col-left">{t('ไฟล์')}</th><th>{t('ขนาด')}</th><th className="col-left">{t('อัปโหลดโดย')}</th><th>{t('วันที่')}</th><th>{t('การจัดการ')}</th></tr></thead>
             <tbody>{files.map(f => (
               <tr key={f.id}>
-                <td style={{ fontWeight: 500 }}>{f.file_name}</td>
+                <td className="col-left" style={{ fontWeight: 500 }}>{f.file_name}</td>
                 <td style={{ fontSize: 12 }}>{fmtFileSize(f.file_size)}</td>
-                <td style={{ fontSize: 12 }}>{f.uploaded_by || '-'}</td>
+                <td className="col-left" style={{ fontSize: 12 }}>{f.uploaded_by || '-'}</td>
                 <td style={{ fontSize: 12 }}>{fmtDate(f.created_at)}</td>
                 <td className="td-actions">
                   <button className="btn btn-outline btn-xs" onClick={() => onDownload(f)}>{t('ดาวน์โหลด')}</button>

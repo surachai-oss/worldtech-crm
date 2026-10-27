@@ -75,15 +75,15 @@ export default function Tasks({ perm, reloadKey, onNavCompany, onAdd, onEdit, on
         <div className="table-wrap">
           {rows.length ? (
             <table>
-              <thead><tr><th>{t('งาน')}</th><th>{t('บริษัท/ผู้ติดต่อ')}</th><th>{t('วันครบกำหนด')}</th><th>{t('ลำดับ')}</th><th>{t('สถานะ')}</th><th>{t('ผู้รับผิดชอบ')}</th><th>{t('การจัดการ')}</th></tr></thead>
+              <thead><tr><th className="col-left">{t('งาน')}</th><th className="col-left">{t('บริษัท/ผู้ติดต่อ')}</th><th>{t('วันครบกำหนด')}</th><th>{t('ลำดับ')}</th><th>{t('สถานะ')}</th><th>{t('ผู้รับผิดชอบ')}</th><th>{t('การจัดการ')}</th></tr></thead>
               <tbody>
                 {rows.map(task => {
                   const ov = task.status !== 'เสร็จสิ้น' && isOverdue(task.due_date)
                   const td = isDueToday(task.due_date)
                   return (
                     <tr key={task.id} style={{ background: ov ? '#fff5f5' : td ? '#fffbeb' : undefined }}>
-                      <td><div style={{ fontWeight: 500 }}>{task.subject}</div>{task.note && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{task.note}</div>}</td>
-                      <td style={{ fontSize: 12 }}>
+                      <td className="col-left"><div style={{ fontWeight: 500 }}>{task.subject}</div>{task.note && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{task.note}</div>}</td>
+                      <td className="col-left" style={{ fontSize: 12 }}>
                         {task.company
                           ? <a onClick={() => onNavCompany(task.company.id)}>{task.company.name}</a>
                           : task.lead
