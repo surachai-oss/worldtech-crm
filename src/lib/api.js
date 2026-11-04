@@ -176,7 +176,8 @@ export async function fetchQuotationsTotal({ status = '', q = '', dateFrom = '',
   return data.reduce((s, x) => s + (Number(x.value) || 0), 0)
 }
 
-export async function fetchQuotationsPage({ page = 0, status = '', q = '', dateFrom = '', dateTo = '', creditType = '' } = {}) {
+// all = true ข้ามการแบ่งหน้า ใช้ตอนส่งออกไฟล์ ซึ่งต้องได้ทุกแถวที่ตรงตัวกรอง ไม่ใช่แค่ 20 แถวของหน้าที่เปิดอยู่
+export async function fetchQuotationsPage({ page = 0, status = '', q = '', dateFrom = '', dateTo = '', creditType = '', all = false } = {}) {
   let query = supabase.from('quotations').select('*, company:companies(id,name,address,tax_id,phone,created_by,credit_term), product:products(id,code,name,image_path)', { count: 'exact' }).order('created_at', { ascending: false })
   if (status) query = query.eq('status', status)
   // credit_term ของใบเสนอราคาที่ไม่ใช่เครดิตถูกเก็บเป็น '' (ไม่ใช่ null) มาตั้งแต่ต้น (ดู QuotationModal) — เช็คทั้งสองแบบกันฟิลเตอร์พลาด
@@ -191,7 +192,7 @@ export async function fetchQuotationsPage({ page = 0, status = '', q = '', dateF
   }
   if (dateFrom) query = query.gte('quot_date', dateFrom)
   if (dateTo) query = query.lte('quot_date', dateTo)
-  const { data, error, count } = await query.range(...range(page))
+  const { data, error, count } = all ? await query : await query.range(...range(page))
   if (error) throw error
   return { rows: data, count, pageSize: PAGE_SIZE }
 }

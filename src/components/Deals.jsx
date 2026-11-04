@@ -220,7 +220,11 @@ export default function Deals({ perm, deals, companies, quotations = [], current
   const doExportForImport = async () => {
     setExporting2(true)
     try {
-      await exportDealsForImport(await attachDealItems(visibleDeals))
+      // deals ดึงมาด้วย select('*') ไม่มี company ติดมาด้วย ต้องเติมชื่อบริษัทเองจาก companies
+      // ไม่งั้นช่อง "ชื่อบริษัท" ในไฟล์จะว่าง ซึ่งเป็นช่องบังคับ นำเข้ากลับไม่ได้สักแถว
+      const byId = new Map(companies.map(c => [c.id, c]))
+      const withCompany = visibleDeals.map(d => ({ ...d, company: byId.get(d.company_id) || null }))
+      await exportDealsForImport(await attachDealItems(withCompany))
     } catch (e) { toast('ส่งออกไม่สำเร็จ: ' + e.message, 'error') }
     finally { setExporting2(false) }
   }

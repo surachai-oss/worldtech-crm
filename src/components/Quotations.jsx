@@ -38,7 +38,9 @@ export default function Quotations({ perm, reloadKey, settings, deals, isAdmin, 
   const doExportForImport = async () => {
     setExporting(true)
     try {
-      await exportQuotationsForImport(await attachQuotationItems(rows))
+      // ดึงใหม่แบบไม่แบ่งหน้า ไม่งั้นได้แค่ 20 แถวของหน้าที่เปิดอยู่ ซึ่งไม่ตรงกับที่คนกดคาดหวัง
+      const { rows: allRows } = await fetchQuotationsPage({ status, q, dateFrom: fromDate, dateTo: toDate, creditType, all: true })
+      await exportQuotationsForImport(await attachQuotationItems(allRows))
     } catch (e) { toast(t('ส่งออกไม่สำเร็จ') + ': ' + e.message, 'error') }
     finally { setExporting(false) }
   }
