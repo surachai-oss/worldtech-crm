@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { fetchOrders, listOrderItems, ORDER_STATUS, PAYMENT_STATUS, ACCOUNTING_DOC_STATUS } from '../lib/api'
 import { fmtCurrency, fmtDate, paymentStatusLabel, paymentBadgeClass, docStatusBadgeClass, currentMonthRange } from '../lib/format'
-import { exportOrdersToExcel } from '../lib/importExport'
+import { exportOrdersToExcel, exportOrdersForImport } from '../lib/importExport'
+import { loadThaiAddress, listProvinces } from '../lib/thaiAddress'
+import ImportDocsModal from './ImportDocsModal'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
 import { OrderDetailModal } from './OrderModal'
@@ -52,7 +54,7 @@ function ActionStack({ button, badge, fixedWidth = false }) {
   )
 }
 
-export default function Orders({ reloadKey, companies, perm, currentUser, settings, onAdd, onCancel, onChanged }) {
+export default function Orders({ reloadKey, companies, quotations = [], perm, currentUser, settings, onAdd, onCancel, onChanged }) {
   const { toast } = useUi()
   const { t, lang } = useLanguage()
   const [status, setStatus] = useState('')
@@ -66,6 +68,9 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
   const [docModalOrder, setDocModalOrder] = useState(null)
   const [paymentModalOrder, setPaymentModalOrder] = useState(null)
   const [exporting, setExporting] = useState(false)
+  const [exporting2, setExporting2] = useState(false)
+  const [showImport, setShowImport] = useState(false)
+  const [provinces, setProvinces] = useState([])
   // บัญชี/แอดมินเห็นสรุปฉบับเต็ม (มีต้นทุน/กำไร) เซลล์เห็นฉบับของตัวเอง (ไม่มีต้นทุน) — คนละคอมโพเนนต์กัน
   // เริ่มต้นซ่อนไว้ทั้งคู่ กันบังรายการออเดอร์ที่เป็นงานหลักของหน้านี้
   const [showReport, setShowReport] = useState(false)
@@ -101,13 +106,40 @@ export default function Orders({ reloadKey, companies, perm, currentUser, settin
     catch (e) { toast('โหลดรายการสินค้าไม่สำเร็จ: ' + e.message, 'error') }
   }
 
+  // ส่งออกตามรูปแบบ template นำเข้าออเดอร์ (1 แถว = 1 ออเดอร์) เอาไปแก้ที่อยู่แล้วนำเข้าต่อได้
+  const doExportForImport = async () => {
+    setExporting2(true)
+    try { await exportOrdersForImport(rows) }
+    catch (e) { toast(t('ส่งออกไม่สำเร็จ') + ': ' + e.message, 'error') }
+    finally { setExporting2(false) }
+  }
+
+  // รายชื่อจังหวัดโหลดตอนกดเท่านั้น ไฟล์ที่อยู่ไทยใหญ่ ไม่ควรโหลดทุกครั้งที่เปิดหน้าออเดอร์
+  const openImport = async () => {
+    try { setProvinces(listProvinces(await loadThaiAddress())) } catch { setProvinces([]) }
+    setShowImport(true)
+  }
+
   return (
     <div className="list-view">
+      {showImport && (
+        <ImportDocsModal
+          kind="order" companies={companies} quotations={quotations} currentUser={currentUser}
+          provinces={provinces}
+          onClose={() => setShowImport(false)}
+          onImported={() => { setLocalBump(b => b + 1); onChanged?.() }}
+        />
+      )}
       <div className="section-header">
         <div className="section-title">{t('ออเดอร์')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({rows.length} {t('รายการ')})</span></div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className={`btn btn-sm ${showReport ? 'btn-secondary' : 'btn-outline'}`} onClick={() => setShowReport(v => !v)}>
             {(perm?.isAdmin || perm?.isFinance) ? t('สรุปกำไร/ส่วนลด') : t('สรุปยอดขายของฉัน')}
+          </button>
+          {/* นำเข้าเป็นชุด — เปิดออเดอร์จากใบเสนอราคาที่มีอยู่ ทีละหลายใบ */}
+          <button className="btn btn-outline btn-sm" onClick={openImport}>{t('นำเข้าจากไฟล์')}</button>
+          <button className="btn btn-outline btn-sm" onClick={doExportForImport} disabled={exporting2 || !rows.length}>
+            {exporting2 ? t('กำลังส่งออก...') : t('ส่งออก (ไฟล์นำเข้าได้)')}
           </button>
           <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting}>{exporting ? t('กำลังส่งออก...') : t('ส่งออกเป็น Excel')}</button>
           <button className="btn btn-primary" onClick={onAdd}>{t('+ สร้างออเดอร์')}</button>

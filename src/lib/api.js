@@ -1,7 +1,7 @@
 import { supabase } from '../supabaseClient'
 import { TEMPLATE_SETTING_KEY, LEGACY_COMPANY_KEYS, documentLogoPath } from './documentTemplate'
 import { normalizeLeadSource, LEAD_SOURCE_UNKNOWN, LEAD_SOURCE_INVALID, leadSourceBucket, leadStatusBucket } from './leadOptions'
-import { toLocalDateStr } from './format'
+import { toLocalDateStr, composeShippingAddress } from './format'
 import { BACKCOVER_SETTING_KEY, mergeBackCover, parseBackCover } from './catalogBackCover'
 
 // ===== CONSTANTS (ค่าคงที่ระบบที่ไม่ให้ผู้ใช้แก้เอง) =====
@@ -410,6 +410,106 @@ export async function addQuotationWithItems(fields, items) {
 // นำเข้าใบเสนอราคาเป็นชุดจากไฟล์ — สร้างทีละใบเพราะเลข QT ต้องขอจาก gen_quot_no ฝั่ง DB ทีละครั้ง
 // ไม่ใช้ transaction เดียวทั้งก้อน เพราะถ้าใบที่ 50 พังแล้ว rollback ทั้งหมด คนกรอกจะไม่รู้ว่าพังที่ใบไหน
 // คืนทั้งใบที่สำเร็จและใบที่พังพร้อมเหตุผล ให้หน้าจอบอกได้ว่าเข้าไปแล้วกี่ใบ เหลือกี่ใบที่ต้องแก้
+// ดึงรายการสินค้าของเอกสารหลายใบในครั้งเดียว แล้วแปะกลับเข้าแต่ละใบ
+// ใช้ตอนส่งออกแบบที่นำเข้ากลับได้ ซึ่งต้องมีรายการสินค้าครบ ไม่ใช่แค่ยอดรวม
+// ยิงทีละ 200 ใบ กัน URL ยาวเกินจนโดนปฏิเสธเวลาเลือกช่วงวันที่กว้างๆ
+async function attachItems(docs, table, fkColumn) {
+  const ids = docs.map(d => d.id).filter(Boolean)
+  const byDoc = new Map(ids.map(id => [id, []]))
+  for (let i = 0; i < ids.length; i += 200) {
+    const chunk = ids.slice(i, i + 200)
+    const rows = await supabase.from(table)
+      .select('*, product:products(id,code,name)')
+      .in(fkColumn, chunk)
+      .order('sort_order', { ascending: true })
+      .then(handle)
+    rows.forEach(r => { byDoc.get(r[fkColumn])?.push(r) })
+  }
+  return docs.map(d => ({ ...d, items: byDoc.get(d.id) || [] }))
+}
+
+export const attachDealItems = (deals) => attachItems(deals, 'deal_items', 'deal_id')
+export const attachQuotationItems = (quotations) => attachItems(quotations, 'quotation_items', 'quotation_id')
+
+// นำเข้าดีลเป็นชุดจากไฟล์ — ใช้โครงเดียวกับ bulkImportQuotations
+// สร้างทีละใบและคืนผลรายใบ เพราะถ้า rollback ทั้งก้อนคนกรอกจะไม่รู้ว่าพังที่ใบไหน
+export async function bulkImportDeals(groups, { proposerName = '', defaultStage = 'Lead' } = {}) {
+  const created = []
+  const failed = []
+  for (const g of groups) {
+    try {
+      const deal = await addDealWithItems({
+        company_id: g.company_id,
+        name: g.subject,
+        stage: g.stage || defaultStage,
+        source: g.source || null,
+        close_date: g.close_date || null,
+        follow_up_date: g.follow_up_date || null,
+        owner: g.customer_contact || null,          // ผู้รับผิดชอบฝั่งลูกค้า เก็บในช่อง owner ตามของเดิม
+        created_by_name: proposerName || null,      // เซลล์ผู้เปิดดีล = ผู้เสนอราคา
+        note: g.note || null,
+        discount_type: g.discount_type || null,
+        discount_value: Number(g.discount_value) || 0,
+      }, g.items)
+      created.push({ ref: g.ref, quot_no: deal.name, subject: g.subject })
+    } catch (e) {
+      failed.push({ ref: g.ref, subject: g.subject, message: e.message })
+    }
+  }
+  return { created, failed }
+}
+
+// นำเข้าออเดอร์เป็นชุด — 1 แถว = 1 ออเดอร์ เปิดจากใบเสนอราคาที่ระบุ
+// รายการสินค้า บริษัท และส่วนลด ดึงจากใบเสนอราคาให้เอง ไม่ให้กรอกเอง
+// เพื่อให้ออเดอร์ตรงกับใบเสนอราคาเสมอ และกันพลาดจากการพิมพ์ซ้ำ
+export async function bulkImportOrders(rows, { currentUser, companiesById = new Map() } = {}) {
+  const created = []
+  const failed = []
+  for (const r of rows) {
+    const quot = r.quotation
+    try {
+      const items = await listQuotationItems(quot.id)
+      if (!items.length) throw new Error('ใบเสนอราคานี้ไม่มีรายการสินค้า')
+      const company = companiesById.get(quot.company_id) || null
+      const orderType = r.order_type === 'Grade B' ? 'Grade B' : 'ปกติ'
+      const orderNo = await genOrderNo(orderType)
+      const ship = {
+        line1: r.shipping_line1 || '', subdistrict: r.shipping_subdistrict || '',
+        district: r.shipping_district || '', province: r.shipping_province || '',
+        postcode: r.shipping_postcode || '',
+      }
+      const order = await addOrderWithItems({
+        order_no: orderNo, order_type: orderType,
+        quotation_id: quot.id, quot_no: quot.quot_no,
+        company_id: quot.company_id || null,
+        customer_name: company?.name || null,
+        customer_contact: r.customer_contact || quot.customer_contact || null,
+        company_tax_id: company?.tax_id || null, company_address: company?.address || null,
+        company_phone: company?.phone || null, company_email: company?.email || null,
+        shipping_address: composeShippingAddress(ship),
+        shipping_line1: ship.line1 || null,
+        shipping_subdistrict: ship.subdistrict || null,
+        shipping_district: ship.district || null,
+        shipping_province: ship.province || null,
+        shipping_postcode: ship.postcode || null,
+        shipping_contact_name: r.shipping_contact_name || null,
+        shipping_contact_phone: r.shipping_contact_phone || null,
+        remark: r.remark || null,
+        sales_id: currentUser?.id, sales_name: currentUser?.name,
+        discount_type: quot.discount_type || null,
+        discount_value: quot.discount_value || 0,
+      }, items.map(it => ({
+        product_id: it.product_id, description: it.description || it.product?.name || '',
+        quantity: it.quantity, unit_price: it.unit_price,
+      })))
+      created.push({ ref: quot.quot_no, quot_no: order.order_no, subject: quot.subject })
+    } catch (e) {
+      failed.push({ ref: quot?.quot_no || `แถว ${r.row}`, subject: quot?.subject || '', message: e.message })
+    }
+  }
+  return { created, failed }
+}
+
 export async function bulkImportQuotations(groups, { proposerName = '', salePhone = '', note = '' } = {}) {
   const created = []
   const failed = []

@@ -6,7 +6,9 @@ import { canManageChild, adminOnlyDelete } from '../lib/permissions'
 import { useUi } from './UiContext'
 import { usePicklists } from './PicklistsContext'
 import { useLanguage } from './LanguageContext'
-import ImportQuotationsModal from './ImportQuotationsModal'
+import ImportDocsModal from './ImportDocsModal'
+import { exportQuotationsForImport } from '../lib/importExport'
+import { attachQuotationItems } from '../lib/api'
 import EditableSelect from './EditableSelect'
 import SignedQuotationControl from './SignedQuotationControl'
 import Pagination from './Pagination'
@@ -29,6 +31,17 @@ export default function Quotations({ perm, reloadKey, settings, deals, isAdmin, 
   const [summary, setSummary] = useState({})
   const [localBump, setLocalBump] = useState(0)
   const [showImport, setShowImport] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  // ส่งออกแบบ 1 แถว = 1 รายการสินค้า หัวคอลัมน์ตรงกับ template นำเข้า
+  // เอาไฟล์นี้ไปนำเข้าเป็นดีลต่อได้เลย เพราะคอลัมน์หลักใช้ชุดเดียวกัน
+  const doExportForImport = async () => {
+    setExporting(true)
+    try {
+      await exportQuotationsForImport(await attachQuotationItems(rows))
+    } catch (e) { toast(t('ส่งออกไม่สำเร็จ') + ': ' + e.message, 'error') }
+    finally { setExporting(false) }
+  }
 
   useEffect(() => { setPage(0) }, [status, creditType, q, fromDate, toDate])
 
@@ -59,6 +72,9 @@ export default function Quotations({ perm, reloadKey, settings, deals, isAdmin, 
           {isAdmin && <button className="btn btn-outline" onClick={() => onNav?.('document-settings')}>{t('ตั้งค่าเอกสาร')}</button>}
           {/* นำเข้าเป็นชุดจากไฟล์ Excel — ใช้ตอนใบเดียวมีรายการเยอะ หรือต้องออกหลายใบรวดเดียว */}
           <button className="btn btn-outline" onClick={() => setShowImport(true)}>{t('นำเข้าจากไฟล์')}</button>
+          <button className="btn btn-outline" onClick={doExportForImport} disabled={exporting || !rows.length}>
+            {exporting ? t('กำลังส่งออก...') : t('ส่งออก (ไฟล์นำเข้าได้)')}
+          </button>
           <button className="btn btn-primary" onClick={onAdd}>{t('+ สร้างใบเสนอราคา')}</button>
         </div>
       </div>
@@ -138,8 +154,9 @@ export default function Quotations({ perm, reloadKey, settings, deals, isAdmin, 
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPage={setPage} />
       </div>
       {showImport && (
-        <ImportQuotationsModal
-          companies={companies} currentUserName={currentUser?.name} settings={settings} creditTerms={list('credit_terms')}
+        <ImportDocsModal
+          kind="quotation"
+          companies={companies} currentUser={currentUser} settings={settings} creditTerms={list('credit_terms')}
           onClose={() => setShowImport(false)}
           onImported={() => setLocalBump(b => b + 1)}
         />

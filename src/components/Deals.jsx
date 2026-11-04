@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { fmtCurrency, fmtDate, stageColor, toLocalDateStr, currentMonthRange } from '../lib/format'
 import { canEdit, adminOnlyDelete } from '../lib/permissions'
-import { exportDealsToExcel } from '../lib/importExport'
+import { exportDealsToExcel, exportDealsForImport } from '../lib/importExport'
+import { attachDealItems } from '../lib/api'
+import ImportDocsModal from './ImportDocsModal'
 import { usePicklists } from './PicklistsContext'
 import { useLanguage } from './LanguageContext'
 import { useUi } from './UiContext'
@@ -147,7 +149,7 @@ function DealPeriodModal({ title, deals, companies, mode, dateField, ascending =
   )
 }
 
-export default function Deals({ perm, deals, companies, quotations = [], onAdd, onAddStage, onEdit, onDelete, onCreateQuotation }) {
+export default function Deals({ perm, deals, companies, quotations = [], currentUser, onAdd, onAddStage, onEdit, onDelete, onCreateQuotation, onChanged }) {
   const { t, lang } = useLanguage()
   const { toast } = useUi()
   const { list } = usePicklists()
@@ -155,6 +157,8 @@ export default function Deals({ perm, deals, companies, quotations = [], onAdd, 
   const [toDate, setToDate] = useState(() => currentMonthRange().last)
   const [q, setQ] = useState('')
   const [exporting, setExporting] = useState(false)
+  const [exporting2, setExporting2] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [salesMode, setSalesMode] = useState(null) // null = ปิด, 'day'/'week'/'month' = เปิด popup ของช่วงนั้น
   const [followMode, setFollowMode] = useState(null)
 
@@ -211,11 +215,33 @@ export default function Deals({ perm, deals, companies, quotations = [], onAdd, 
     finally { setExporting(false) }
   }
 
+  // ส่งออกแบบ 1 แถว = 1 รายการสินค้า หัวคอลัมน์ตรงกับ template นำเข้า
+  // เอาไฟล์นี้ไปนำเข้าเป็นใบเสนอราคาต่อได้เลย เพราะคอลัมน์หลักใช้ชุดเดียวกัน
+  const doExportForImport = async () => {
+    setExporting2(true)
+    try {
+      await exportDealsForImport(await attachDealItems(visibleDeals))
+    } catch (e) { toast('ส่งออกไม่สำเร็จ: ' + e.message, 'error') }
+    finally { setExporting2(false) }
+  }
+
   return (
     <div>
+      {showImport && (
+        <ImportDocsModal
+          kind="deal" companies={companies} currentUser={currentUser}
+          stages={list('deal_stages')} sources={list('deal_sources')}
+          onClose={() => setShowImport(false)} onImported={() => onChanged?.()}
+        />
+      )}
       <div className="section-header">
         <div className="section-title">{t('ดีลการขาย')} <span style={{ fontSize: 13, color: 'var(--text-light)', fontWeight: 400 }}>({deals.length} {t('ดีล')} · {fmtCurrency(totalVal)})</span></div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {/* นำเข้าเป็นชุดจากไฟล์ — ไฟล์เดียวกับของใบเสนอราคา ใช้คอลัมน์หลักชุดเดียวกัน */}
+          <button className="btn btn-outline btn-sm" onClick={() => setShowImport(true)}>{t('นำเข้าจากไฟล์')}</button>
+          <button className="btn btn-outline btn-sm" onClick={doExportForImport} disabled={exporting2 || !visibleDeals.length}>
+            {exporting2 ? t('กำลังส่งออก...') : t('ส่งออก (ไฟล์นำเข้าได้)')}
+          </button>
           <button className="btn btn-outline btn-sm" onClick={doExport} disabled={exporting || !visibleDeals.length}>
             {exporting ? t('กำลังส่งออก...') : t('ส่งออกเป็น Excel')}
           </button>

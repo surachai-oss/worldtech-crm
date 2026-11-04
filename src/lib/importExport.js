@@ -776,44 +776,80 @@ export async function parseProductCostImportFile(file, productsByCode) {
   return { validRows, invalidRows, skipped }
 }
 
-// ===== นำเข้าใบเสนอราคาเป็นชุดจากไฟล์ Excel =====
-// 1 แถว = 1 รายการสินค้า จับกลุ่มเป็นใบเดียวกันด้วยคอลัมน์ "เลขที่ใบ (กลุ่ม)"
-// เลือกรูปแบบนี้เพราะใบเสนอราคาใบเดียวมักมีสินค้าหลายรายการ ถ้าใช้ 1 แถว = 1 ใบ จะใส่ได้แค่รายการเดียว
-// ข้อมูลหัวใบ (บริษัท/หัวข้อ/วันที่/ส่วนลด) อ่านจากค่าแรกที่ไม่ว่างของกลุ่มนั้น กรอกแค่แถวแรกก็พอ
-// เลข QT ไม่ต้องกรอก — ระบบรันให้เองตอนบันทึกผ่าน gen_quot_no ฝั่ง DB (กัน race condition เวลาหลายคนนำเข้าพร้อมกัน)
-export const QUOTATION_IMPORT_COLUMNS = [
+// ============================================================================
+// ===== นำเข้า/ส่งออกเอกสารเป็นชุด: ดีล · ใบเสนอราคา · ออเดอร์ =====
+// ============================================================================
+// ดีลกับใบเสนอราคาหน้าตาเหมือนกัน (บริษัท + หัวข้อ + รายการสินค้าหลายบรรทัด)
+// จึงใช้คอลัมน์หลักชุดเดียวกัน ส่งออกจากที่หนึ่งแล้วเอาไปนำเข้าอีกที่หนึ่งได้เลย
+//
+// ออเดอร์ต่างออกไป เพราะฐานข้อมูลบังคับว่าต้องมีที่อยู่จัดส่ง และมี unique index
+// กันไว้ว่าใบเสนอราคา 1 ใบเปิดออเดอร์ที่ยัง Active ได้แค่ 1 ใบ การนำเข้าออเดอร์
+// จึงเป็น "เปิดจากใบเสนอราคาที่มีอยู่" — 1 แถว = 1 ออเดอร์ รายการสินค้าดึงจาก
+// ใบเสนอราคาให้เอง ไม่ต้องกรอกซ้ำและรับประกันว่าตรงกับใบเสนอราคาเสมอ
+
+// ---------- คอลัมน์หลักที่ดีลกับใบเสนอราคาใช้ร่วมกัน ----------
+const LINE_DOC_CORE = [
   { key: 'ref', label: 'เลขที่ใบ (กลุ่ม)', required: true,
-    help: 'ใช้จับกลุ่มว่าแถวไหนอยู่ใบเดียวกัน ใส่อะไรก็ได้ เช่น A, B หรือ 1, 2 ขอแค่ใบเดียวกันใส่ให้ตรงกัน\nไม่ใช่เลขที่ใบเสนอราคาจริง ระบบรันเลข QT ให้เอง' },
+    help: 'ใช้จับกลุ่มว่าแถวไหนอยู่ใบเดียวกัน ใส่อะไรก็ได้ เช่น A, B หรือ 1, 2 ขอแค่ใบเดียวกันใส่ให้ตรงกัน\nไม่ใช่เลขที่เอกสารจริง ระบบรันเลขให้เอง' },
   { key: 'company_name', label: 'ชื่อบริษัท', required: true,
     help: 'ต้องตรงกับบริษัทที่มีในระบบ เลือกจาก dropdown ในช่องจะชัวร์ที่สุด\nถ้าไม่ตรง ใบนั้นจะถูกข้ามแล้วรายงานให้แก้\nกรอกแค่แถวแรกของแต่ละกลุ่มก็พอ' },
-  { key: 'subject', label: 'หัวข้อใบเสนอราคา', required: true,
-    help: 'ชื่อเรื่องที่จะโชว์บนเอกสาร เช่น "เครื่องฟอกอากาศ 10 เครื่อง"\nกรอกแค่แถวแรกของแต่ละกลุ่มก็พอ' },
+  { key: 'subject', label: 'หัวข้อ', required: true,
+    help: 'ชื่อเรื่องของเอกสาร เช่น "เครื่องฟอกอากาศ 10 เครื่อง"\nดีลจะใช้เป็นชื่อดีล ใบเสนอราคาจะใช้เป็นหัวข้อใบเสนอราคา\nกรอกแค่แถวแรกของแต่ละกลุ่มก็พอ' },
   { key: 'product_code', label: 'รหัสสินค้า',
     help: 'กดลูกศรในช่องแล้วเลื่อนเลือกได้เลย รายการเป็น "รหัส — ชื่อสินค้า" ไม่ต้องจำรหัสเอง\nรายชื่อดึงจากระบบสดทุกครั้งที่ดาวน์โหลด สินค้าที่เพิ่งเพิ่มเข้าระบบจะมีให้เลือกด้วย\nถ้าเป็นรายการพิมพ์เอง (เช่น ค่าขนส่ง) เว้นช่องนี้ว่างแล้วไปกรอก "ชื่อรายการ" แทน' },
   { key: 'description', label: 'ชื่อรายการ (ถ้าไม่มีรหัสสินค้า)',
     help: 'ใช้เมื่อไม่ได้ใส่รหัสสินค้า เช่น ค่าขนส่ง ค่าติดตั้ง\nต้องมีอย่างน้อยหนึ่งอย่างระหว่างช่องนี้กับรหัสสินค้า' },
-  { key: 'quantity', label: 'จำนวน', required: true,
-    help: 'ตัวเลขมากกว่า 0 กรอกทุกแถว' },
+  { key: 'quantity', label: 'จำนวน', required: true, help: 'ตัวเลขมากกว่า 0 กรอกทุกแถว' },
   { key: 'unit_price', label: 'ราคา/หน่วย (รวม VAT)', required: true,
     help: 'ราคาต่อ 1 ชิ้น และเป็นราคาที่รวม VAT แล้ว เหมือนตอนกรอกในฟอร์ม\nกรอกทุกแถว' },
-  { key: 'quot_date', label: 'วันที่ (YYYY-MM-DD)',
-    help: 'เว้นว่าง = ใช้วันที่นำเข้า\nรูปแบบ 2026-11-04' },
-  { key: 'expire_date', label: 'วันหมดอายุ (YYYY-MM-DD)',
-    help: 'เว้นว่างได้\nรูปแบบ 2026-11-30' },
-  { key: 'credit_term', label: 'เทอมเครดิต (ว่าง = ใบธรรมดา)',
-    help: 'เว้นว่าง = ใบเสนอราคาแบบธรรมดา (เงินสด)\nถ้าเป็นลูกค้าเครดิต เลือกเทอมจาก dropdown' },
-  { key: 'customer_contact', label: 'ผู้รับผิดชอบ (ลูกค้า)',
-    help: 'ชื่อคนฝั่งลูกค้าที่ติดต่อด้วย เว้นว่างได้' },
+]
+
+const LINE_DOC_TAIL = [
+  { key: 'customer_contact', label: 'ผู้รับผิดชอบ (ลูกค้า)', help: 'ชื่อคนฝั่งลูกค้าที่ติดต่อด้วย เว้นว่างได้' },
   { key: 'discount_type', label: 'ประเภทส่วนลดท้ายบิล',
     help: 'เลือก "เปอร์เซ็นต์" หรือ "จำนวนเงิน" — ใส่เฉพาะตอนมีส่วนลดท้ายบิล\nถ้ากรอกช่องส่วนลดแล้วต้องเลือกช่องนี้ด้วย' },
   { key: 'discount_value', label: 'ส่วนลดท้ายบิล',
     help: 'ตัวเลขส่วนลด เช่น 5 (ถ้าเลือกเปอร์เซ็นต์) หรือ 1000 (ถ้าเลือกจำนวนเงิน)\nเว้นว่างถ้าไม่มีส่วนลด' },
-  { key: 'note', label: 'หมายเหตุ',
-    help: 'ข้อความที่จะพิมพ์ลงท้ายเอกสาร เว้นว่าง = ใช้หมายเหตุตั้งต้นจากหน้าตั้งค่าเอกสาร' },
+  { key: 'note', label: 'หมายเหตุ', help: 'ข้อความประกอบเอกสาร เว้นว่างได้' },
 ]
 
-// แถวตัวอย่างใส่คำว่า "ตัวอย่าง" นำหน้าเลขกลุ่ม แล้วให้ตัวอ่านไฟล์ข้ามแถวพวกนี้ไปเลย
-// เผื่อคนกรอกลืมลบทิ้ง จะได้ไม่มีใบขยะหลุดเข้าระบบ — ปลอดภัยกว่าเขียนเตือนเฉยๆ แล้วหวังว่าจะอ่าน
+export const DEAL_IMPORT_COLUMNS = [
+  ...LINE_DOC_CORE,
+  { key: 'stage', label: 'Stage', help: 'ขั้นของดีล เว้นว่าง = Lead\nเลือกจาก dropdown ในช่อง' },
+  { key: 'source', label: 'ที่มาของดีล', help: 'เช่น ไลน์ โทรศัพท์ ออกบูธ เว้นว่างได้' },
+  { key: 'close_date', label: 'วันที่คาดว่าปิดดีล (YYYY-MM-DD)', help: 'เว้นว่างได้ รูปแบบ 2026-11-30' },
+  { key: 'follow_up_date', label: 'วันที่ต้อง Follow up (YYYY-MM-DD)', help: 'เว้นว่างได้ รูปแบบ 2026-11-15' },
+  ...LINE_DOC_TAIL,
+]
+
+export const QUOTATION_IMPORT_COLUMNS = [
+  ...LINE_DOC_CORE,
+  { key: 'quot_date', label: 'วันที่ (YYYY-MM-DD)', help: 'เว้นว่าง = ใช้วันที่นำเข้า\nรูปแบบ 2026-11-04' },
+  { key: 'expire_date', label: 'วันหมดอายุ (YYYY-MM-DD)', help: 'เว้นว่างได้\nรูปแบบ 2026-11-30' },
+  { key: 'credit_term', label: 'เทอมเครดิต (ว่าง = ใบธรรมดา)',
+    help: 'เว้นว่าง = ใบเสนอราคาแบบธรรมดา (เงินสด)\nถ้าเป็นลูกค้าเครดิต เลือกเทอมจาก dropdown' },
+  ...LINE_DOC_TAIL,
+]
+
+// หัวคอลัมน์ชื่ออื่นที่ยอมรับด้วย — ไฟล์ที่กรอกค้างจากเทมเพลตรุ่นก่อน หรือไฟล์ที่ส่งออกจากอีกเอกสารหนึ่ง
+// จะได้ยังนำเข้าได้โดยไม่ต้องไล่เปลี่ยนหัวคอลัมน์เอง
+const LABEL_ALIASES = {
+  'หัวข้อใบเสนอราคา': 'subject',
+  'ชื่อดีล': 'subject',
+  'หัวข้อ / ชื่อดีล': 'subject',
+  'ดีล': 'subject',
+  'บริษัท': 'company_name',
+  'ลูกค้า': 'company_name',
+  'ชื่อรายการ': 'description',
+  'สินค้า / รายการ': 'description',
+  'ราคา/หน่วย': 'unit_price',
+  'มูลค่า': 'unit_price',
+  'วันที่': 'quot_date',
+  'วันที่คาดว่าปิดดีล': 'close_date',
+  'วันที่ต้อง Follow up': 'follow_up_date',
+  'วันหมดอายุ': 'expire_date',
+}
+
 export const QUOTATION_EXAMPLE_PREFIX = 'ตัวอย่าง'
 export const QUOTATION_SHEET_NAME = 'กรอกข้อมูล'
 export const PRODUCT_PICK_SEP = ' — '
@@ -821,85 +857,77 @@ export const productPickLabel = (p) => (p.name ? `${p.code}${PRODUCT_PICK_SEP}${
 // ตัดเอาเฉพาะรหัสออกมา — รองรับทั้งค่าที่เลือกจาก dropdown ("WT-P40 — เครื่องฟอกอากาศ") และรหัสเปล่าที่พิมพ์เอง
 export const productCodeFromCell = (v) => (v || '').split(PRODUCT_PICK_SEP)[0].trim()
 
-const QUOTATION_EXAMPLE_ROWS = [
-  { ref: 'ตัวอย่าง-A', company_name: 'บริษัท ตัวอย่าง จำกัด', subject: 'เครื่องฟอกอากาศ 10 เครื่อง',
-    product_code: 'WT-P40 — เครื่องฟอกอากาศ (ตัวอย่าง)', description: '', quantity: 10, unit_price: 3500,
-    quot_date: '', expire_date: '', credit_term: '', customer_contact: 'คุณสมชาย',
-    discount_type: 'เปอร์เซ็นต์', discount_value: 5, note: '' },
-  { ref: 'ตัวอย่าง-A', company_name: '', subject: '', product_code: '', description: 'ค่าขนส่ง',
-    quantity: 1, unit_price: 500, quot_date: '', expire_date: '', credit_term: '',
-    customer_contact: '', discount_type: '', discount_value: '', note: '' },
-  { ref: 'ตัวอย่าง-B', company_name: 'หจก. ตัวอย่างสอง', subject: 'ตู้แช่ 2 เครื่อง',
-    product_code: '', description: 'ตู้แช่แข็ง 2 ประตู', quantity: 2, unit_price: 18000,
-    quot_date: '', expire_date: '', credit_term: '', customer_contact: '',
-    discount_type: '', discount_value: '', note: '' },
-]
+const normName = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ')
 
+// สร้างตารางแปลงหัวคอลัมน์ -> key รองรับทั้งชื่อปกติ ชื่อที่มีดาว และชื่ออื่นที่ยอมรับ
+function buildLabelMap(columns) {
+  const m = {}
+  columns.forEach(c => { m[c.label] = c.key; m[`${c.label} *`] = c.key })
+  Object.entries(LABEL_ALIASES).forEach(([label, key]) => {
+    if (!(label in m)) { m[label] = key; m[`${label} *`] = key }
+  })
+  return m
+}
+
+// ---------- สร้างไฟล์ template ----------
 const TPL_REQUIRED_FILL = 'FF1B315E'   // หัวคอลัมน์ที่ต้องกรอก — น้ำเงินเข้มเหมือนหัวตารางในระบบ
 const TPL_OPTIONAL_FILL = 'FF8A94A6'   // หัวคอลัมน์ที่ไม่บังคับ — เทา เห็นความต่างชัดตั้งแต่เปิดไฟล์
 const TPL_EXAMPLE_FILL  = 'FFFFF4D6'   // แถวตัวอย่าง — เหลืองอ่อน บอกว่าไม่ใช่ข้อมูลจริง
 
-// Template ของใบเสนอราคาสร้างเองไม่ใช้ downloadExcelTemplate ตัวกลาง เพราะต้องมี
-// หัวคอลัมน์แยกสี/ติดดาวตัวที่บังคับ, คำอธิบายเวลาเอาเมาส์ชี้, แถวตัวอย่าง และชีตวิธีกรอก
-export async function downloadQuotationTemplate(companies = [], products = [], creditTerms = []) {
-  const workbook = new ExcelJS.Workbook()
-
-  // ---------- ชีตกรอกข้อมูล วางไว้ชีตแรก ----------
-  // ให้คนเปิดไฟล์มาเจอช่องกรอกเลย กันรีบๆ แล้วพิมพ์ลงชีตคู่มือจนข้อมูลไปผิดที่
-  // ตัวอ่านไฟล์เลือกชีตตามชื่อ ไม่ได้อ่านชีตแรกดื้อๆ จะสลับลำดับยังไงก็ยังอ่านถูก
-  const sheet = workbook.addWorksheet(QUOTATION_SHEET_NAME)
+// เขียนชีตคู่มือ: อธิบายการจับกลุ่ม ช่องไหนบังคับ และอะไรที่ระบบใส่ให้เอง
+function writeGuideSheet(workbook, { title, columns, groupNote, autoFilled, cautions }) {
   const guide = workbook.addWorksheet('วิธีกรอก (อ่านก่อนกรอก)')
   guide.columns = [{ width: 34 }, { width: 13 }, { width: 86 }]
-  const gTitle = (text) => {
-    const r = guide.addRow([text])
-    r.font = { bold: true, size: 13, color: { argb: 'FF1B315E' } }
-    r.height = 22
-  }
+  const gTitle = (text) => { const r = guide.addRow([text]); r.font = { bold: true, size: 13, color: { argb: 'FF1B315E' } }; r.height = 22 }
   const gText = (text) => { guide.addRow([text]).font = { size: 11 } }
+  const headRow = (cells) => {
+    const r = guide.addRow(cells)
+    r.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+    r.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TPL_REQUIRED_FILL } } })
+  }
 
-  gTitle('วิธีกรอกไฟล์นำเข้าใบเสนอราคา')
+  gTitle(title)
   gText('')
   gText('1) กรอกข้อมูลในชีต "กรอกข้อมูล" (แท็บข้างล่าง)')
   gText('2) ลบแถวตัวอย่างสีเหลืองออก หรือจะปล่อยไว้ก็ได้ ระบบข้ามให้อยู่แล้ว')
   gText('3) กลับไปที่เว็บ กดอัปโหลดไฟล์นี้')
   gText('')
-  gTitle('สำคัญที่สุด: 1 แถว = สินค้า 1 รายการ')
-  gText('ใบเสนอราคา 1 ใบที่มีสินค้า 3 อย่าง ต้องกรอก 3 แถว แล้วใส่ "เลขที่ใบ (กลุ่ม)" ให้ตรงกันทั้ง 3 แถว')
-  gText('ข้อมูลหัวใบ (ชื่อบริษัท หัวข้อ วันที่ ส่วนลด) กรอกแค่แถวแรกของกลุ่มก็พอ แถวถัดไปเว้นว่างได้')
-  gText('')
-  const exHead = guide.addRow(['เลขที่ใบ (กลุ่ม)', 'ชื่อบริษัท', 'หัวข้อ / รายการ'])
-  exHead.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-  exHead.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TPL_REQUIRED_FILL } } })
-  ;[['A', 'บริษัท ตัวอย่าง จำกัด', 'เครื่องฟอกอากาศ WT-P40 จำนวน 10'],
-    ['A', '(เว้นว่าง)', 'ค่าขนส่ง จำนวน 1'],
-    ['B', 'หจก. ตัวอย่างสอง', 'ตู้แช่แข็ง 2 ประตู จำนวน 2']].forEach(r => guide.addRow(r))
-  gText('')
-  gText('แบบข้างบนนี้จะได้ 2 ใบ — ใบแรก (กลุ่ม A) มี 2 รายการ ใบที่สอง (กลุ่ม B) มี 1 รายการ')
-  gText('"เลขที่ใบ (กลุ่ม)" ใช้แค่ในไฟล์นี้เท่านั้น ไม่ใช่เลขที่เอกสารจริง')
-  gText('')
+  if (groupNote) {
+    gTitle('สำคัญที่สุด: 1 แถว = สินค้า 1 รายการ')
+    groupNote.forEach(gText)
+    gText('')
+    headRow(['เลขที่ใบ (กลุ่ม)', 'ชื่อบริษัท', 'หัวข้อ / รายการ'])
+    ;[['A', 'บริษัท ตัวอย่าง จำกัด', 'เครื่องฟอกอากาศ WT-P40 จำนวน 10'],
+      ['A', '(เว้นว่าง)', 'ค่าจัดส่งสินค้า จำนวน 1'],
+      ['B', 'หจก. ตัวอย่างสอง', 'ตู้แช่แข็ง 2 ประตู จำนวน 2']].forEach(r => guide.addRow(r))
+    gText('')
+    gText('แบบข้างบนนี้จะได้ 2 ใบ — ใบแรก (กลุ่ม A) มี 2 รายการ ใบที่สอง (กลุ่ม B) มี 1 รายการ')
+    gText('"เลขที่ใบ (กลุ่ม)" ใช้แค่ในไฟล์นี้เท่านั้น ไม่ใช่เลขที่เอกสารจริง')
+    gText('')
+  }
   gTitle('ช่องไหนต้องกรอก ช่องไหนไม่บังคับ')
-  const colHead = guide.addRow(['ชื่อคอลัมน์', 'จำเป็นไหม', 'คำอธิบาย'])
-  colHead.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-  colHead.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TPL_REQUIRED_FILL } } })
-  QUOTATION_IMPORT_COLUMNS.forEach(c => {
+  headRow(['ชื่อคอลัมน์', 'จำเป็นไหม', 'คำอธิบาย'])
+  columns.forEach(c => {
     const r = guide.addRow([c.label, c.required ? 'ต้องกรอก' : 'ไม่บังคับ', (c.help || '').replace(/\n/g, '  ')])
     r.getCell(2).font = { bold: !!c.required, color: { argb: c.required ? 'FFC53030' : 'FF6B7280' } }
     r.alignment = { vertical: 'top', wrapText: true }
   })
   gText('')
   gTitle('ระบบใส่ให้เอง ไม่ต้องกรอก')
-  gText('• เลขที่ใบเสนอราคา (QT...) — ระบบรันให้ตอนบันทึก ไม่ซ้ำแน่นอน')
-  gText('• สถานะ — เข้ามาเป็น Draft ทุกใบ ให้ตรวจก่อนแล้วค่อยเปลี่ยนสถานะส่งลูกค้า')
-  gText('• ผู้เสนอราคา — ใช้ชื่อคนที่กดนำเข้า')
-  gText('• เบอร์ติดต่อเซลล์ — ดึงจากหน้าตั้งค่าเอกสาร')
+  autoFilled.forEach(t => gText('• ' + t))
   gText('')
   gTitle('ข้อควรระวัง')
-  gText('• ชื่อบริษัทต้องมีในระบบอยู่แล้ว ถ้าไม่ตรงใบนั้นจะถูกข้ามแล้วรายงานให้ — แนะนำให้เลือกจาก dropdown ในช่อง')
-  gText('• รหัสสินค้าต้องมีในระบบ ถ้าเป็นรายการที่ไม่มีรหัส ให้เว้นรหัสว่างแล้วกรอกชื่อรายการแทน')
-  gText('• ราคา/หน่วย เป็นราคารวม VAT แล้ว')
-  gText('• ก่อนกดยืนยันนำเข้า หน้าเว็บจะสรุปให้ดูก่อนว่าจะเข้ากี่ใบ ใบไหนมีปัญหา')
+  cautions.forEach(t => gText('• ' + t))
+}
 
-  sheet.columns = QUOTATION_IMPORT_COLUMNS.map(c => ({
+// สร้างไฟล์ template — ชีตกรอกข้อมูลไว้หน้าสุดกันคนรีบๆ พิมพ์ลงชีตคู่มือ
+// ตัวอ่านไฟล์เลือกชีตตามชื่อ ไม่ได้อ่านชีตแรกดื้อๆ จะสลับลำดับยังไงก็ยังอ่านถูก
+async function buildTemplate({ columns, exampleRows, dropdowns, filename, guide }) {
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet(QUOTATION_SHEET_NAME)
+  writeGuideSheet(workbook, { columns, ...guide })
+
+  sheet.columns = columns.map(c => ({
     header: c.required ? `${c.label} *` : c.label,
     key: c.key,
     width: Math.max(16, Math.min(34, c.label.length + 6)),
@@ -907,7 +935,7 @@ export async function downloadQuotationTemplate(companies = [], products = [], c
   const header = sheet.getRow(1)
   header.height = 34
   header.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
-  QUOTATION_IMPORT_COLUMNS.forEach((c, i) => {
+  columns.forEach((c, i) => {
     const cell = header.getCell(i + 1)
     cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 }
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: c.required ? TPL_REQUIRED_FILL : TPL_OPTIONAL_FILL } }
@@ -915,29 +943,20 @@ export async function downloadQuotationTemplate(companies = [], products = [], c
     if (c.help) cell.note = `${c.required ? '[ต้องกรอก] ' : '[ไม่บังคับ] '}${c.help}`
   })
 
-  QUOTATION_EXAMPLE_ROWS.forEach(r => {
+  exampleRows.forEach(r => {
     const row = sheet.addRow(r)
     row.font = { italic: true, color: { argb: 'FF8A6D3B' } }
-    row.eachCell({ includeEmpty: true }, c => {
-      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TPL_EXAMPLE_FILL } }
-    })
+    row.eachCell({ includeEmpty: true }, c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TPL_EXAMPLE_FILL } } })
   })
 
-  const dropdowns = {
-    company_name: companies.map(c => c.name).filter(Boolean),
-    product_code: products.filter(p => p.code).map(productPickLabel),
-    credit_term: creditTerms.filter(Boolean),
-    discount_type: ['เปอร์เซ็นต์', 'จำนวนเงิน'],
-  }
   const refs = addDropdownListsSheet(workbook, dropdowns)
-  QUOTATION_IMPORT_COLUMNS.forEach((c, idx) => {
+  columns.forEach((c, idx) => {
     const ref = refs[c.key]
     if (!ref) return
     for (let row = 2; row <= TEMPLATE_DROPDOWN_ROWS; row++) {
       sheet.getCell(row, idx + 1).dataValidation = { type: 'list', allowBlank: true, formulae: [ref] }
     }
   })
-
   sheet.views = [{ state: 'frozen', ySplit: 1 }]   // เลื่อนลงแล้วหัวคอลัมน์ยังอยู่
 
   const buffer = await workbook.xlsx.writeBuffer()
@@ -945,24 +964,87 @@ export async function downloadQuotationTemplate(companies = [], products = [], c
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'template_นำเข้าใบเสนอราคา.xlsx'
+  a.download = filename
   a.click()
   URL.revokeObjectURL(url)
 }
 
-const normName = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ')
+const exampleLineRows = (extra = {}) => ([
+  { ref: 'ตัวอย่าง-A', company_name: 'บริษัท ตัวอย่าง จำกัด', subject: 'เครื่องฟอกอากาศ 10 เครื่อง',
+    product_code: 'WT-P40 — เครื่องฟอกอากาศ (ตัวอย่าง)', description: '', quantity: 10, unit_price: 3500,
+    customer_contact: 'คุณสมชาย', discount_type: 'เปอร์เซ็นต์', discount_value: 5, note: '', ...extra },
+  { ref: 'ตัวอย่าง-A', company_name: '', subject: '', product_code: '', description: 'ค่าจัดส่งสินค้า',
+    quantity: 1, unit_price: 500, customer_contact: '', discount_type: '', discount_value: '', note: '' },
+  { ref: 'ตัวอย่าง-B', company_name: 'หจก. ตัวอย่างสอง', subject: 'ตู้แช่ 2 เครื่อง',
+    product_code: '', description: 'ตู้แช่แข็ง 2 ประตู', quantity: 2, unit_price: 18000,
+    customer_contact: '', discount_type: '', discount_value: '', note: '' },
+])
 
-// คืน { groups, invalidRows } — groups คือใบเสนอราคาที่พร้อมบันทึก 1 ก้อนต่อ 1 ใบ
-// companiesByName / productsByCode เป็น Map ที่ normalize คีย์มาแล้ว (ดู ImportQuotationsModal)
-export async function parseQuotationImportFile(file, companiesByName, productsByCode) {
-  const rawRows = await readExcelRows(file, QUOTATION_SHEET_NAME)
-  const labelToKey = {}
-  QUOTATION_IMPORT_COLUMNS.forEach(c => {
-    labelToKey[c.label] = c.key
-    labelToKey[`${c.label} *`] = c.key   // หัวคอลัมน์ที่บังคับกรอกมีดาวต่อท้ายในไฟล์ template
+const lineDropdowns = (companies, products, extra = {}) => ({
+  company_name: companies.map(c => c.name).filter(Boolean),
+  product_code: products.filter(p => p.code).map(productPickLabel),
+  discount_type: ['เปอร์เซ็นต์', 'จำนวนเงิน'],
+  ...extra,
+})
+
+const GROUP_NOTE = [
+  'เอกสาร 1 ใบที่มีสินค้า 3 อย่าง ต้องกรอก 3 แถว แล้วใส่ "เลขที่ใบ (กลุ่ม)" ให้ตรงกันทั้ง 3 แถว',
+  'ข้อมูลหัวใบ (ชื่อบริษัท หัวข้อ วันที่ ส่วนลด) กรอกแค่แถวแรกของกลุ่มก็พอ แถวถัดไปเว้นว่างได้',
+]
+const LINE_CAUTIONS = [
+  'ชื่อบริษัทต้องมีในระบบอยู่แล้ว ถ้าไม่ตรงใบนั้นจะถูกข้ามแล้วรายงานให้ — แนะนำให้เลือกจาก dropdown ในช่อง',
+  'รหัสสินค้าต้องมีในระบบ ถ้าเป็นรายการที่ไม่มีรหัส ให้เว้นรหัสว่างแล้วกรอกชื่อรายการแทน',
+  'ราคา/หน่วย เป็นราคารวม VAT แล้ว',
+  'ก่อนกดยืนยันนำเข้า หน้าเว็บจะสรุปให้ดูก่อนว่าจะเข้ากี่ใบ ใบไหนมีปัญหา',
+]
+
+export const downloadQuotationTemplate = (companies = [], products = [], creditTerms = []) =>
+  buildTemplate({
+    columns: QUOTATION_IMPORT_COLUMNS,
+    exampleRows: exampleLineRows(),
+    dropdowns: lineDropdowns(companies, products, { credit_term: creditTerms.filter(Boolean) }),
+    filename: 'template_นำเข้าใบเสนอราคา.xlsx',
+    guide: {
+      title: 'วิธีกรอกไฟล์นำเข้าใบเสนอราคา',
+      groupNote: GROUP_NOTE,
+      autoFilled: [
+        'เลขที่ใบเสนอราคา (QT...) — ระบบรันให้ตอนบันทึก ไม่ซ้ำแน่นอน',
+        'สถานะ — เข้ามาเป็น Draft ทุกใบ ให้ตรวจก่อนแล้วค่อยเปลี่ยนสถานะส่งลูกค้า',
+        'ผู้เสนอราคา — ใช้ชื่อคนที่กดนำเข้า',
+        'เบอร์ติดต่อเซลล์ — ดึงจากหน้าตั้งค่าเอกสาร',
+      ],
+      cautions: LINE_CAUTIONS,
+    },
   })
 
-  const groups = new Map() // ref -> { ...หัวใบ, items: [], rowNumbers: [] }
+export const downloadDealTemplate = (companies = [], products = [], stages = [], sources = []) =>
+  buildTemplate({
+    columns: DEAL_IMPORT_COLUMNS,
+    exampleRows: exampleLineRows({ stage: stages[0] || 'Lead' }),
+    dropdowns: lineDropdowns(companies, products, { stage: stages.filter(Boolean), source: sources.filter(Boolean) }),
+    filename: 'template_นำเข้าดีลการขาย.xlsx',
+    guide: {
+      title: 'วิธีกรอกไฟล์นำเข้าดีลการขาย',
+      groupNote: GROUP_NOTE,
+      autoFilled: [
+        'มูลค่าดีล — คำนวณจากรายการสินค้าให้เอง',
+        'ผู้เสนอราคา — ใช้ชื่อคนที่กดนำเข้า',
+        'Stage — เว้นว่าง = Lead',
+      ],
+      cautions: LINE_CAUTIONS,
+    },
+  })
+
+// ---------- อ่านไฟล์ดีล/ใบเสนอราคา (1 แถว = 1 รายการสินค้า) ----------
+// คืน { groups, invalidRows } — groups คือเอกสารที่พร้อมบันทึก 1 ก้อนต่อ 1 ใบ
+// kind: 'deal' | 'quotation' — ต่างกันแค่คอลัมน์เสริม ตรรกะการจับกลุ่มและตรวจสอบเหมือนกันหมด
+export async function parseLineDocImportFile(file, kind, { companiesByName, productsByCode }) {
+  const columns = kind === 'deal' ? DEAL_IMPORT_COLUMNS : QUOTATION_IMPORT_COLUMNS
+  const extraKeys = columns.map(c => c.key).filter(k => !LINE_DOC_CORE.some(c => c.key === k))
+  const labelToKey = buildLabelMap(columns)
+  const rawRows = await readExcelRows(file, QUOTATION_SHEET_NAME)
+
+  const groups = new Map()
   const invalidRows = []
 
   rawRows.forEach((raw, i) => {
@@ -1001,16 +1083,13 @@ export async function parseQuotationImportFile(file, companiesByName, productsBy
     if (errors.length) { invalidRows.push({ row: rowNo, ref, errors, data: row }); return }
 
     if (!groups.has(ref)) {
-      groups.set(ref, {
-        ref, company_name: '', company_id: null, subject: '', quot_date: '', expire_date: '',
-        credit_term: '', customer_contact: '', discount_type: '', discount_value: '', note: '',
-        items: [], rowNumbers: [],
-      })
+      const blank = { ref, company_name: '', company_id: null, subject: '', items: [], rowNumbers: [] }
+      extraKeys.forEach(k => { blank[k] = '' })
+      groups.set(ref, blank)
     }
     const g = groups.get(ref)
     // หัวใบเอาค่าแรกที่ไม่ว่าง — กรอกแค่แถวแรกของกลุ่มก็พอ แถวถัดไปเว้นว่างได้
-    ;['company_name', 'subject', 'quot_date', 'expire_date', 'credit_term', 'customer_contact', 'discount_type', 'discount_value', 'note']
-      .forEach(k => { if (!g[k] && row[k]) g[k] = row[k] })
+    ;['company_name', 'subject', ...extraKeys].forEach(k => { if (!g[k] && row[k]) g[k] = row[k] })
     g.rowNumbers.push(rowNo)
     g.items.push({
       product_id: product?.id || null,
@@ -1030,7 +1109,7 @@ export async function parseQuotationImportFile(file, companiesByName, productsBy
       if (!co) errors.push(`ไม่พบบริษัท "${g.company_name}" ในระบบ — ตรวจสะกดชื่อให้ตรงกับที่มีอยู่ หรือเพิ่มบริษัทก่อน`)
       else g.company_id = co.id
     }
-    if (!g.subject) errors.push('กรุณากรอกหัวข้อใบเสนอราคา')
+    if (!g.subject) errors.push('กรุณากรอกหัวข้อ')
     if (g.discount_value && !g.discount_type) errors.push('กรอกส่วนลดท้ายบิลแล้ว ต้องเลือกประเภทส่วนลดด้วย')
     if (errors.length) { invalidRows.push({ row: g.rowNumbers[0], ref: g.ref, errors, data: { company_name: g.company_name, subject: g.subject } }); return }
     valid.push(g)
@@ -1039,15 +1118,189 @@ export async function parseQuotationImportFile(file, companiesByName, productsBy
   return { groups: valid, invalidRows }
 }
 
-export const exportQuotationImportIssues = (invalidRows) => {
+// เก็บชื่อเดิมไว้ ให้โค้ดที่เรียกอยู่แล้วไม่พัง
+export const parseQuotationImportFile = (file, companiesByName, productsByCode) =>
+  parseLineDocImportFile(file, 'quotation', { companiesByName, productsByCode })
+
+export const exportImportIssues = (invalidRows, filename = 'รายการที่มีปัญหา_นำเข้า.xlsx') => {
   const columns = [
     { key: 'row', label: 'แถวที่' }, { key: 'ref', label: 'เลขที่ใบ (กลุ่ม)' },
-    { key: 'company_name', label: 'ชื่อบริษัท' }, { key: 'subject', label: 'หัวข้อใบเสนอราคา' },
+    { key: 'company_name', label: 'ชื่อบริษัท' }, { key: 'subject', label: 'หัวข้อ' },
     { key: 'errors', label: 'ปัญหา' },
   ]
   const rows = invalidRows.map(r => ({
     row: r.row, ref: r.ref || '', company_name: r.data?.company_name || '', subject: r.data?.subject || '',
     errors: r.errors.join(', '),
   }))
-  return exportRowsToExcel(columns, rows, 'รายการที่มีปัญหา_นำเข้าใบเสนอราคา.xlsx')
+  return exportRowsToExcel(columns, rows, filename)
 }
+export const exportQuotationImportIssues = (invalidRows) =>
+  exportImportIssues(invalidRows, 'รายการที่มีปัญหา_นำเข้าใบเสนอราคา.xlsx')
+
+// ---------- นำเข้าออเดอร์: 1 แถว = 1 ออเดอร์ เปิดจากใบเสนอราคาที่มีอยู่ ----------
+// ไม่ให้กรอกรายการสินค้าเอง เพราะฐานข้อมูลบังคับว่าใบเสนอราคา 1 ใบเปิดออเดอร์ Active ได้แค่ 1 ใบ
+// และรายการสินค้าควรตรงกับใบเสนอราคาเสมอ — ระบบจึงคัดลอกรายการจากใบเสนอราคาให้เอง
+export const ORDER_IMPORT_COLUMNS = [
+  { key: 'quot_no', label: 'เลขที่ใบเสนอราคา', required: true,
+    help: 'เลขที่ใบเสนอราคาที่จะเปิดออเดอร์ เช่น QT26110483\nเลือกจาก dropdown ในช่อง จะมีเฉพาะใบที่ยังไม่ได้เปิดออเดอร์\nรายการสินค้า บริษัท และส่วนลด ระบบดึงจากใบนี้ให้เอง ไม่ต้องกรอกซ้ำ' },
+  { key: 'order_type', label: 'ประเภทออเดอร์', help: 'เว้นว่าง = ปกติ\nเลือก "Grade B" สำหรับการขายเหมาสินค้าที่เสียหาย' },
+  { key: 'shipping_line1', label: 'บ้านเลขที่ / หมู่ / ถนน', required: true, help: 'ที่อยู่จัดส่ง บรรทัดแรก เช่น 889/17 ม.1' },
+  { key: 'shipping_subdistrict', label: 'ตำบล / แขวง', help: 'เว้นว่างได้' },
+  { key: 'shipping_district', label: 'อำเภอ / เขต', help: 'เว้นว่างได้' },
+  { key: 'shipping_province', label: 'จังหวัด', required: true, help: 'ชื่อจังหวัดภาษาไทย เช่น เพชรบุรี' },
+  { key: 'shipping_postcode', label: 'รหัสไปรษณีย์', help: 'เว้นว่างได้ เช่น 76130' },
+  { key: 'shipping_contact_name', label: 'ชื่อผู้รับ', help: 'เว้นว่างได้' },
+  { key: 'shipping_contact_phone', label: 'เบอร์โทรติดต่อ', required: true, help: 'เบอร์ผู้รับของ ใช้ให้ขนส่งติดต่อ' },
+  { key: 'customer_contact', label: 'ผู้รับผิดชอบ (ลูกค้า)', help: 'เว้นว่าง = ใช้ค่าจากใบเสนอราคา' },
+  { key: 'remark', label: 'หมายเหตุ', help: 'เว้นว่างได้' },
+]
+
+const ORDER_EXAMPLE_ROWS = [{
+  quot_no: 'ตัวอย่าง-QT26110001', order_type: '', shipping_line1: '889/17 ม.1',
+  shipping_subdistrict: 'ท่ายาง', shipping_district: 'ท่ายาง', shipping_province: 'เพชรบุรี',
+  shipping_postcode: '76130', shipping_contact_name: 'คุณสมชาย', shipping_contact_phone: '08x-xxx-xxxx',
+  customer_contact: '', remark: '',
+}]
+
+export const downloadOrderTemplate = (openQuotations = [], provinces = []) =>
+  buildTemplate({
+    columns: ORDER_IMPORT_COLUMNS,
+    exampleRows: ORDER_EXAMPLE_ROWS,
+    dropdowns: {
+      quot_no: openQuotations.map(q => q.quot_no).filter(Boolean),
+      order_type: ['ปกติ', 'Grade B'],
+      shipping_province: provinces.filter(Boolean),
+    },
+    filename: 'template_นำเข้าออเดอร์.xlsx',
+    guide: {
+      title: 'วิธีกรอกไฟล์นำเข้าออเดอร์',
+      groupNote: null,
+      autoFilled: [
+        'เลขออเดอร์ (WTE...) — ระบบรันให้ตอนบันทึก ไม่ซ้ำแน่นอน',
+        'รายการสินค้า — คัดลอกจากใบเสนอราคาที่ระบุให้ทั้งหมด ไม่ต้องกรอกซ้ำ',
+        'บริษัท เลขผู้เสียภาษี ที่อยู่ เบอร์ อีเมล — ดึงจากใบเสนอราคา',
+        'ส่วนลดท้ายบิล — ดึงจากใบเสนอราคา',
+        'เซลล์ผู้เปิดออเดอร์ — ใช้ชื่อคนที่กดนำเข้า',
+      ],
+      cautions: [
+        '1 แถว = 1 ออเดอร์ (ไม่ใช่ 1 รายการสินค้า เหมือนไฟล์ดีล/ใบเสนอราคา)',
+        'ใบเสนอราคา 1 ใบเปิดออเดอร์ที่ยังใช้งานอยู่ได้แค่ 1 ใบ ถ้าเปิดไปแล้วจะถูกข้ามแล้วรายงาน',
+        'ที่อยู่จัดส่งและเบอร์โทรเป็นช่องบังคับ เพราะออเดอร์ที่ไม่มีที่อยู่ส่งของไม่ได้',
+        'ออเดอร์บันทึกแล้วแก้ไม่ได้ (ยกเลิกได้อย่างเดียว) ตรวจไฟล์ให้ดีก่อนนำเข้า',
+      ],
+    },
+  })
+
+export async function parseOrderImportFile(file, { quotationsByNo, usedQuotationIds }) {
+  const labelToKey = buildLabelMap(ORDER_IMPORT_COLUMNS)
+  const rawRows = await readExcelRows(file, QUOTATION_SHEET_NAME)
+  const valid = []
+  const invalidRows = []
+  const seen = new Set()   // กันไฟล์เดียวกันใส่ใบเสนอราคาซ้ำสองแถว
+
+  rawRows.forEach((raw, i) => {
+    const rowNo = i + 2
+    const row = {}
+    Object.entries(raw).forEach(([label, value]) => {
+      const key = labelToKey[label.trim()]
+      if (key) row[key] = (value || '').trim()
+    })
+    if ((row.quot_no || '').startsWith(QUOTATION_EXAMPLE_PREFIX)) return
+
+    const errors = []
+    const quotNo = row.quot_no
+    let quot = null
+    if (!quotNo) errors.push('กรุณากรอกเลขที่ใบเสนอราคา')
+    else {
+      quot = quotationsByNo.get(normName(quotNo)) || null
+      if (!quot) errors.push(`ไม่พบใบเสนอราคา "${quotNo}" ในระบบ`)
+      else if (usedQuotationIds.has(quot.id)) errors.push(`ใบเสนอราคา "${quotNo}" ถูกใช้เปิดออเดอร์ไปแล้ว`)
+      else if (seen.has(quot.id)) errors.push(`ใบเสนอราคา "${quotNo}" ซ้ำกับแถวก่อนหน้าในไฟล์นี้`)
+    }
+    if (!row.shipping_line1) errors.push('กรุณากรอกบ้านเลขที่ / หมู่ / ถนน')
+    if (!row.shipping_province) errors.push('กรุณากรอกจังหวัด')
+    if (!row.shipping_contact_phone) errors.push('กรุณากรอกเบอร์โทรติดต่อ')
+    if (row.order_type && !['ปกติ', 'Grade B'].includes(row.order_type)) errors.push('ประเภทออเดอร์ต้องเป็น "ปกติ" หรือ "Grade B"')
+
+    if (errors.length) { invalidRows.push({ row: rowNo, ref: quotNo, errors, data: { subject: quot?.subject || '' } }); return }
+    seen.add(quot.id)
+    valid.push({ ...row, row: rowNo, quotation: quot })
+  })
+  return { rows: valid, invalidRows }
+}
+
+// ---------- ส่งออกแบบที่นำเข้ากลับได้ ----------
+// ต่างจากปุ่มส่งออกเดิมที่เป็น 1 แถว = 1 ใบ มีแค่ยอดรวม (ใช้ดูสรุป/ส่งผู้บริหาร)
+// อันนี้ 1 แถว = 1 รายการสินค้า หัวคอลัมน์ตรงกับ template นำเข้าเป๊ะ
+// ส่งออกจากดีลแล้วเอาไปนำเข้าเป็นใบเสนอราคาได้เลย เพราะคอลัมน์หลักใช้ชุดเดียวกัน
+const lineDocExportRows = (docs, { refOf, headOf }) => {
+  const out = []
+  docs.forEach(d => {
+    const ref = refOf(d)
+    const head = headOf(d)
+    const items = d.items || []
+    if (!items.length) { out.push({ ref, ...head }); return }
+    items.forEach((it, i) => {
+      out.push({
+        ref,
+        // หัวใบใส่เฉพาะแถวแรกของกลุ่ม ให้หน้าตาเหมือนที่ template สอนให้กรอก
+        ...(i === 0 ? head : {}),
+        product_code: it.product?.code ? productPickLabel(it.product) : '',
+        description: it.description || '',
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+      })
+    })
+  })
+  return out
+}
+
+export const exportDealsForImport = (deals, filename = 'ดีลการขาย_สำหรับนำเข้า.xlsx') =>
+  exportRowsToExcel(DEAL_IMPORT_COLUMNS, lineDocExportRows(deals, {
+    refOf: d => d.name || d.id,
+    headOf: d => ({
+      company_name: d.company?.name || '',
+      subject: d.name || '',
+      stage: d.stage || '',
+      source: d.source || '',
+      close_date: (d.close_date || '').slice(0, 10),
+      follow_up_date: (d.follow_up_date || '').slice(0, 10),
+      customer_contact: d.owner || '',
+      discount_type: d.discount_type || '',
+      discount_value: d.discount_value || '',
+      note: d.note || '',
+    }),
+  }), filename)
+
+export const exportQuotationsForImport = (quotations, filename = 'ใบเสนอราคา_สำหรับนำเข้า.xlsx') =>
+  exportRowsToExcel(QUOTATION_IMPORT_COLUMNS, lineDocExportRows(quotations, {
+    refOf: q => q.quot_no || q.id,
+    headOf: q => ({
+      company_name: q.company?.name || '',
+      subject: q.subject || '',
+      quot_date: (q.quot_date || '').slice(0, 10),
+      expire_date: (q.expire_date || '').slice(0, 10),
+      credit_term: q.credit_term || '',
+      customer_contact: q.customer_contact || '',
+      discount_type: q.discount_type || '',
+      discount_value: q.discount_value || '',
+      note: q.note || '',
+    }),
+  }), filename)
+
+// ออเดอร์ส่งออกตามรูปแบบ template นำเข้าออเดอร์ (1 แถว = 1 ออเดอร์)
+// เอาไปแก้ที่อยู่แล้วนำเข้าที่อื่นต่อได้ หรือเก็บเป็นบันทึกที่อยู่จัดส่งของลูกค้า
+export const exportOrdersForImport = (orders, filename = 'ออเดอร์_สำหรับนำเข้า.xlsx') =>
+  exportRowsToExcel(ORDER_IMPORT_COLUMNS, orders.map(o => ({
+    quot_no: o.quot_no || o.quotation?.quot_no || '',
+    order_type: o.order_type === 'Grade B' ? 'Grade B' : 'ปกติ',
+    shipping_line1: o.shipping_line1 || o.shipping_address || '',
+    shipping_subdistrict: o.shipping_subdistrict || '',
+    shipping_district: o.shipping_district || '',
+    shipping_province: o.shipping_province || '',
+    shipping_postcode: o.shipping_postcode || '',
+    shipping_contact_name: o.shipping_contact_name || '',
+    shipping_contact_phone: o.shipping_contact_phone || '',
+    customer_contact: o.customer_contact || '',
+    remark: o.remark || '',
+  })), filename)

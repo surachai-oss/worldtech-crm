@@ -428,7 +428,7 @@ function AppInner({ session }) {
             <Leads perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={actions.addLead} onEdit={actions.editLead} onCreateCompany={actions.convertLeadToCompany} onStatusChange={actions.leadStatus} onDelete={actions.deleteLead} onLogActivity={actions.logLeadActivity} />
           )}
           {view === 'deals' && (
-            <Deals perm={perm} deals={data.deals} companies={data.companies} quotations={data.quotations} onAdd={() => actions.addDeal(null)} onAddStage={actions.addDealStage} onEdit={actions.editDeal} onDelete={actions.deleteDeal} onMoveStage={actions.moveDealStage} onCreateQuotation={actions.createQuotationFromDeal} />
+            <Deals perm={perm} deals={data.deals} companies={data.companies} quotations={data.quotations} currentUser={currentUser} onChanged={() => setReloadKey(k => k + 1)} onAdd={() => actions.addDeal(null)} onAddStage={actions.addDealStage} onEdit={actions.editDeal} onDelete={actions.deleteDeal} onMoveStage={actions.moveDealStage} onCreateQuotation={actions.createQuotationFromDeal} />
           )}
           {view === 'tasks' && (
             <Tasks perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addTask(null)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />
@@ -437,7 +437,7 @@ function AppInner({ session }) {
             <Quotations perm={perm} reloadKey={reloadKey} settings={settings} deals={data.deals} isAdmin={isAdmin} companies={data.companies} currentUser={currentUser} onNav={nav} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onCopy={actions.copyQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onCreateDeal={actions.createDealFromQuotation} />
           )}
           {view === 'orders' && (
-            <Orders reloadKey={reloadKey} companies={data.companies} perm={perm} currentUser={currentUser} settings={settings} onAdd={actions.addOrder} onCancel={actions.cancelOrder} onChanged={reload} />
+            <Orders reloadKey={reloadKey} companies={data.companies} quotations={data.quotations} perm={perm} currentUser={currentUser} settings={settings} onAdd={actions.addOrder} onCancel={actions.cancelOrder} onChanged={reload} />
           )}
           {view === 'users' && isAdmin && <Users currentUserId={session.user.id} accessToken={session.access_token} />}
           {view === 'document-settings' && isAdmin && <DocumentSettings settings={settings} isAdmin={isAdmin} onSaved={reloadSettings} onBack={() => nav('quotations')} />}
