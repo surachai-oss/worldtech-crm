@@ -132,9 +132,18 @@ export default function ImportQuotationsModal({ companies = [], currentUserName,
               <div style={{ fontSize: 13, marginBottom: 12 }}>
                 {t('1) ดาวน์โหลด Template  2) กรอกข้อมูลใน Excel  3) อัปโหลดไฟล์ .xlsx กลับมาที่นี่')}
               </div>
-              <button className="btn btn-outline btn-sm" style={{ marginBottom: 16 }} onClick={onDownload} disabled={products === null}>
+              <button className="btn btn-outline btn-sm" onClick={onDownload} disabled={products === null}>
                 {products === null ? t('กำลังโหลด...') : t('ดาวน์โหลด Template (.xlsx)')}
               </button>
+              {/* บอกจำนวนให้เห็นว่ารายชื่อใน dropdown ดึงสดทุกครั้ง ไม่ใช่ไฟล์เก่าที่ค้างไว้ */}
+              <div style={{ fontSize: 12, color: 'var(--text-light)', margin: '8px 0 16px', lineHeight: 1.7 }}>
+                {products === null
+                  ? t('กำลังดึงรายการสินค้าจากระบบ...')
+                  : <>
+                      {t('ในไฟล์จะมี dropdown ให้เลื่อนเลือก')} <b>{t('บริษัท')} {companies.length} {t('ราย')}</b> {t('และ')} <b>{t('สินค้า')} {products.length} {t('รายการ')}</b> {t('ไม่ต้องพิมพ์ชื่อเอง')}
+                      <br />{t('รายชื่อดึงจากระบบ ณ ตอนกดดาวน์โหลด — สินค้าหรือบริษัทที่เพิ่งเพิ่มเข้าระบบจะมีให้เลือกทันที ไม่ต้องรออัปเดตอะไร')}
+                    </>}
+              </div>
               <div className="form-group">
                 <label className="form-label">{t('อัปโหลดไฟล์ (.xlsx)')}</label>
                 <input className="form-control" type="file" accept=".xlsx" onChange={onFileChange} disabled={products === null} />
@@ -145,7 +154,8 @@ export default function ImportQuotationsModal({ companies = [], currentUserName,
                 <div>• <b>{t('1 แถว = สินค้า 1 รายการ')}</b> {t('ใบที่มีสินค้า 5 อย่าง ให้กรอก 5 แถว')}</div>
                 <div>• {t('แถวที่อยู่ใบเดียวกัน ใส่ "เลขที่ใบ (กลุ่ม)" ให้ตรงกัน เช่น A, B, C หรือ 1, 2, 3 — ใช้แค่ในไฟล์ ไม่ใช่เลขที่จริง')}</div>
                 <div>• {t('ข้อมูลหัวใบ (บริษัท หัวข้อ วันที่ ส่วนลด) กรอกแค่แถวแรกของแต่ละกลุ่มก็พอ')}</div>
-                <div>• {t('สินค้าที่มีในระบบให้ใส่รหัสสินค้า ถ้าเป็นรายการพิมพ์เอง (เช่น ค่าขนส่ง) เว้นรหัสไว้แล้วกรอกชื่อรายการแทน')}</div>
+                <div>• {t('ช่องรหัสสินค้าและชื่อบริษัท กดลูกศรในช่องแล้วเลื่อนเลือกได้เลย สินค้าจะขึ้นเป็น "รหัส — ชื่อสินค้า" ไม่ต้องจำรหัส')}</div>
+                <div>• {t('ถ้าเป็นรายการพิมพ์เอง (เช่น ค่าขนส่ง) เว้นช่องรหัสสินค้าไว้แล้วกรอกชื่อรายการแทน')}</div>
                 <div>• <b>{t('เลขที่ QT ไม่ต้องกรอก')}</b> {t('ระบบรันให้เองตอนบันทึก')}</div>
                 <div>• {t('ในไฟล์มีแถวตัวอย่างสีเหลืองให้ดูเป็นแนว จะลบทิ้งหรือปล่อยไว้ก็ได้ ระบบข้ามให้อยู่แล้ว')}</div>
                 <div>• {t('หัวคอลัมน์ที่มีดาว (*) และพื้นสีน้ำเงินคือช่องที่ต้องกรอก สีเทาคือไม่บังคับ — เอาเมาส์ชี้หัวคอลัมน์ใน Excel จะมีคำอธิบายขึ้น')}</div>

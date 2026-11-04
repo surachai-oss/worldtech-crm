@@ -789,7 +789,7 @@ export const QUOTATION_IMPORT_COLUMNS = [
   { key: 'subject', label: 'หัวข้อใบเสนอราคา', required: true,
     help: 'ชื่อเรื่องที่จะโชว์บนเอกสาร เช่น "เครื่องฟอกอากาศ 10 เครื่อง"\nกรอกแค่แถวแรกของแต่ละกลุ่มก็พอ' },
   { key: 'product_code', label: 'รหัสสินค้า',
-    help: 'เลือกจาก dropdown ถ้าเป็นสินค้าที่มีในระบบ ระบบจะเติมชื่อสินค้าให้เอง\nถ้าเป็นรายการพิมพ์เอง (เช่น ค่าขนส่ง) เว้นช่องนี้ว่างแล้วไปกรอก "ชื่อรายการ" แทน' },
+    help: 'กดลูกศรในช่องแล้วเลื่อนเลือกได้เลย รายการเป็น "รหัส — ชื่อสินค้า" ไม่ต้องจำรหัสเอง\nรายชื่อดึงจากระบบสดทุกครั้งที่ดาวน์โหลด สินค้าที่เพิ่งเพิ่มเข้าระบบจะมีให้เลือกด้วย\nถ้าเป็นรายการพิมพ์เอง (เช่น ค่าขนส่ง) เว้นช่องนี้ว่างแล้วไปกรอก "ชื่อรายการ" แทน' },
   { key: 'description', label: 'ชื่อรายการ (ถ้าไม่มีรหัสสินค้า)',
     help: 'ใช้เมื่อไม่ได้ใส่รหัสสินค้า เช่น ค่าขนส่ง ค่าติดตั้ง\nต้องมีอย่างน้อยหนึ่งอย่างระหว่างช่องนี้กับรหัสสินค้า' },
   { key: 'quantity', label: 'จำนวน', required: true,
@@ -816,10 +816,14 @@ export const QUOTATION_IMPORT_COLUMNS = [
 // เผื่อคนกรอกลืมลบทิ้ง จะได้ไม่มีใบขยะหลุดเข้าระบบ — ปลอดภัยกว่าเขียนเตือนเฉยๆ แล้วหวังว่าจะอ่าน
 export const QUOTATION_EXAMPLE_PREFIX = 'ตัวอย่าง'
 export const QUOTATION_SHEET_NAME = 'กรอกข้อมูล'
+export const PRODUCT_PICK_SEP = ' — '
+export const productPickLabel = (p) => (p.name ? `${p.code}${PRODUCT_PICK_SEP}${p.name}` : p.code)
+// ตัดเอาเฉพาะรหัสออกมา — รองรับทั้งค่าที่เลือกจาก dropdown ("WT-P40 — เครื่องฟอกอากาศ") และรหัสเปล่าที่พิมพ์เอง
+export const productCodeFromCell = (v) => (v || '').split(PRODUCT_PICK_SEP)[0].trim()
 
 const QUOTATION_EXAMPLE_ROWS = [
   { ref: 'ตัวอย่าง-A', company_name: 'บริษัท ตัวอย่าง จำกัด', subject: 'เครื่องฟอกอากาศ 10 เครื่อง',
-    product_code: 'WT-P40', description: '', quantity: 10, unit_price: 3500,
+    product_code: 'WT-P40 — เครื่องฟอกอากาศ (ตัวอย่าง)', description: '', quantity: 10, unit_price: 3500,
     quot_date: '', expire_date: '', credit_term: '', customer_contact: 'คุณสมชาย',
     discount_type: 'เปอร์เซ็นต์', discount_value: 5, note: '' },
   { ref: 'ตัวอย่าง-A', company_name: '', subject: '', product_code: '', description: 'ค่าขนส่ง',
@@ -921,7 +925,7 @@ export async function downloadQuotationTemplate(companies = [], products = [], c
 
   const dropdowns = {
     company_name: companies.map(c => c.name).filter(Boolean),
-    product_code: products.map(p => p.code).filter(Boolean),
+    product_code: products.filter(p => p.code).map(productPickLabel),
     credit_term: creditTerms.filter(Boolean),
     discount_type: ['เปอร์เซ็นต์', 'จำนวนเงิน'],
   }
@@ -987,8 +991,9 @@ export async function parseQuotationImportFile(file, companiesByName, productsBy
     // สินค้า: มีรหัสต้องหาเจอ ไม่มีรหัสก็ต้องมีชื่อรายการ ไม่งั้นบรรทัดนี้ว่างเปล่า
     let product = null
     if (row.product_code) {
-      product = productsByCode.get(normName(row.product_code)) || null
-      if (!product) errors.push(`ไม่พบรหัสสินค้า "${row.product_code}" ในระบบ`)
+      const code = productCodeFromCell(row.product_code)
+      product = productsByCode.get(normName(code)) || null
+      if (!product) errors.push(`ไม่พบรหัสสินค้า "${code}" ในระบบ`)
     } else if (!row.description) {
       errors.push('ต้องกรอกรหัสสินค้า หรือชื่อรายการอย่างใดอย่างหนึ่ง')
     }
