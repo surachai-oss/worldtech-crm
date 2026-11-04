@@ -111,11 +111,15 @@ th.col-right,td.col-right{text-align:right}
 .form-group{margin-bottom:10px}
 .form-label{display:block;font-size:12px;font-weight:500;margin-bottom:5px}
 .form-label.required::after{content:' *';color:var(--danger)}
-.form-control{width:100%;border:1px solid var(--border);border-radius:7px;padding:9px 12px;font-size:13px;outline:none;background:var(--white)}
+.form-control{width:100%;border:1px solid var(--border);border-radius:7px;padding:9px 12px;font-size:13px;outline:none;background:var(--white);text-align:left}
 .form-control:focus{border-color:var(--yellow);box-shadow:0 0 0 3px rgba(254,191,16,.15)}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
-.searchable-option{padding:8px 10px;font-size:13px;cursor:pointer}
+/* ตัวเลือกใน dropdown ให้อยู่บรรทัดเดียว ชื่อยาวตัดด้วย ... แล้วเอาเมาส์ไปวางอ่านชื่อเต็ม
+   ของเดิมปล่อยให้ตัดบรรทัด ตัวเลือกเดียวกินสามสี่บรรทัด กวาดตาหายาก ต้องเลื่อนเยอะ
+   text-align ต้องกำหนดเอง เพราะ dropdown นี้ไปโผล่ในช่องของตารางที่จัดกลางอยู่ แล้วมันสืบทอดมา */
+.searchable-option{padding:8px 10px;font-size:13px;cursor:pointer;text-align:left;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .searchable-option:hover{background:#f4f6f9}
 
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px}
