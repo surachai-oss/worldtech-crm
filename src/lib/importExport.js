@@ -772,3 +772,142 @@ export async function parseProductCostImportFile(file, productsByCode) {
 
   return { validRows, invalidRows, skipped }
 }
+
+// ===== นำเข้าใบเสนอราคาเป็นชุดจากไฟล์ Excel =====
+// 1 แถว = 1 รายการสินค้า จับกลุ่มเป็นใบเดียวกันด้วยคอลัมน์ "เลขที่ใบ (กลุ่ม)"
+// เลือกรูปแบบนี้เพราะใบเสนอราคาใบเดียวมักมีสินค้าหลายรายการ ถ้าใช้ 1 แถว = 1 ใบ จะใส่ได้แค่รายการเดียว
+// ข้อมูลหัวใบ (บริษัท/หัวข้อ/วันที่/ส่วนลด) อ่านจากค่าแรกที่ไม่ว่างของกลุ่มนั้น กรอกแค่แถวแรกก็พอ
+// เลข QT ไม่ต้องกรอก — ระบบรันให้เองตอนบันทึกผ่าน gen_quot_no ฝั่ง DB (กัน race condition เวลาหลายคนนำเข้าพร้อมกัน)
+export const QUOTATION_IMPORT_COLUMNS = [
+  { key: 'ref', label: 'เลขที่ใบ (กลุ่ม)', required: true },
+  { key: 'company_name', label: 'ชื่อบริษัท', required: true },
+  { key: 'subject', label: 'หัวข้อใบเสนอราคา', required: true },
+  { key: 'product_code', label: 'รหัสสินค้า' },
+  { key: 'description', label: 'ชื่อรายการ (ถ้าไม่มีรหัสสินค้า)' },
+  { key: 'quantity', label: 'จำนวน', required: true },
+  { key: 'unit_price', label: 'ราคา/หน่วย (รวม VAT)', required: true },
+  { key: 'quot_date', label: 'วันที่ (YYYY-MM-DD)' },
+  { key: 'expire_date', label: 'วันหมดอายุ (YYYY-MM-DD)' },
+  { key: 'credit_term', label: 'เทอมเครดิต (ว่าง = ใบธรรมดา)' },
+  { key: 'customer_contact', label: 'ผู้รับผิดชอบ (ลูกค้า)' },
+  { key: 'discount_type', label: 'ประเภทส่วนลดท้ายบิล' },
+  { key: 'discount_value', label: 'ส่วนลดท้ายบิล' },
+  { key: 'note', label: 'หมายเหตุ' },
+]
+
+const QUOTATION_EXAMPLE_ROWS = [
+  { ref: 'A', company_name: 'บริษัท ตัวอย่าง จำกัด', subject: 'เครื่องฟอกอากาศ 10 เครื่อง',
+    product_code: 'WT-P40', description: '', quantity: 10, unit_price: 3500,
+    quot_date: '', expire_date: '', credit_term: '', customer_contact: 'คุณสมชาย',
+    discount_type: '', discount_value: '', note: '' },
+  { ref: 'A', company_name: '', subject: '', product_code: '', description: 'ค่าขนส่ง',
+    quantity: 1, unit_price: 500, quot_date: '', expire_date: '', credit_term: '',
+    customer_contact: '', discount_type: '', discount_value: '', note: '' },
+]
+
+export async function downloadQuotationTemplate(companies = [], products = [], creditTerms = []) {
+  await downloadExcelTemplate(
+    QUOTATION_IMPORT_COLUMNS, QUOTATION_EXAMPLE_ROWS[0], 'template_นำเข้าใบเสนอราคา.xlsx',
+    {
+      company_name: companies.map(c => c.name).filter(Boolean),
+      product_code: products.map(p => p.code).filter(Boolean),
+      credit_term: creditTerms,
+      discount_type: ['เปอร์เซ็นต์', 'จำนวนเงิน'],
+    }
+  )
+}
+
+const normName = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ')
+
+// คืน { groups, invalidRows } — groups คือใบเสนอราคาที่พร้อมบันทึก 1 ก้อนต่อ 1 ใบ
+// companiesByName / productsByCode เป็น Map ที่ normalize คีย์มาแล้ว (ดู ImportQuotationsModal)
+export async function parseQuotationImportFile(file, companiesByName, productsByCode) {
+  const rawRows = await readExcelRows(file)
+  const labelToKey = {}
+  QUOTATION_IMPORT_COLUMNS.forEach(c => { labelToKey[c.label] = c.key })
+
+  const groups = new Map() // ref -> { ...หัวใบ, items: [], rowNumbers: [] }
+  const invalidRows = []
+
+  rawRows.forEach((raw, i) => {
+    const rowNo = i + 2
+    const row = {}
+    Object.entries(raw).forEach(([label, value]) => {
+      const key = labelToKey[label.trim()]
+      if (key) row[key] = (value || '').trim()
+    })
+
+    const errors = []
+    const ref = row.ref
+    if (!ref) errors.push('กรุณากรอกเลขที่ใบ (กลุ่ม)')
+
+    const qty = Number(row.quantity)
+    if (!row.quantity) errors.push('กรุณากรอกจำนวน')
+    else if (!isFinite(qty) || qty <= 0) errors.push('จำนวนต้องเป็นตัวเลขมากกว่า 0')
+
+    const price = Number(row.unit_price)
+    if (!row.unit_price) errors.push('กรุณากรอกราคา/หน่วย')
+    else if (!isFinite(price) || price < 0) errors.push('ราคา/หน่วยต้องเป็นตัวเลขไม่ติดลบ')
+
+    // สินค้า: มีรหัสต้องหาเจอ ไม่มีรหัสก็ต้องมีชื่อรายการ ไม่งั้นบรรทัดนี้ว่างเปล่า
+    let product = null
+    if (row.product_code) {
+      product = productsByCode.get(normName(row.product_code)) || null
+      if (!product) errors.push(`ไม่พบรหัสสินค้า "${row.product_code}" ในระบบ`)
+    } else if (!row.description) {
+      errors.push('ต้องกรอกรหัสสินค้า หรือชื่อรายการอย่างใดอย่างหนึ่ง')
+    }
+
+    if (errors.length) { invalidRows.push({ row: rowNo, ref, errors, data: row }); return }
+
+    if (!groups.has(ref)) {
+      groups.set(ref, {
+        ref, company_name: '', company_id: null, subject: '', quot_date: '', expire_date: '',
+        credit_term: '', customer_contact: '', discount_type: '', discount_value: '', note: '',
+        items: [], rowNumbers: [],
+      })
+    }
+    const g = groups.get(ref)
+    // หัวใบเอาค่าแรกที่ไม่ว่าง — กรอกแค่แถวแรกของกลุ่มก็พอ แถวถัดไปเว้นว่างได้
+    ;['company_name', 'subject', 'quot_date', 'expire_date', 'credit_term', 'customer_contact', 'discount_type', 'discount_value', 'note']
+      .forEach(k => { if (!g[k] && row[k]) g[k] = row[k] })
+    g.rowNumbers.push(rowNo)
+    g.items.push({
+      product_id: product?.id || null,
+      description: row.description || product?.name || '',
+      quantity: qty,
+      unit_price: price,
+    })
+  })
+
+  // ตรวจระดับใบ หลังรวมทุกแถวของกลุ่มแล้ว ถึงจะรู้ว่าหัวใบครบหรือเปล่า
+  const valid = []
+  groups.forEach(g => {
+    const errors = []
+    if (!g.company_name) errors.push('กรุณากรอกชื่อบริษัท')
+    else {
+      const co = companiesByName.get(normName(g.company_name))
+      if (!co) errors.push(`ไม่พบบริษัท "${g.company_name}" ในระบบ — ตรวจสะกดชื่อให้ตรงกับที่มีอยู่ หรือเพิ่มบริษัทก่อน`)
+      else g.company_id = co.id
+    }
+    if (!g.subject) errors.push('กรุณากรอกหัวข้อใบเสนอราคา')
+    if (g.discount_value && !g.discount_type) errors.push('กรอกส่วนลดท้ายบิลแล้ว ต้องเลือกประเภทส่วนลดด้วย')
+    if (errors.length) { invalidRows.push({ row: g.rowNumbers[0], ref: g.ref, errors, data: { company_name: g.company_name, subject: g.subject } }); return }
+    valid.push(g)
+  })
+
+  return { groups: valid, invalidRows }
+}
+
+export const exportQuotationImportIssues = (invalidRows) => {
+  const columns = [
+    { key: 'row', label: 'แถวที่' }, { key: 'ref', label: 'เลขที่ใบ (กลุ่ม)' },
+    { key: 'company_name', label: 'ชื่อบริษัท' }, { key: 'subject', label: 'หัวข้อใบเสนอราคา' },
+    { key: 'errors', label: 'ปัญหา' },
+  ]
+  const rows = invalidRows.map(r => ({
+    row: r.row, ref: r.ref || '', company_name: r.data?.company_name || '', subject: r.data?.subject || '',
+    errors: r.errors.join(', '),
+  }))
+  return exportRowsToExcel(columns, rows, 'รายการที่มีปัญหา_นำเข้าใบเสนอราคา.xlsx')
+}

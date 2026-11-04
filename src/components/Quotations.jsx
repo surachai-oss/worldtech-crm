@@ -6,11 +6,12 @@ import { canManageChild, adminOnlyDelete } from '../lib/permissions'
 import { useUi } from './UiContext'
 import { usePicklists } from './PicklistsContext'
 import { useLanguage } from './LanguageContext'
+import ImportQuotationsModal from './ImportQuotationsModal'
 import EditableSelect from './EditableSelect'
 import SignedQuotationControl from './SignedQuotationControl'
 import Pagination from './Pagination'
 
-export default function Quotations({ perm, reloadKey, settings, deals, isAdmin, onNav, onAdd, onEdit, onCopy, onStatusChange, onDelete, onCreateDeal }) {
+export default function Quotations({ perm, reloadKey, settings, deals, isAdmin, companies = [], currentUser, onNav, onAdd, onEdit, onCopy, onStatusChange, onDelete, onCreateDeal }) {
   const { toast } = useUi()
   const { t, lang } = useLanguage()
   const { list } = usePicklists()
@@ -27,6 +28,7 @@ export default function Quotations({ perm, reloadKey, settings, deals, isAdmin, 
   const [total, setTotal] = useState(0)
   const [summary, setSummary] = useState({})
   const [localBump, setLocalBump] = useState(0)
+  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => { setPage(0) }, [status, creditType, q, fromDate, toDate])
 
@@ -55,6 +57,8 @@ export default function Quotations({ perm, reloadKey, settings, deals, isAdmin, 
         <div style={{ display: 'flex', gap: 8 }}>
           {/* ปุ่มลัดไปหน้าตั้งค่าเทมเพลตเอกสาร (หัวกระดาษ/โลโก้/เงื่อนไข) — เมนูหลักอยู่ใต้ "ผู้ดูแลระบบ" */}
           {isAdmin && <button className="btn btn-outline" onClick={() => onNav?.('document-settings')}>{t('ตั้งค่าเอกสาร')}</button>}
+          {/* นำเข้าเป็นชุดจากไฟล์ Excel — ใช้ตอนใบเดียวมีรายการเยอะ หรือต้องออกหลายใบรวดเดียว */}
+          <button className="btn btn-outline" onClick={() => setShowImport(true)}>{t('นำเข้าจากไฟล์')}</button>
           <button className="btn btn-primary" onClick={onAdd}>{t('+ สร้างใบเสนอราคา')}</button>
         </div>
       </div>
@@ -133,6 +137,13 @@ export default function Quotations({ perm, reloadKey, settings, deals, isAdmin, 
         </div>
         <Pagination page={page} pageSize={PAGE_SIZE} count={count} onPage={setPage} />
       </div>
+      {showImport && (
+        <ImportQuotationsModal
+          companies={companies} currentUserName={currentUser?.name} settings={settings} creditTerms={list('credit_terms')}
+          onClose={() => setShowImport(false)}
+          onImported={() => setLocalBump(b => b + 1)}
+        />
+      )}
     </div>
   )
 }

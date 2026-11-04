@@ -407,6 +407,37 @@ export async function addQuotationWithItems(fields, items) {
   return quot
 }
 
+// นำเข้าใบเสนอราคาเป็นชุดจากไฟล์ — สร้างทีละใบเพราะเลข QT ต้องขอจาก gen_quot_no ฝั่ง DB ทีละครั้ง
+// ไม่ใช้ transaction เดียวทั้งก้อน เพราะถ้าใบที่ 50 พังแล้ว rollback ทั้งหมด คนกรอกจะไม่รู้ว่าพังที่ใบไหน
+// คืนทั้งใบที่สำเร็จและใบที่พังพร้อมเหตุผล ให้หน้าจอบอกได้ว่าเข้าไปแล้วกี่ใบ เหลือกี่ใบที่ต้องแก้
+export async function bulkImportQuotations(groups, { proposerName = '', salePhone = '', note = '' } = {}) {
+  const created = []
+  const failed = []
+  for (const g of groups) {
+    try {
+      const quot = await addQuotationWithItems({
+        company_id: g.company_id,
+        subject: g.subject,
+        status: 'Draft',                               // เข้ามาเป็นฉบับร่างเสมอ ให้คนตรวจก่อนส่งลูกค้า
+        quot_date: g.quot_date || new Date().toISOString().split('T')[0],
+        expire_date: g.expire_date || null,
+        credit_term: g.credit_term || null,
+        customer_contact: g.customer_contact || null,
+        discount_type: g.discount_type || null,
+        discount_value: Number(g.discount_value) || 0,
+        note: g.note || note || null,
+        sale_phone: salePhone || null,
+        proposer_name: proposerName || null,           // คนกดนำเข้าคือผู้เสนอราคา เหมือนตอนสร้างจากฟอร์ม
+        payment_status: 'ยังไม่ชำระ',
+      }, g.items)
+      created.push({ ref: g.ref, quot_no: quot.quot_no, subject: g.subject })
+    } catch (e) {
+      failed.push({ ref: g.ref, subject: g.subject, message: e.message })
+    }
+  }
+  return { created, failed }
+}
+
 // แก้ไขใบเสนอราคา — ลบรายการเดิมทั้งหมดแล้วใส่ชุดใหม่ทั้งหมด (แบบเดียวกับดีล)
 export async function updateQuotationWithItems(id, fields, items) {
   const totals = computeDealTotals(items, { type: fields.discount_type, value: fields.discount_value })

@@ -434,7 +434,7 @@ function AppInner({ session }) {
             <Tasks perm={perm} reloadKey={reloadKey} onNavCompany={(id) => nav('company-detail', id)} onAdd={() => actions.addTask(null)} onEdit={actions.editTask} onComplete={actions.completeTask} onDelete={actions.deleteTask} />
           )}
           {view === 'quotations' && (
-            <Quotations perm={perm} reloadKey={reloadKey} settings={settings} deals={data.deals} isAdmin={isAdmin} onNav={nav} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onCopy={actions.copyQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onCreateDeal={actions.createDealFromQuotation} />
+            <Quotations perm={perm} reloadKey={reloadKey} settings={settings} deals={data.deals} isAdmin={isAdmin} companies={data.companies} currentUser={currentUser} onNav={nav} onAdd={() => actions.addQuotation(null)} onEdit={actions.editQuotation} onCopy={actions.copyQuotation} onStatusChange={actions.quotStatus} onPaymentStatusChange={actions.quotPaymentStatus} onDelete={actions.deleteQuotation} onCreateDeal={actions.createDealFromQuotation} />
           )}
           {view === 'orders' && (
             <Orders reloadKey={reloadKey} companies={data.companies} perm={perm} currentUser={currentUser} settings={settings} onAdd={actions.addOrder} onCancel={actions.cancelOrder} onChanged={reload} />
