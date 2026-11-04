@@ -22,6 +22,7 @@ import CostMaster from './components/CostMaster'
 import Catalogs from './components/Catalogs'
 import CatalogBuilder from './components/CatalogBuilder'
 import NotificationBell from './components/NotificationBell'
+import UserGuideModal from './components/UserGuideModal'
 import { PicklistsProvider } from './components/PicklistsContext'
 import { CompanyModal, ContactModal, DealModal, ActivityModal, TaskModal, QuotationModal, LeadModal } from './components/Modals'
 import DocumentSettings from './components/DocumentSettings'
@@ -45,6 +46,7 @@ function AppInner({ session }) {
   const [settings, setSettings] = useState({})
   const [profile, setProfile] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [showGuide, setShowGuide] = useState(false)
   const [view, setView] = useState('dashboard')
   const [currentCompanyId, setCurrentCompanyId] = useState(null)
   const [currentCatalogId, setCurrentCatalogId] = useState(null)
@@ -374,6 +376,7 @@ function AppInner({ session }) {
 
   return (
     <div id="app">
+      {showGuide && <UserGuideModal onClose={() => setShowGuide(false)} />}
       <Sidebar activeView={view} onNav={nav} user={currentUser} isAdmin={isAdmin} isFinance={isFinance} onLogout={() => supabase.auth.signOut()} />
       <div className="main-content">
         <div className="topbar">
@@ -400,6 +403,8 @@ function AppInner({ session }) {
               </div>
             )}
           </div>
+          {/* คู่มือการใช้งาน — วางไว้มุมขวาบนให้เปิดได้จากทุกหน้า */}
+          <button className="btn btn-outline btn-sm" onClick={() => setShowGuide(true)} title={t('คู่มือการใช้งาน')}>{t('คู่มือ')}</button>
           <NotificationBell onNav={nav} />
           {addBtnMap[view] && <button className="btn btn-primary btn-sm" onClick={addBtnMap[view]}>+ เพิ่มใหม่</button>}
         </div>
