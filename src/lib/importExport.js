@@ -19,11 +19,14 @@ function cellText(cell) {
 }
 
 // อ่านไฟล์ .xlsx เป็น array ของ object {label: value} โดยใช้แถวแรกของ sheet แรกเป็นหัวคอลัมน์
-export async function readExcelRows(file) {
+// sheetName (ไม่บังคับ): ชื่อชีตที่ต้องการอ่าน — ใช้กับ template ที่มีหลายชีต เช่นมีชีตวิธีกรอกแถมมาด้วย
+// ถ้าไม่ระบุหรือหาไม่เจอ ถอยไปใช้ชีตแรกที่ไม่ได้ซ่อน (ชีต Lists ที่เก็บตัวเลือก dropdown ถูกซ่อนไว้ ต้องไม่โดนอ่าน)
+export async function readExcelRows(file, sheetName) {
   const buffer = await file.arrayBuffer()
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(buffer)
-  const sheet = workbook.worksheets[0]
+  const visible = workbook.worksheets.filter(w => w.state !== 'veryHidden' && w.state !== 'hidden')
+  const sheet = (sheetName && workbook.getWorksheet(sheetName)) || visible[0] || workbook.worksheets[0]
   if (!sheet) return []
 
   const headers = {} // colNumber -> label
@@ -779,42 +782,168 @@ export async function parseProductCostImportFile(file, productsByCode) {
 // ข้อมูลหัวใบ (บริษัท/หัวข้อ/วันที่/ส่วนลด) อ่านจากค่าแรกที่ไม่ว่างของกลุ่มนั้น กรอกแค่แถวแรกก็พอ
 // เลข QT ไม่ต้องกรอก — ระบบรันให้เองตอนบันทึกผ่าน gen_quot_no ฝั่ง DB (กัน race condition เวลาหลายคนนำเข้าพร้อมกัน)
 export const QUOTATION_IMPORT_COLUMNS = [
-  { key: 'ref', label: 'เลขที่ใบ (กลุ่ม)', required: true },
-  { key: 'company_name', label: 'ชื่อบริษัท', required: true },
-  { key: 'subject', label: 'หัวข้อใบเสนอราคา', required: true },
-  { key: 'product_code', label: 'รหัสสินค้า' },
-  { key: 'description', label: 'ชื่อรายการ (ถ้าไม่มีรหัสสินค้า)' },
-  { key: 'quantity', label: 'จำนวน', required: true },
-  { key: 'unit_price', label: 'ราคา/หน่วย (รวม VAT)', required: true },
-  { key: 'quot_date', label: 'วันที่ (YYYY-MM-DD)' },
-  { key: 'expire_date', label: 'วันหมดอายุ (YYYY-MM-DD)' },
-  { key: 'credit_term', label: 'เทอมเครดิต (ว่าง = ใบธรรมดา)' },
-  { key: 'customer_contact', label: 'ผู้รับผิดชอบ (ลูกค้า)' },
-  { key: 'discount_type', label: 'ประเภทส่วนลดท้ายบิล' },
-  { key: 'discount_value', label: 'ส่วนลดท้ายบิล' },
-  { key: 'note', label: 'หมายเหตุ' },
+  { key: 'ref', label: 'เลขที่ใบ (กลุ่ม)', required: true,
+    help: 'ใช้จับกลุ่มว่าแถวไหนอยู่ใบเดียวกัน ใส่อะไรก็ได้ เช่น A, B หรือ 1, 2 ขอแค่ใบเดียวกันใส่ให้ตรงกัน\nไม่ใช่เลขที่ใบเสนอราคาจริง ระบบรันเลข QT ให้เอง' },
+  { key: 'company_name', label: 'ชื่อบริษัท', required: true,
+    help: 'ต้องตรงกับบริษัทที่มีในระบบ เลือกจาก dropdown ในช่องจะชัวร์ที่สุด\nถ้าไม่ตรง ใบนั้นจะถูกข้ามแล้วรายงานให้แก้\nกรอกแค่แถวแรกของแต่ละกลุ่มก็พอ' },
+  { key: 'subject', label: 'หัวข้อใบเสนอราคา', required: true,
+    help: 'ชื่อเรื่องที่จะโชว์บนเอกสาร เช่น "เครื่องฟอกอากาศ 10 เครื่อง"\nกรอกแค่แถวแรกของแต่ละกลุ่มก็พอ' },
+  { key: 'product_code', label: 'รหัสสินค้า',
+    help: 'เลือกจาก dropdown ถ้าเป็นสินค้าที่มีในระบบ ระบบจะเติมชื่อสินค้าให้เอง\nถ้าเป็นรายการพิมพ์เอง (เช่น ค่าขนส่ง) เว้นช่องนี้ว่างแล้วไปกรอก "ชื่อรายการ" แทน' },
+  { key: 'description', label: 'ชื่อรายการ (ถ้าไม่มีรหัสสินค้า)',
+    help: 'ใช้เมื่อไม่ได้ใส่รหัสสินค้า เช่น ค่าขนส่ง ค่าติดตั้ง\nต้องมีอย่างน้อยหนึ่งอย่างระหว่างช่องนี้กับรหัสสินค้า' },
+  { key: 'quantity', label: 'จำนวน', required: true,
+    help: 'ตัวเลขมากกว่า 0 กรอกทุกแถว' },
+  { key: 'unit_price', label: 'ราคา/หน่วย (รวม VAT)', required: true,
+    help: 'ราคาต่อ 1 ชิ้น และเป็นราคาที่รวม VAT แล้ว เหมือนตอนกรอกในฟอร์ม\nกรอกทุกแถว' },
+  { key: 'quot_date', label: 'วันที่ (YYYY-MM-DD)',
+    help: 'เว้นว่าง = ใช้วันที่นำเข้า\nรูปแบบ 2026-11-04' },
+  { key: 'expire_date', label: 'วันหมดอายุ (YYYY-MM-DD)',
+    help: 'เว้นว่างได้\nรูปแบบ 2026-11-30' },
+  { key: 'credit_term', label: 'เทอมเครดิต (ว่าง = ใบธรรมดา)',
+    help: 'เว้นว่าง = ใบเสนอราคาแบบธรรมดา (เงินสด)\nถ้าเป็นลูกค้าเครดิต เลือกเทอมจาก dropdown' },
+  { key: 'customer_contact', label: 'ผู้รับผิดชอบ (ลูกค้า)',
+    help: 'ชื่อคนฝั่งลูกค้าที่ติดต่อด้วย เว้นว่างได้' },
+  { key: 'discount_type', label: 'ประเภทส่วนลดท้ายบิล',
+    help: 'เลือก "เปอร์เซ็นต์" หรือ "จำนวนเงิน" — ใส่เฉพาะตอนมีส่วนลดท้ายบิล\nถ้ากรอกช่องส่วนลดแล้วต้องเลือกช่องนี้ด้วย' },
+  { key: 'discount_value', label: 'ส่วนลดท้ายบิล',
+    help: 'ตัวเลขส่วนลด เช่น 5 (ถ้าเลือกเปอร์เซ็นต์) หรือ 1000 (ถ้าเลือกจำนวนเงิน)\nเว้นว่างถ้าไม่มีส่วนลด' },
+  { key: 'note', label: 'หมายเหตุ',
+    help: 'ข้อความที่จะพิมพ์ลงท้ายเอกสาร เว้นว่าง = ใช้หมายเหตุตั้งต้นจากหน้าตั้งค่าเอกสาร' },
 ]
+
+// แถวตัวอย่างใส่คำว่า "ตัวอย่าง" นำหน้าเลขกลุ่ม แล้วให้ตัวอ่านไฟล์ข้ามแถวพวกนี้ไปเลย
+// เผื่อคนกรอกลืมลบทิ้ง จะได้ไม่มีใบขยะหลุดเข้าระบบ — ปลอดภัยกว่าเขียนเตือนเฉยๆ แล้วหวังว่าจะอ่าน
+export const QUOTATION_EXAMPLE_PREFIX = 'ตัวอย่าง'
+export const QUOTATION_SHEET_NAME = 'กรอกข้อมูล'
 
 const QUOTATION_EXAMPLE_ROWS = [
-  { ref: 'A', company_name: 'บริษัท ตัวอย่าง จำกัด', subject: 'เครื่องฟอกอากาศ 10 เครื่อง',
+  { ref: 'ตัวอย่าง-A', company_name: 'บริษัท ตัวอย่าง จำกัด', subject: 'เครื่องฟอกอากาศ 10 เครื่อง',
     product_code: 'WT-P40', description: '', quantity: 10, unit_price: 3500,
     quot_date: '', expire_date: '', credit_term: '', customer_contact: 'คุณสมชาย',
-    discount_type: '', discount_value: '', note: '' },
-  { ref: 'A', company_name: '', subject: '', product_code: '', description: 'ค่าขนส่ง',
+    discount_type: 'เปอร์เซ็นต์', discount_value: 5, note: '' },
+  { ref: 'ตัวอย่าง-A', company_name: '', subject: '', product_code: '', description: 'ค่าขนส่ง',
     quantity: 1, unit_price: 500, quot_date: '', expire_date: '', credit_term: '',
     customer_contact: '', discount_type: '', discount_value: '', note: '' },
+  { ref: 'ตัวอย่าง-B', company_name: 'หจก. ตัวอย่างสอง', subject: 'ตู้แช่ 2 เครื่อง',
+    product_code: '', description: 'ตู้แช่แข็ง 2 ประตู', quantity: 2, unit_price: 18000,
+    quot_date: '', expire_date: '', credit_term: '', customer_contact: '',
+    discount_type: '', discount_value: '', note: '' },
 ]
 
+const TPL_REQUIRED_FILL = 'FF1B315E'   // หัวคอลัมน์ที่ต้องกรอก — น้ำเงินเข้มเหมือนหัวตารางในระบบ
+const TPL_OPTIONAL_FILL = 'FF8A94A6'   // หัวคอลัมน์ที่ไม่บังคับ — เทา เห็นความต่างชัดตั้งแต่เปิดไฟล์
+const TPL_EXAMPLE_FILL  = 'FFFFF4D6'   // แถวตัวอย่าง — เหลืองอ่อน บอกว่าไม่ใช่ข้อมูลจริง
+
+// Template ของใบเสนอราคาสร้างเองไม่ใช้ downloadExcelTemplate ตัวกลาง เพราะต้องมี
+// หัวคอลัมน์แยกสี/ติดดาวตัวที่บังคับ, คำอธิบายเวลาเอาเมาส์ชี้, แถวตัวอย่าง และชีตวิธีกรอก
 export async function downloadQuotationTemplate(companies = [], products = [], creditTerms = []) {
-  await downloadExcelTemplate(
-    QUOTATION_IMPORT_COLUMNS, QUOTATION_EXAMPLE_ROWS[0], 'template_นำเข้าใบเสนอราคา.xlsx',
-    {
-      company_name: companies.map(c => c.name).filter(Boolean),
-      product_code: products.map(p => p.code).filter(Boolean),
-      credit_term: creditTerms,
-      discount_type: ['เปอร์เซ็นต์', 'จำนวนเงิน'],
+  const workbook = new ExcelJS.Workbook()
+
+  // ---------- ชีตกรอกข้อมูล วางไว้ชีตแรก ----------
+  // ให้คนเปิดไฟล์มาเจอช่องกรอกเลย กันรีบๆ แล้วพิมพ์ลงชีตคู่มือจนข้อมูลไปผิดที่
+  // ตัวอ่านไฟล์เลือกชีตตามชื่อ ไม่ได้อ่านชีตแรกดื้อๆ จะสลับลำดับยังไงก็ยังอ่านถูก
+  const sheet = workbook.addWorksheet(QUOTATION_SHEET_NAME)
+  const guide = workbook.addWorksheet('วิธีกรอก (อ่านก่อนกรอก)')
+  guide.columns = [{ width: 34 }, { width: 13 }, { width: 86 }]
+  const gTitle = (text) => {
+    const r = guide.addRow([text])
+    r.font = { bold: true, size: 13, color: { argb: 'FF1B315E' } }
+    r.height = 22
+  }
+  const gText = (text) => { guide.addRow([text]).font = { size: 11 } }
+
+  gTitle('วิธีกรอกไฟล์นำเข้าใบเสนอราคา')
+  gText('')
+  gText('1) กรอกข้อมูลในชีต "กรอกข้อมูล" (แท็บข้างล่าง)')
+  gText('2) ลบแถวตัวอย่างสีเหลืองออก หรือจะปล่อยไว้ก็ได้ ระบบข้ามให้อยู่แล้ว')
+  gText('3) กลับไปที่เว็บ กดอัปโหลดไฟล์นี้')
+  gText('')
+  gTitle('สำคัญที่สุด: 1 แถว = สินค้า 1 รายการ')
+  gText('ใบเสนอราคา 1 ใบที่มีสินค้า 3 อย่าง ต้องกรอก 3 แถว แล้วใส่ "เลขที่ใบ (กลุ่ม)" ให้ตรงกันทั้ง 3 แถว')
+  gText('ข้อมูลหัวใบ (ชื่อบริษัท หัวข้อ วันที่ ส่วนลด) กรอกแค่แถวแรกของกลุ่มก็พอ แถวถัดไปเว้นว่างได้')
+  gText('')
+  const exHead = guide.addRow(['เลขที่ใบ (กลุ่ม)', 'ชื่อบริษัท', 'หัวข้อ / รายการ'])
+  exHead.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+  exHead.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TPL_REQUIRED_FILL } } })
+  ;[['A', 'บริษัท ตัวอย่าง จำกัด', 'เครื่องฟอกอากาศ WT-P40 จำนวน 10'],
+    ['A', '(เว้นว่าง)', 'ค่าขนส่ง จำนวน 1'],
+    ['B', 'หจก. ตัวอย่างสอง', 'ตู้แช่แข็ง 2 ประตู จำนวน 2']].forEach(r => guide.addRow(r))
+  gText('')
+  gText('แบบข้างบนนี้จะได้ 2 ใบ — ใบแรก (กลุ่ม A) มี 2 รายการ ใบที่สอง (กลุ่ม B) มี 1 รายการ')
+  gText('"เลขที่ใบ (กลุ่ม)" ใช้แค่ในไฟล์นี้เท่านั้น ไม่ใช่เลขที่เอกสารจริง')
+  gText('')
+  gTitle('ช่องไหนต้องกรอก ช่องไหนไม่บังคับ')
+  const colHead = guide.addRow(['ชื่อคอลัมน์', 'จำเป็นไหม', 'คำอธิบาย'])
+  colHead.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+  colHead.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TPL_REQUIRED_FILL } } })
+  QUOTATION_IMPORT_COLUMNS.forEach(c => {
+    const r = guide.addRow([c.label, c.required ? 'ต้องกรอก' : 'ไม่บังคับ', (c.help || '').replace(/\n/g, '  ')])
+    r.getCell(2).font = { bold: !!c.required, color: { argb: c.required ? 'FFC53030' : 'FF6B7280' } }
+    r.alignment = { vertical: 'top', wrapText: true }
+  })
+  gText('')
+  gTitle('ระบบใส่ให้เอง ไม่ต้องกรอก')
+  gText('• เลขที่ใบเสนอราคา (QT...) — ระบบรันให้ตอนบันทึก ไม่ซ้ำแน่นอน')
+  gText('• สถานะ — เข้ามาเป็น Draft ทุกใบ ให้ตรวจก่อนแล้วค่อยเปลี่ยนสถานะส่งลูกค้า')
+  gText('• ผู้เสนอราคา — ใช้ชื่อคนที่กดนำเข้า')
+  gText('• เบอร์ติดต่อเซลล์ — ดึงจากหน้าตั้งค่าเอกสาร')
+  gText('')
+  gTitle('ข้อควรระวัง')
+  gText('• ชื่อบริษัทต้องมีในระบบอยู่แล้ว ถ้าไม่ตรงใบนั้นจะถูกข้ามแล้วรายงานให้ — แนะนำให้เลือกจาก dropdown ในช่อง')
+  gText('• รหัสสินค้าต้องมีในระบบ ถ้าเป็นรายการที่ไม่มีรหัส ให้เว้นรหัสว่างแล้วกรอกชื่อรายการแทน')
+  gText('• ราคา/หน่วย เป็นราคารวม VAT แล้ว')
+  gText('• ก่อนกดยืนยันนำเข้า หน้าเว็บจะสรุปให้ดูก่อนว่าจะเข้ากี่ใบ ใบไหนมีปัญหา')
+
+  sheet.columns = QUOTATION_IMPORT_COLUMNS.map(c => ({
+    header: c.required ? `${c.label} *` : c.label,
+    key: c.key,
+    width: Math.max(16, Math.min(34, c.label.length + 6)),
+  }))
+  const header = sheet.getRow(1)
+  header.height = 34
+  header.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+  QUOTATION_IMPORT_COLUMNS.forEach((c, i) => {
+    const cell = header.getCell(i + 1)
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: c.required ? TPL_REQUIRED_FILL : TPL_OPTIONAL_FILL } }
+    // เอาเมาส์ชี้หัวคอลัมน์ใน Excel แล้วเห็นคำอธิบายเลย ไม่ต้องสลับไปดูชีตวิธีกรอก
+    if (c.help) cell.note = `${c.required ? '[ต้องกรอก] ' : '[ไม่บังคับ] '}${c.help}`
+  })
+
+  QUOTATION_EXAMPLE_ROWS.forEach(r => {
+    const row = sheet.addRow(r)
+    row.font = { italic: true, color: { argb: 'FF8A6D3B' } }
+    row.eachCell({ includeEmpty: true }, c => {
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TPL_EXAMPLE_FILL } }
+    })
+  })
+
+  const dropdowns = {
+    company_name: companies.map(c => c.name).filter(Boolean),
+    product_code: products.map(p => p.code).filter(Boolean),
+    credit_term: creditTerms.filter(Boolean),
+    discount_type: ['เปอร์เซ็นต์', 'จำนวนเงิน'],
+  }
+  const refs = addDropdownListsSheet(workbook, dropdowns)
+  QUOTATION_IMPORT_COLUMNS.forEach((c, idx) => {
+    const ref = refs[c.key]
+    if (!ref) return
+    for (let row = 2; row <= TEMPLATE_DROPDOWN_ROWS; row++) {
+      sheet.getCell(row, idx + 1).dataValidation = { type: 'list', allowBlank: true, formulae: [ref] }
     }
-  )
+  })
+
+  sheet.views = [{ state: 'frozen', ySplit: 1 }]   // เลื่อนลงแล้วหัวคอลัมน์ยังอยู่
+
+  const buffer = await workbook.xlsx.writeBuffer()
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'template_นำเข้าใบเสนอราคา.xlsx'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 const normName = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ')
@@ -822,9 +951,12 @@ const normName = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ')
 // คืน { groups, invalidRows } — groups คือใบเสนอราคาที่พร้อมบันทึก 1 ก้อนต่อ 1 ใบ
 // companiesByName / productsByCode เป็น Map ที่ normalize คีย์มาแล้ว (ดู ImportQuotationsModal)
 export async function parseQuotationImportFile(file, companiesByName, productsByCode) {
-  const rawRows = await readExcelRows(file)
+  const rawRows = await readExcelRows(file, QUOTATION_SHEET_NAME)
   const labelToKey = {}
-  QUOTATION_IMPORT_COLUMNS.forEach(c => { labelToKey[c.label] = c.key })
+  QUOTATION_IMPORT_COLUMNS.forEach(c => {
+    labelToKey[c.label] = c.key
+    labelToKey[`${c.label} *`] = c.key   // หัวคอลัมน์ที่บังคับกรอกมีดาวต่อท้ายในไฟล์ template
+  })
 
   const groups = new Map() // ref -> { ...หัวใบ, items: [], rowNumbers: [] }
   const invalidRows = []
@@ -836,6 +968,9 @@ export async function parseQuotationImportFile(file, companiesByName, productsBy
       const key = labelToKey[label.trim()]
       if (key) row[key] = (value || '').trim()
     })
+
+    // แถวตัวอย่างที่แถมมาใน template — ข้ามไปเงียบๆ ไม่นับเป็นข้อมูลและไม่นับเป็นข้อผิดพลาด
+    if ((row.ref || '').startsWith(QUOTATION_EXAMPLE_PREFIX)) return
 
     const errors = []
     const ref = row.ref
