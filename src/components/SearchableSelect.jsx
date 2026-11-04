@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLanguage } from './LanguageContext'
+import { looksRelated } from '../lib/itemProductLink'
 
 // dropdown เลือกตัวเลือกที่พิมพ์ค้นหาได้ — ใช้แทน <select> ธรรมดาตอนตัวเลือกมีเยอะ (เช่น รายชื่อบริษัท/สินค้า) กันต้องเลื่อนหา
 // ใส่ freeText + onFreeTextChange เพื่อเปิดโหมดพิมพ์ข้อความเองได้ในช่องเดียวกัน (ใช้กับรายการใบเสนอราคาที่แก้ชื่อที่พิมพ์ได้ ไม่ต้องมีอีกช่องแยก)
@@ -9,15 +10,6 @@ import { useLanguage } from './LanguageContext'
 // แก้โดยโชว์ป้ายบอกเสมอว่าบรรทัดนี้ผูกกับสินค้าตัวไหน กดกากบาทเพื่อปลดได้ และถ้าชื่อที่พิมพ์
 // ไม่เข้าพวกกับชื่อสินค้าเลย ป้ายจะเปลี่ยนเป็นสีส้มพร้อมเตือน
 
-// ชื่อที่พิมพ์ "เข้าพวก" กับสินค้าที่ผูกไว้ไหม — เทียบหยาบๆ พอให้จับเคสที่ผิดชัดๆ อย่าง "ค่าขนส่ง" ผูกกับไส้กรอง
-// ไม่ได้เข้มงวดถึงขั้นต้องตรงเป๊ะ เพราะแก้ชื่อสินค้านิดหน่อยตอนเสนอราคาเป็นเรื่องปกติ
-const looksRelated = (text, label) => {
-  const a = (text || '').trim().toLowerCase()
-  const b = (label || '').trim().toLowerCase()
-  if (!a || !b) return true
-  if (a.length < 3) return true
-  return b.includes(a) || a.includes(b) || b.split(/[\s-]+/).filter(w => w.length >= 3).some(w => a.includes(w))
-}
 export default function SearchableSelect({ options, value, onChange, placeholder = '-- เลือก --', getOptionLabel, getOptionValue = (o) => o.id, disabled, freeText, onFreeTextChange }) {
   const { t } = useLanguage()
   const [open, setOpen] = useState(false)
@@ -80,7 +72,8 @@ export default function SearchableSelect({ options, value, onChange, placeholder
           {value && <div className="searchable-option" style={{ color: 'var(--text-light)' }} onMouseDown={clear}>{t('-- ไม่เลือก --')}</div>}
           {filtered.length
             ? filtered.map(o => (
-              <div key={getOptionValue(o)} className="searchable-option" onMouseDown={() => pick(o)}>
+              // ชื่อยาวโดนตัดด้วย ... ที่ CSS — ใส่ title ไว้ให้เอาเมาส์ไปวางแล้วอ่านชื่อเต็มได้
+              <div key={getOptionValue(o)} className="searchable-option" title={getOptionLabel(o)} onMouseDown={() => pick(o)}>
                 {getOptionLabel(o)}
               </div>
             ))

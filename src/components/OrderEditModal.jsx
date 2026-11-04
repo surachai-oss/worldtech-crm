@@ -4,6 +4,7 @@ import { fmtCurrency, composeShippingAddress } from '../lib/format'
 import { loadThaiAddress, parseThaiAddress } from '../lib/thaiAddress'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
+import { confirmItemLinks } from '../lib/itemProductLink'
 import SearchableSelect from './SearchableSelect'
 
 // แก้ไขออเดอร์ที่บันทึกแล้ว — แอดมินเท่านั้น
@@ -118,6 +119,7 @@ export default function OrderEditModal({ order, currentUserName, onClose, onSave
     const msg = changedTotal
       ? `ยอดรวมจะเปลี่ยนจาก ${fmtCurrency(order.value)} เป็น ${fmtCurrency(totals.grandTotal)} บาท\n\nถ้าออกใบแจ้งหนี้/ใบกำกับภาษีไปแล้ว ต้องแก้เอกสารฝั่งบัญชีให้ตรงกันด้วย ยืนยันแก้ไข?`
       : 'ยืนยันแก้ไขออเดอร์นี้?'
+    if (!(await confirmItemLinks(items, products, confirm))) return
     if (!(await confirm(msg))) return
 
     setSaving(true)

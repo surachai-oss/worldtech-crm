@@ -7,6 +7,7 @@ import {
 } from '../lib/thaiAddress'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
+import { confirmItemLinks } from '../lib/itemProductLink'
 import SearchableSelect from './SearchableSelect'
 import DiscountField from './DiscountField'
 
@@ -179,6 +180,8 @@ export default function OrderModal({ companies, quotations, currentUser, onClose
     if (!ship.line1.trim()) { toast('กรุณากรอกบ้านเลขที่/ที่อยู่', 'error'); return }
     if (!ship.province.trim()) { toast('กรุณาเลือกจังหวัด', 'error'); return }
     if (!shippingContactPhone.trim()) { toast('กรุณากรอกเบอร์โทรติดต่อ', 'error'); return }
+    // เช็คก่อนถามยืนยันบันทึก — ออเดอร์มักสร้างจากใบเสนอราคาที่คัดลอกกันมา สินค้าที่ผูกผิดจะพ่วงมาเงียบๆ
+    if (!(await confirmItemLinks(cleanItems, products, confirm, lang))) return
     const confirmMsg = lang === 'en'
       ? `Confirm saving order ${orderNo}?\n\nOnce saved, this order cannot be edited — you can only cancel it and open a new one if there's a mistake.`
       : `ยืนยันบันทึกออเดอร์เลขที่ ${orderNo}?\n\nหลังบันทึกแล้วจะแก้ไขข้อมูลไม่ได้อีก หากลงข้อมูลผิดต้องยกเลิกออเดอร์นี้แล้วเปิดออเดอร์ใหม่เท่านั้น`

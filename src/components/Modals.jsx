@@ -4,6 +4,7 @@ import EditableSelect from './EditableSelect'
 import SearchableSelect from './SearchableSelect'
 import { useUi } from './UiContext'
 import { useLanguage } from './LanguageContext'
+import { confirmItemLinks } from '../lib/itemProductLink'
 import { listProducts, listDealItems, listQuotationItems, computeDealTotals, getProductImageUrl } from '../lib/api'
 import DiscountField from './DiscountField'
 import { POSITION_OPTIONS, BUSINESS_TYPE_OTHER, BUSINESS_TYPE_OPTIONS, APPLIANCE_OTHER, APPLIANCE_OPTIONS, PURCHASE_REASON_OPTIONS } from '../lib/leadOptions'
@@ -234,7 +235,7 @@ export function LeadModal({ initial, isAdmin, onClose, onSave }) {
 const EMPTY_ITEM = { product_id: '', description: '', quantity: 1, unit_price: '' }
 
 export function DealModal({ initial, companies, defaultCompanyId, defaultStage, isAdmin, currentUserName, onClose, onSave }) {
-  const { toast } = useUi()
+  const { toast, confirm } = useUi()
   const { t, lang } = useLanguage()
   const [f, setF] = useState(() => {
     const base = { company_id: defaultCompanyId || '', name: '', stage: defaultStage || 'Lead', close_date: '', follow_up_date: '', source: '', owner: '', note: '', discount_type: '', discount_value: 0 }
@@ -280,10 +281,14 @@ export function DealModal({ initial, companies, defaultCompanyId, defaultStage, 
 
   // แถวที่ไม่ได้เลือกสินค้าและไม่ได้พิมพ์ชื่อรายการเอง ถือว่าเป็นช่องว่างที่ยังไม่ได้ใช้ ตัดทิ้งก่อนบันทึก
   // close_date/follow_up_date ไม่บังคับ ถ้าไม่ได้กรอก/เคลียร์ทิ้งจะได้ "" มา ต้องแปลงเป็น null ก่อนส่ง ไม่งั้น Postgres ปฏิเสธ (invalid input syntax for type date)
-  const submit = () => onSave(
-    { ...f, close_date: f.close_date || null, follow_up_date: f.follow_up_date || null, created_by_name: dealProposer || null },
-    items.filter(it => it.product_id || it.description?.trim())
-  )
+  const submit = async () => {
+    const clean = items.filter(it => it.product_id || it.description?.trim())
+    if (!(await confirmItemLinks(clean, products, confirm, lang))) return
+    onSave(
+      { ...f, close_date: f.close_date || null, follow_up_date: f.follow_up_date || null, created_by_name: dealProposer || null },
+      clean
+    )
+  }
 
   return (
     <ModalShell title={initial?.id ? 'แก้ไขดีล' : 'เพิ่มดีล'} onClose={onClose} onSave={submit} wide>
@@ -485,7 +490,7 @@ export function TaskModal({ initial, companies, quotations = [], defaultCompanyI
 const EMPTY_QUOT_ITEM = { product_id: '', description: '', quantity: 1, unit_price: '' }
 
 export function QuotationModal({ initial, companies, defaultCompanyId, currentUserName, isAdmin, settings = {}, onClose, onSave }) {
-  const { toast } = useUi()
+  const { toast, confirm } = useUi()
   const { t, lang } = useLanguage()
   // หมายเหตุตั้งต้นและเบอร์เซลล์ตั้งต้นมาจาก "ตั้งค่าเอกสาร" — แอดมินแก้ได้เองโดยไม่ต้อง deploy
   const tplQuot = useMemo(() => mergeDocumentTemplate(settings).quotation, [settings])
@@ -556,10 +561,14 @@ export function QuotationModal({ initial, companies, defaultCompanyId, currentUs
 
   // แถวที่ไม่ได้เลือกสินค้าและไม่ได้พิมพ์ชื่อรายการเอง ถือว่าเป็นช่องว่างที่ยังไม่ได้ใช้ ตัดทิ้งก่อนบันทึก
   // ช่องวันที่ที่ไม่บังคับ (expire_date/payment_due_date) ถ้าเคลียร์ค่าจนว่างจะได้ "" มา ต้องแปลงเป็น null ก่อนส่ง ไม่งั้น Postgres ปฏิเสธ (invalid input syntax for type date)
-  const submit = () => onSave(
-    { ...f, expire_date: f.expire_date || null, payment_due_date: f.payment_due_date || null },
-    items.filter(it => it.product_id || it.description?.trim())
-  )
+  const submit = async () => {
+    const clean = items.filter(it => it.product_id || it.description?.trim())
+    if (!(await confirmItemLinks(clean, products, confirm, lang))) return
+    onSave(
+      { ...f, expire_date: f.expire_date || null, payment_due_date: f.payment_due_date || null },
+      clean
+    )
+  }
 
   return (
     <ModalShell title={initial?.id ? 'แก้ไขใบเสนอราคา' : 'สร้างใบเสนอราคา'} onClose={onClose} onSave={submit} wide>
